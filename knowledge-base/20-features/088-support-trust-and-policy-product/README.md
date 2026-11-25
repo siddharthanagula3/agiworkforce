@@ -2,7 +2,7 @@
 id: "AREA-088"
 type: "area"
 title: "Support, trust, and policy product"
-features: ["F088-01", "F088-02", "F088-03", "F088-04", "F088-05", "F088-06", "F088-07", "F088-08", "F088-09", "F088-10", "F088-11"]
+features: ["F088-01", "F088-02", "F088-03", "F088-04", "F088-05", "F088-06", "F088-07", "F088-08", "F088-09", "F088-10", "F088-11", "F088-99"]
 basis: "code inspection"
 last_reviewed: "2026-11-24"
 revision: "f51d16e747"
@@ -28,6 +28,7 @@ This area gives a person a way to get help and to be heard. It covers the help c
 | [F088-09](F088-09-reports-and-appeals-content-copyright-safety-refus.md) | Reports and appeals (content, copyright, safety refusal, suspension) | built | built | partly | no | no | no |
 | [F088-10](F088-10-security-accessibility-and-policy-pages.md) | Security, accessibility and policy pages | partly | partly | no | no | no | no |
 | [F088-11](F088-11-support-assistant-answers-email-and-whatsapp-langu.md) | Support assistant (answers, email and WhatsApp, languages, analytics) | partly | n/a | n/a | n/a | n/a | n/a |
+| [F088-99](F088-99-other-items.md) | Other items in Support, trust, and policy product | n/a | n/a | n/a | no | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/088-support-trust-and-policy-product.md](../../10-requirements/capabilities/088-support-trust-and-policy-product.md).
 

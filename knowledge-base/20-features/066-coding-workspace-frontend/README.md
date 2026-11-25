@@ -2,7 +2,7 @@
 id: "AREA-066"
 type: "area"
 title: "Coding-workspace frontend"
-features: ["F066-01", "F066-02", "F066-03", "F066-04", "F066-05", "F066-06", "F066-07", "F066-08", "F066-09", "F066-10", "F066-11", "F066-12"]
+features: ["F066-01", "F066-02", "F066-03", "F066-04", "F066-05", "F066-06", "F066-07", "F066-08", "F066-09", "F066-10", "F066-11", "F066-12", "F066-99"]
 basis: "code inspection"
 last_reviewed: "2026-11-24"
 revision: "f51d16e747"
@@ -29,6 +29,7 @@ A coding session lets a person ask the AI agent to read, change and test code in
 | [F066-10](F066-10-live-browser-preview-and-simulator.md) | Live browser preview and simulator | no | partly | no | no | no | n/a |
 | [F066-11](F066-11-pull-request-checks-test-results-recap.md) | Pull request, checks, test results, recap | partly | partly | partly | partly | no | n/a |
 | [F066-12](F066-12-continue-share-and-move-sessions.md) | Continue, share and move sessions | partly | built | partly | built | partly | n/a |
+| [F066-99](F066-99-other-items.md) | Other items in Coding-workspace frontend | no | n/a | no | no | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/066-coding-workspace-frontend.md](../../10-requirements/capabilities/066-coding-workspace-frontend.md).
 

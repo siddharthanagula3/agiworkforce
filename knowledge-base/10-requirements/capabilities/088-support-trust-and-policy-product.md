@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 88. Support, trust, and policy product
 
-31 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+32 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S88.01
 
@@ -245,3 +245,11 @@ revision: "f51d16e747"
 
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web missing
 - Feature: [F088-11 Support assistant (answers, email and WhatsApp, languages, analytics)](../../20-features/088-support-trust-and-policy-product/F088-11-support-assistant-answers-email-and-whatsapp-langu.md)
+
+## S88.32
+
+**Present and enforce the workspace’s contracted retention and compliance scope in the CLI.** An authorized administrator can distinguish the contracted health-data and retention scopes, compatible versions, permitted connections and tools, local-storage exceptions, offboarding behavior and verification status; users see and receive the corresponding restrictions.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F088-99 Other items in Support, trust, and policy product](../../20-features/088-support-trust-and-policy-product/F088-99-other-items.md)
+- An owner decision is open on this item.

@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 31. PDF and document-transformation products
 
-25 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+26 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S31.01
 
@@ -185,3 +185,10 @@ revision: "f51d16e747"
 
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web missing, Desktop missing, Mobile missing, CLI missing, VS Code missing, Chrome missing
 - Feature: [F031-06 Compare documents and original versus transformed](../../20-features/031-pdf-and-document-transformation-products/F031-06-compare-documents-and-original-versus-transformed.md)
+
+## S31.26
+
+**Create a PDF from a mobile chat.** A user can choose PDF from Create file in mobile chat, describe the document, and open the resulting PDF.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): Mobile partial
+- Feature: [F031-99 Other items in PDF and document-transformation products](../../20-features/031-pdf-and-document-transformation-products/F031-99-other-items.md)

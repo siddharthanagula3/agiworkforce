@@ -4518,6 +4518,19 @@
    ]
   },
   {
+   "feature": "F101-99",
+   "name": "Other items in Shared package boundaries",
+   "app": "vscode",
+   "ledger_says": "missing",
+   "page_says": "partial",
+   "quote": "VS Code: the source record is parsed and forwarded, but no code was found that renders citations in its webview",
+   "items": [
+    "S101.18",
+    "S101.39",
+    "S101.40"
+   ]
+  },
+  {
    "feature": "F105-05",
    "name": "Try a request in the browser",
    "app": "web",

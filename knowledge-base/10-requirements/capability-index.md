@@ -7,14 +7,14 @@ revision: "f51d16e747"
 ---
 # Requirement items by area
 
-3439 requirement items in 106 areas. Identifiers (for example `S13.10`) are the project's own and are used everywhere in this knowledge base.
+3466 requirement items in 106 areas. Identifiers (for example `S13.10`) are the project's own and are used everywhere in this knowledge base.
 
 | # | Area | Items |
 |---:|---|---:|
 | 2 | [Public website and acquisition screens](capabilities/002-public-website-and-acquisition-screens.md) | 40 |
 | 3 | [Authentication and onboarding screens](capabilities/003-authentication-and-onboarding-screens.md) | 37 |
 | 4 | [Signed-in application destinations](capabilities/004-signed-in-application-destinations.md) | 44 |
-| 5 | [Application shell and navigation components](capabilities/005-application-shell-and-navigation-components.md) | 39 |
+| 5 | [Application shell and navigation components](capabilities/005-application-shell-and-navigation-components.md) | 40 |
 | 6 | [Visual foundations and spacing conventions](capabilities/006-visual-foundations-and-spacing-conventions.md) | 35 |
 | 7 | [Layout systems](capabilities/007-layout-systems.md) | 32 |
 | 8 | [Basic interactive elements](capabilities/008-basic-interactive-elements.md) | 50 |
@@ -40,7 +40,7 @@ revision: "f51d16e747"
 | 28 | [Code Canvas and application preview](capabilities/028-code-canvas-and-application-preview.md) | 32 |
 | 29 | [Spreadsheet and data-analysis workspace](capabilities/029-spreadsheet-and-data-analysis-workspace.md) | 40 |
 | 30 | [Presentation workspace](capabilities/030-presentation-workspace.md) | 33 |
-| 31 | [PDF and document-transformation products](capabilities/031-pdf-and-document-transformation-products.md) | 25 |
+| 31 | [PDF and document-transformation products](capabilities/031-pdf-and-document-transformation-products.md) | 26 |
 | 32 | [Design workspace](capabilities/032-design-workspace.md) | 34 |
 | 33 | [Generated Sites and published applications](capabilities/033-generated-sites-and-published-applications.md) | 30 |
 | 34 | [Search experiences](capabilities/034-search-experiences.md) | 32 |
@@ -75,27 +75,27 @@ revision: "f51d16e747"
 | 63 | [Routines, schedules, and triggers](capabilities/063-routines-schedules-and-triggers.md) | 35 |
 | 64 | [Browser-assistant experience](capabilities/064-browser-assistant-experience.md) | 32 |
 | 65 | [Computer-use experience](capabilities/065-computer-use-experience.md) | 29 |
-| 66 | [Coding-workspace frontend](capabilities/066-coding-workspace-frontend.md) | 41 |
-| 67 | [Coding capabilities and developer workflows](capabilities/067-coding-capabilities-and-developer-workflows.md) | 39 |
+| 66 | [Coding-workspace frontend](capabilities/066-coding-workspace-frontend.md) | 52 |
+| 67 | [Coding capabilities and developer workflows](capabilities/067-coding-capabilities-and-developer-workflows.md) | 41 |
 | 68 | [Session continuity and remote-session product](capabilities/068-session-continuity-and-remote-session-product.md) | 30 |
 | 69 | [Web application](capabilities/069-web-application.md) | 20 |
 | 70 | [Desktop application](capabilities/070-desktop-application.md) | 32 |
 | 71 | [Mobile application](capabilities/071-mobile-application.md) | 32 |
-| 72 | [CLI and terminal application](capabilities/072-cli-and-terminal-application.md) | 37 |
+| 72 | [CLI and terminal application](capabilities/072-cli-and-terminal-application.md) | 39 |
 | 73 | [VS Code and IDE extension](capabilities/073-vs-code-and-ide-extension.md) | 30 |
 | 74 | [Browser extension](capabilities/074-browser-extension.md) | 28 |
 | 76 | [Model-capability registry](capabilities/076-model-capability-registry.md) | 38 |
-| 78 | [UI gating and adaptation components](capabilities/078-ui-gating-and-adaptation-components.md) | 28 |
+| 78 | [UI gating and adaptation components](capabilities/078-ui-gating-and-adaptation-components.md) | 30 |
 | 79 | [Routing and model-neutral orchestration](capabilities/079-routing-and-model-neutral-orchestration.md) | 31 |
 | 81 | [Free / Basic / Pro / Max 5x / Max 20x planning structure](capabilities/081-free-basic-pro-max-5x-max-20x-planning-structure.md) | 28 |
 | 82 | [Usage dashboard and limit UI](capabilities/082-usage-dashboard-and-limit-ui.md) | 33 |
 | 83 | [Billing and subscription screens](capabilities/083-billing-and-subscription-screens.md) | 33 |
-| 84 | [General and appearance settings](capabilities/084-general-and-appearance-settings.md) | 26 |
+| 84 | [General and appearance settings](capabilities/084-general-and-appearance-settings.md) | 27 |
 | 85 | [Personalization and data settings](capabilities/085-personalization-and-data-settings.md) | 26 |
 | 86 | [Security and connected-access settings](capabilities/086-security-and-connected-access-settings.md) | 26 |
-| 87 | [Enterprise administration screens](capabilities/087-enterprise-administration-screens.md) | 40 |
-| 88 | [Support, trust, and policy product](capabilities/088-support-trust-and-policy-product.md) | 31 |
-| 89 | [Account and access components](capabilities/089-account-and-access-components.md) | 24 |
+| 87 | [Enterprise administration screens](capabilities/087-enterprise-administration-screens.md) | 42 |
+| 88 | [Support, trust, and policy product](capabilities/088-support-trust-and-policy-product.md) | 32 |
+| 89 | [Account and access components](capabilities/089-account-and-access-components.md) | 26 |
 | 90 | [Conversation and synchronization components](capabilities/090-conversation-and-synchronization-components.md) | 23 |
 | 91 | [Model and inference components](capabilities/091-model-and-inference-components.md) | 32 |
 | 92 | [Tool-calling and agent-loop components](capabilities/092-tool-calling-and-agent-loop-components.md) | 30 |
@@ -107,7 +107,7 @@ revision: "f51d16e747"
 | 98 | [Integration and extensibility components](capabilities/098-integration-and-extensibility-components.md) | 29 |
 | 99 | [Coding and local-runtime components](capabilities/099-coding-and-local-runtime-components.md) | 30 |
 | 100 | [Commercial and administrative components](capabilities/100-commercial-and-administrative-components.md) | 28 |
-| 101 | [Shared package boundaries](capabilities/101-shared-package-boundaries.md) | 38 |
+| 101 | [Shared package boundaries](capabilities/101-shared-package-boundaries.md) | 40 |
 | 102 | [Runtime inventory](capabilities/102-runtime-inventory.md) | 32 |
 | 103 | [Data and persistence categories](capabilities/103-data-and-persistence-categories.md) | 38 |
 | 104 | [Named technology options-not claims about competitor internals](capabilities/104-named-technology-options-not-claims-about-competitor-interna.md) | 39 |

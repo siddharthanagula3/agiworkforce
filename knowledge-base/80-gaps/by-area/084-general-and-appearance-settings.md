@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 84. General and appearance settings
 
-93 open gaps that touch this area. Area page: [20-features/084-general-and-appearance-settings](../../20-features/084-general-and-appearance-settings/README.md).
+94 open gaps that touch this area. Area page: [20-features/084-general-and-appearance-settings](../../20-features/084-general-and-appearance-settings/README.md).
 
 ## CMP-C533
 
@@ -870,3 +870,13 @@ revision: "f51d16e747"
 - Features: [F084-12](../../20-features/084-general-and-appearance-settings/F084-12-experimental-features-and-restore-defaults.md)
 - Requirement items: S84.25
 - Detail: Mobile: S84.25; VS Code: S84.25; Chrome: S84.25
+
+## GAP-F084-99-PARTLY
+
+**Other items in General and appearance settings: partly built on Web**
+
+- Kind: partly built (read in the code; source: capability ledger)
+- Apps: Web
+- Features: [F084-99](../../20-features/084-general-and-appearance-settings/F084-99-other-items.md)
+- Requirement items: S84.27
+- Detail: Web S84.27: The language selector offers individual languages only. Add a persistent automatic preference alongside manual selection.

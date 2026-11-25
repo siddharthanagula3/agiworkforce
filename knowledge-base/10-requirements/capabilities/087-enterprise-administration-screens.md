@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 87. Enterprise administration screens
 
-40 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+42 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S87.01
 
@@ -330,3 +330,19 @@ revision: "f51d16e747"
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web done, Desktop done, CLI missing
 - Feature: [F087-05 Service accounts and admin API keys](../../20-features/087-enterprise-administration-screens/F087-05-service-accounts-and-admin-api-keys.md)
 - Competitor trace: CAP-teams-and-admin-24
+
+## S87.41
+
+**Apply gateway policy for an organization or identity group.** The administrator can assign model access, upstream routing and managed settings by group or domain and define how overlapping policies and device defaults combine. The gateway enforces the resulting policy.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F087-99 Other items in Enterprise administration screens](../../20-features/087-enterprise-administration-screens/F087-99-other-items.md)
+- An owner decision is open on this item.
+
+## S87.42
+
+**Operate and monitor a workspace gateway telemetry relay.** Administrators can configure diagnostic logging, relay or direct export to approved collectors, attribute events to permitted users or groups and see delivery failures.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F087-99 Other items in Enterprise administration screens](../../20-features/087-enterprise-administration-screens/F087-99-other-items.md)
+- An owner decision is open on this item.

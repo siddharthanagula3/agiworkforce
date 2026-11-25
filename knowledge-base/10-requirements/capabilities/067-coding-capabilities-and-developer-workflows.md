@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 67. Coding capabilities and developer workflows
 
-39 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+41 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S67.01
 
@@ -296,3 +296,19 @@ revision: "f51d16e747"
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web missing, Desktop done, Mobile done, CLI done, VS Code done
 - Feature: [F067-10 Repository memory, instruction files and skills](../../20-features/067-coding-capabilities-and-developer-workflows/F067-10-repository-memory-instruction-files-and-skills.md)
 - Competitor trace: CAP-coding-workflows-22
+
+## S67.40
+
+**Configure a defensive repository scan from the CLI.** A maintainer can select repository scope, exclusions, scan depth, independent validation, model and resource limits, save project settings and receive per-attempt findings.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F067-99 Other items in Coding capabilities and developer workflows](../../20-features/067-coding-capabilities-and-developer-workflows/F067-99-other-items.md)
+- An owner decision is open on this item.
+
+## S67.41
+
+**Review and act on saved repository scan results.** A maintainer can follow progress, inspect machine-readable results and a saved threat model, review a remediation diff and explicitly open a draft pull request.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F067-99 Other items in Coding capabilities and developer workflows](../../20-features/067-coding-capabilities-and-developer-workflows/F067-99-other-items.md)
+- An owner decision is open on this item.

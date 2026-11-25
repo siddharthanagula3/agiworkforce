@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 5. Application shell and navigation components
 
-39 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+40 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S5.01
 
@@ -294,3 +294,10 @@ revision: "f51d16e747"
 
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web done, Desktop done, Mobile done
 - Feature: [F005-07 Breadcrumbs, back and forward, and links](../../20-features/005-application-shell-and-navigation-components/F005-07-breadcrumbs-back-and-forward-and-links.md)
+
+## S5.40
+
+**Find downloads from the account menu.** A signed-in web user can open the app and extension download directory directly from their account menu.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web missing
+- Feature: [F005-99 Other items in Application shell and navigation components](../../20-features/005-application-shell-and-navigation-components/F005-99-other-items.md)

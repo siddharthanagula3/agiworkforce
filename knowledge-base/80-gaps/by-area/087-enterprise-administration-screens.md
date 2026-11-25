@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 87. Enterprise administration screens
 
-186 open gaps that touch this area. Area page: [20-features/087-enterprise-administration-screens](../../20-features/087-enterprise-administration-screens/README.md).
+187 open gaps that touch this area. Area page: [20-features/087-enterprise-administration-screens](../../20-features/087-enterprise-administration-screens/README.md).
 
 ## CMP-CP342
 
@@ -1785,3 +1785,13 @@ revision: "f51d16e747"
 - Features: [F087-12](../../20-features/087-enterprise-administration-screens/F087-12-billing-compliance-legal-holds-and-support-access.md)
 - Requirement items: S87.34, S87.35, S87.36, S87.37
 - Detail: Web: S87.35; Desktop: S87.35; Mobile: S87.35; CLI: S87.34, S87.35, S87.36, S87.37; VS Code: S87.35
+
+## GAP-F087-99-NOTBUILT
+
+**Other items in Enterprise administration screens: not built on CLI**
+
+- Kind: not built on an app (read in the code; source: capability ledger)
+- Apps: CLI
+- Features: [F087-99](../../20-features/087-enterprise-administration-screens/F087-99-other-items.md)
+- Requirement items: S87.41, S87.42
+- Detail: CLI: S87.41, S87.42

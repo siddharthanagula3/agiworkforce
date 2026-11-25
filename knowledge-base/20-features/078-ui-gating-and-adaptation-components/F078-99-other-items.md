@@ -5,9 +5,9 @@ title: "Other items in UI gating and adaptation components"
 aliases: ["Effective-capability inspector", "Capability inspector", "S78.27", "Other items in UI gating and adaptation components"]
 area: "78 UI gating and adaptation components"
 available_on: []
-implementation: {web: "n/a", desktop: "n/a", mobile: "n/a", cli: "n/a", vscode: "n/a", chrome: "n/a"}
+implementation: {web: "n/a", desktop: "n/a", mobile: "n/a", cli: "missing", vscode: "n/a", chrome: "n/a"}
 verification: {web: "n/a", desktop: "n/a", mobile: "n/a", cli: "n/a", vscode: "n/a", chrome: "n/a"}
-requirement_items: ["S78.27"]
+requirement_items: ["S78.27", "S78.29", "S78.30"]
 depends_on: ["surface:web", "surface:desktop", "surface:mobile", "surface:cli", "surface:vscode", "surface:chrome", "F078-08", "api:GET /api/me", "SYS-subscriptions-entitlements-and-usage", "SYS-api-and-contracts", "SYS-shared-ui-and-design"]
 basis: "code inspection"
 second_reader: "not sampled: statements are code readings that nobody has re-checked"
@@ -18,7 +18,7 @@ revision: "f51d16e747"
 
 Item S78.27 asks for one view showing what is effectively available to a user on a surface and why anything is not. No such view exists on any app. A founder decision records that neither leader offers one, so it is not built. Only partial neighbours exist: a mobile Capabilities screen, a model catalogue, and a VS Code developer card.
 
-Area: [78. UI gating and adaptation components](README.md). Requirement items: [S78.27](../../10-requirements/capabilities/078-ui-gating-and-adaptation-components.md#s7827).
+Area: [78. UI gating and adaptation components](README.md). Requirement items: [S78.27](../../10-requirements/capabilities/078-ui-gating-and-adaptation-components.md#s7827), [S78.29](../../10-requirements/capabilities/078-ui-gating-and-adaptation-components.md#s7829), [S78.30](../../10-requirements/capabilities/078-ui-gating-and-adaptation-components.md#s7830).
 
 ## Status
 
@@ -29,7 +29,7 @@ Two separate questions: is the code there, and has a person seen it work. "Seen 
 | Web | does not apply | does not apply | n/a |
 | Desktop | does not apply | does not apply | n/a |
 | Mobile | does not apply | does not apply | n/a |
-| CLI | does not apply | does not apply | n/a |
+| CLI | not built | not built | n/a |
 | VS Code | does not apply | does not apply | n/a |
 | Chrome | does not apply | does not apply | n/a |
 
@@ -218,6 +218,7 @@ What has actually been seen by a person is in the Status table above. This secti
 
 - **The brief and the audit view disagree: the brief marks S78.27 not applicable everywhere, while the audit view lists web, desktop, mobile and VS Code as partial with a 'ui' gap and CLI and Chrome as missing.** Affects: Planning and status reporting for all apps.. Evidence: audit/checklist/views/legacy/partial/078-ui-gating-and-adaptation-components.md (S78.27 table); docs/decisions/2026-09-27-founder-decisions.md lines 187-197.. Work needed: Owner of the audit register to align the row with the decision (mark decided-not-built or remove it).
 - **If the owner reverses the decision, no inspector exists on any app and the document needs a shared rendering component.** Affects: All six apps.. Evidence: No inspector file found; server document already available (apps/web/app/api/me/route.ts:342).. Work needed: A shared list component plus per-app entry points and reason wording for each denying layer.
+- Not built on: CLI (from the capability ledger).
 
 **Depends on**
 

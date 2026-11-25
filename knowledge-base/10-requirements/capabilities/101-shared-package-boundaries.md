@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 101. Shared package boundaries
 
-38 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+40 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S101.01
 
@@ -276,3 +276,18 @@ revision: "f51d16e747"
 
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates):
 - Feature: [F101-08 Telemetry, configuration, security helpers and package runtimes](../../20-features/101-shared-package-boundaries/F101-08-telemetry-configuration-security-helpers-and-packa.md)
+
+## S101.39
+
+**Export coding-client telemetry to a customer collector.** With explicit configuration, permitted CLI or editor session metrics, traces and tool events reach the organization’s OpenTelemetry collector and retain their documented event types.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing, VS Code missing
+- Feature: [F101-99 Other items in Shared package boundaries](../../20-features/101-shared-package-boundaries/F101-99-other-items.md)
+
+## S101.40
+
+**Control what coding-client telemetry leaves a machine.** Administrators can set export limits and collector credentials, choose privacy-preserving attributes, bound metric cardinality and control content and survey export separately. A local-only session remains local.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F101-99 Other items in Shared package boundaries](../../20-features/101-shared-package-boundaries/F101-99-other-items.md)
+- An owner decision is open on this item.

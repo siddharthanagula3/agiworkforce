@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 5. Application shell and navigation components
 
-58 open gaps that touch this area. Area page: [20-features/005-application-shell-and-navigation-components](../../20-features/005-application-shell-and-navigation-components/README.md).
+59 open gaps that touch this area. Area page: [20-features/005-application-shell-and-navigation-components](../../20-features/005-application-shell-and-navigation-components/README.md).
 
 ## GAP-AREA005-LW04
 
@@ -539,3 +539,13 @@ revision: "f51d16e747"
 - Features: [F005-11](../../20-features/005-application-shell-and-navigation-components/F005-11-connection-offline-and-release-status.md)
 - Requirement items: S5.33, S5.34
 - Detail: Web: S5.34; Mobile: S5.34; CLI: S5.33; VS Code: S5.33, S5.34; Chrome: S5.33, S5.34
+
+## GAP-F005-99-NOTBUILT
+
+**Other items in Application shell and navigation components: not built on Web**
+
+- Kind: not built on an app (read in the code; source: capability ledger)
+- Apps: Web
+- Features: [F005-99](../../20-features/005-application-shell-and-navigation-components/F005-99-other-items.md)
+- Requirement items: S5.40
+- Detail: Web: S5.40

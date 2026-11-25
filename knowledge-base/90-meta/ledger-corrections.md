@@ -12,7 +12,7 @@ The project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl
 
 | Kind of disagreement | Cases | What it means |
 |---|---:|---|
-| The page describes it on an app where the ledger says not built | 364 | The ledger may be behind the code |
+| The page describes it on an app where the ledger says not built | 365 | The ledger may be behind the code |
 | The ledger says built or partly built where the page found nothing | 109 | The feature may be gone, or the page's writer did not find it |
 | Both say it exists; the page lists unfinished parts where the ledger says built (or the reverse) | 787 | Usually a matter of degree. Not counted as a ledger error. Includes things switched off by decision, such as sales |
 | Notes from the area pages that the brief or ledger is out of date | 535 | Free-text notes |
@@ -393,6 +393,7 @@ These are kept out of the gap register. Corrections to the ledger go through the
 | [F088-06](../20-features/088-support-trust-and-policy-product/F088-06-service-status-incidents-and-maintenance-notices.md) Service status, incidents and maintenance notices | VS Code | partly built | Mobile and VS Code only link to the status page. |
 | [F088-07](../20-features/088-support-trust-and-policy-product/F088-07-release-and-model-retirement-notices-and-migration.md) Release and model-retirement notices, and migration help | Mobile | partly built | Mobile release toast, 30-day retirement label and retired-model notice exist and are mounted. |
 | [F088-11](../20-features/088-support-trust-and-policy-product/F088-11-support-assistant-answers-email-and-whatsapp-langu.md) Support assistant (answers, email and WhatsApp, languages, analytics) | Web | partly built | The brief status says web missing while the assistant itself works for the in-scope parts. |
+| [F101-99](../20-features/101-shared-package-boundaries/F101-99-other-items.md) Other items in Shared package boundaries | VS Code | partly built | VS Code: the source record is parsed and forwarded, but no code was found that renders citations in its webview |
 | [F105-05](../20-features/105-developer-platform-and-console/F105-05-try-a-request-in-the-browser.md) Try a request in the browser | Web | partly built | Only one system and one user message; no multi-turn editing (buildRequestBody lines 103-119). |
 | [F105-05](../20-features/105-developer-platform-and-console/F105-05-try-a-request-in-the-browser.md) Try a request in the browser | Desktop | partly built | Desktop: the same page if the hosted app is shown |
 | [F105-12](../20-features/105-developer-platform-and-console/F105-12-inspectors-and-data-tools-not-built.md) Inspectors and data tools (not built) | Web | partly built | Tool-call inspector (S105.08): shows calls the model made, with arguments, for one request; no results, no history, no streamed calls |

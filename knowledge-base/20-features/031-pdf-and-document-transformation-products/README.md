@@ -2,7 +2,7 @@
 id: "AREA-031"
 type: "area"
 title: "PDF and document-transformation products"
-features: ["F031-01", "F031-02", "F031-03", "F031-04", "F031-05", "F031-06", "F031-07", "F031-08", "F031-09", "F031-10", "F031-11", "F031-12"]
+features: ["F031-01", "F031-02", "F031-03", "F031-04", "F031-05", "F031-06", "F031-07", "F031-08", "F031-09", "F031-10", "F031-11", "F031-12", "F031-99"]
 basis: "code inspection"
 last_reviewed: "2026-11-24"
 revision: "f51d16e747"
@@ -29,6 +29,7 @@ Lets a person attach a PDF, Word, spreadsheet or slide file to a chat and ask ab
 | [F031-10](F031-10-shrink-redact-and-edit-metadata.md) | Shrink, redact and edit metadata | no | no | no | no | no | no |
 | [F031-11](F031-11-searchable-and-accessible-pdf-output.md) | Searchable and accessible PDF output | no | no | no | no | no | no |
 | [F031-12](F031-12-send-a-document-for-e-signature.md) | Send a document for e-signature | partly | partly | no | no | no | no |
+| [F031-99](F031-99-other-items.md) | Other items in PDF and document-transformation products | n/a | n/a | partly | n/a | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/031-pdf-and-document-transformation-products.md](../../10-requirements/capabilities/031-pdf-and-document-transformation-products.md).
 

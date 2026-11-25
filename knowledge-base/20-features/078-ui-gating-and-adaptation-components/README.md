@@ -25,7 +25,7 @@ This area decides what a person can see and use right now. It checks the plan, t
 | [F078-06](F078-06-connections-devices-and-runtimes.md) | Connections, devices and runtimes | built | built | partly | partly | partly | no |
 | [F078-07](F078-07-permission-explanations.md) | Permission explanations | built | built | built | built | built | built |
 | [F078-08](F078-08-live-refresh-after-a-change.md) | Live refresh after a change | built | built | built | built | built | built |
-| [F078-99](F078-99-other-items.md) | Other items in UI gating and adaptation components | n/a | n/a | n/a | n/a | n/a | n/a |
+| [F078-99](F078-99-other-items.md) | Other items in UI gating and adaptation components | n/a | n/a | n/a | no | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/078-ui-gating-and-adaptation-components.md](../../10-requirements/capabilities/078-ui-gating-and-adaptation-components.md).
 

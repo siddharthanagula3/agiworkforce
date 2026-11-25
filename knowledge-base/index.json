@@ -1,6 +1,6 @@
 {
  "built_on": "2026-11-24",
- "built_at_commit": "ab04b88ea8",
+ "built_at_commit": "8213c7ea65",
  "content_read_on": "2026-11-24",
  "content_read_at_commit": "f51d16e747",
  "documents": [
@@ -39,7 +39,7 @@
    "type": "overview",
    "title": "System architecture",
    "path": "00-start/system-architecture.md",
-   "words": 5177,
+   "words": 5181,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -89,7 +89,7 @@
    "type": "requirements",
    "title": "Requirement items: Application shell and navigation components",
    "path": "10-requirements/capabilities/005-application-shell-and-navigation-components.md",
-   "words": 2222,
+   "words": 2273,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -349,7 +349,7 @@
    "type": "requirements",
    "title": "Requirement items: PDF and document-transformation products",
    "path": "10-requirements/capabilities/031-pdf-and-document-transformation-products.md",
-   "words": 1394,
+   "words": 1447,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -699,7 +699,7 @@
    "type": "requirements",
    "title": "Requirement items: Coding-workspace frontend",
    "path": "10-requirements/capabilities/066-coding-workspace-frontend.md",
-   "words": 2278,
+   "words": 2997,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -709,7 +709,7 @@
    "type": "requirements",
    "title": "Requirement items: Coding capabilities and developer workflows",
    "path": "10-requirements/capabilities/067-coding-capabilities-and-developer-workflows.md",
-   "words": 2191,
+   "words": 2327,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -759,7 +759,7 @@
    "type": "requirements",
    "title": "Requirement items: CLI and terminal application",
    "path": "10-requirements/capabilities/072-cli-and-terminal-application.md",
-   "words": 1744,
+   "words": 1887,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -799,7 +799,7 @@
    "type": "requirements",
    "title": "Requirement items: UI gating and adaptation components",
    "path": "10-requirements/capabilities/078-ui-gating-and-adaptation-components.md",
-   "words": 1621,
+   "words": 1750,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -849,7 +849,7 @@
    "type": "requirements",
    "title": "Requirement items: General and appearance settings",
    "path": "10-requirements/capabilities/084-general-and-appearance-settings.md",
-   "words": 1448,
+   "words": 1508,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -879,7 +879,7 @@
    "type": "requirements",
    "title": "Requirement items: Enterprise administration screens",
    "path": "10-requirements/capabilities/087-enterprise-administration-screens.md",
-   "words": 2361,
+   "words": 2501,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -889,7 +889,7 @@
    "type": "requirements",
    "title": "Requirement items: Support, trust, and policy product",
    "path": "10-requirements/capabilities/088-support-trust-and-policy-product.md",
-   "words": 1810,
+   "words": 1891,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -899,7 +899,7 @@
    "type": "requirements",
    "title": "Requirement items: Account and access components",
    "path": "10-requirements/capabilities/089-account-and-access-components.md",
-   "words": 1113,
+   "words": 1248,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -1019,7 +1019,7 @@
    "type": "requirements",
    "title": "Requirement items: Shared package boundaries",
    "path": "10-requirements/capabilities/101-shared-package-boundaries.md",
-   "words": 1644,
+   "words": 1772,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -1685,11 +1685,21 @@
    "revision": "f51d16e747"
   },
   {
+   "id": "F005-99",
+   "type": "feature",
+   "title": "Other items in Application shell and navigation components",
+   "path": "20-features/005-application-shell-and-navigation-components/F005-99-other-items.md",
+   "words": 276,
+   "has_metadata": true,
+   "last_reviewed": "2026-11-24",
+   "revision": "f51d16e747"
+  },
+  {
    "id": "AREA-005",
    "type": "area",
    "title": "Application shell and navigation components",
    "path": "20-features/005-application-shell-and-navigation-components/README.md",
-   "words": 2287,
+   "words": 2312,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -4745,11 +4755,21 @@
    "revision": "f51d16e747"
   },
   {
+   "id": "F031-99",
+   "type": "feature",
+   "title": "Other items in PDF and document-transformation products",
+   "path": "20-features/031-pdf-and-document-transformation-products/F031-99-other-items.md",
+   "words": 280,
+   "has_metadata": true,
+   "last_reviewed": "2026-11-24",
+   "revision": "f51d16e747"
+  },
+  {
    "id": "AREA-031",
    "type": "area",
    "title": "PDF and document-transformation products",
    "path": "20-features/031-pdf-and-document-transformation-products/README.md",
-   "words": 2222,
+   "words": 2246,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -8875,11 +8895,21 @@
    "revision": "f51d16e747"
   },
   {
+   "id": "F066-99",
+   "type": "feature",
+   "title": "Other items in Coding-workspace frontend",
+   "path": "20-features/066-coding-workspace-frontend/F066-99-other-items.md",
+   "words": 282,
+   "has_metadata": true,
+   "last_reviewed": "2026-11-24",
+   "revision": "f51d16e747"
+  },
+  {
    "id": "AREA-066",
    "type": "area",
    "title": "Coding-workspace frontend",
    "path": "20-features/066-coding-workspace-frontend/README.md",
-   "words": 2071,
+   "words": 2093,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -8995,11 +9025,21 @@
    "revision": "f51d16e747"
   },
   {
+   "id": "F067-99",
+   "type": "feature",
+   "title": "Other items in Coding capabilities and developer workflows",
+   "path": "20-features/067-coding-capabilities-and-developer-workflows/F067-99-other-items.md",
+   "words": 278,
+   "has_metadata": true,
+   "last_reviewed": "2026-11-24",
+   "revision": "f51d16e747"
+  },
+  {
    "id": "AREA-067",
    "type": "area",
    "title": "Coding capabilities and developer workflows",
    "path": "20-features/067-coding-capabilities-and-developer-workflows/README.md",
-   "words": 2132,
+   "words": 2157,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9635,11 +9675,21 @@
    "revision": "f51d16e747"
   },
   {
+   "id": "F072-99",
+   "type": "feature",
+   "title": "Other items in CLI and terminal application",
+   "path": "20-features/072-cli-and-terminal-application/F072-99-other-items.md",
+   "words": 274,
+   "has_metadata": true,
+   "last_reviewed": "2026-11-24",
+   "revision": "f51d16e747"
+  },
+  {
    "id": "AREA-072",
    "type": "area",
    "title": "CLI and terminal application",
    "path": "20-features/072-cli-and-terminal-application/README.md",
-   "words": 2322,
+   "words": 2346,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10119,7 +10169,7 @@
    "type": "feature",
    "title": "Other items in UI gating and adaptation components",
    "path": "20-features/078-ui-gating-and-adaptation-components/F078-99-other-items.md",
-   "words": 2148,
+   "words": 2159,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10705,11 +10755,21 @@
    "revision": "f51d16e747"
   },
   {
+   "id": "F084-99",
+   "type": "feature",
+   "title": "Other items in General and appearance settings",
+   "path": "20-features/084-general-and-appearance-settings/F084-99-other-items.md",
+   "words": 280,
+   "has_metadata": true,
+   "last_reviewed": "2026-11-24",
+   "revision": "f51d16e747"
+  },
+  {
    "id": "AREA-084",
    "type": "area",
    "title": "General and appearance settings",
    "path": "20-features/084-general-and-appearance-settings/README.md",
-   "words": 2920,
+   "words": 2944,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -11095,11 +11155,21 @@
    "revision": "f51d16e747"
   },
   {
+   "id": "F087-99",
+   "type": "feature",
+   "title": "Other items in Enterprise administration screens",
+   "path": "20-features/087-enterprise-administration-screens/F087-99-other-items.md",
+   "words": 270,
+   "has_metadata": true,
+   "last_reviewed": "2026-11-24",
+   "revision": "f51d16e747"
+  },
+  {
    "id": "AREA-087",
    "type": "area",
    "title": "Enterprise administration screens",
    "path": "20-features/087-enterprise-administration-screens/README.md",
-   "words": 2301,
+   "words": 2324,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -11215,11 +11285,21 @@
    "revision": "f51d16e747"
   },
   {
+   "id": "F088-99",
+   "type": "feature",
+   "title": "Other items in Support, trust, and policy product",
+   "path": "20-features/088-support-trust-and-policy-product/F088-99-other-items.md",
+   "words": 276,
+   "has_metadata": true,
+   "last_reviewed": "2026-11-24",
+   "revision": "f51d16e747"
+  },
+  {
    "id": "AREA-088",
    "type": "area",
    "title": "Support, trust, and policy product",
    "path": "20-features/088-support-trust-and-policy-product/README.md",
-   "words": 1798,
+   "words": 1823,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -11345,11 +11425,21 @@
    "revision": "f51d16e747"
   },
   {
+   "id": "F089-99",
+   "type": "feature",
+   "title": "Other items in Account and access components",
+   "path": "20-features/089-account-and-access-components/F089-99-other-items.md",
+   "words": 274,
+   "has_metadata": true,
+   "last_reviewed": "2026-11-24",
+   "revision": "f51d16e747"
+  },
+  {
    "id": "AREA-089",
    "type": "area",
    "title": "Account and access components",
    "path": "20-features/089-account-and-access-components/README.md",
-   "words": 2158,
+   "words": 2182,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12539,7 +12629,7 @@
    "type": "feature",
    "title": "Other items in Shared package boundaries",
    "path": "20-features/101-shared-package-boundaries/F101-99-other-items.md",
-   "words": 2900,
+   "words": 2966,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -13699,7 +13789,7 @@
    "type": "catalog",
    "title": "Feature catalog",
    "path": "20-features/README.md",
-   "words": 27135,
+   "words": 27342,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -14549,7 +14639,7 @@
    "type": "root-cause",
    "title": "RETRY-WRONG-TURN: design",
    "path": "70-qa/defects/root-causes/RETRY-WRONG-TURN.md",
-   "words": 1797,
+   "words": 1799,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -18569,7 +18659,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 4. Signed-in application destinations",
    "path": "70-qa/test-plans/web/004-signed-in-application-destinations.md",
-   "words": 4979,
+   "words": 4978,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -18679,7 +18769,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 15. Model-selector interface",
    "path": "70-qa/test-plans/web/015-model-selector-interface.md",
-   "words": 4254,
+   "words": 4252,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -18699,7 +18789,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 17. Assistant-message components",
    "path": "70-qa/test-plans/web/017-assistant-message-components.md",
-   "words": 4467,
+   "words": 4465,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -18709,7 +18799,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 18. Conversation-level controls",
    "path": "70-qa/test-plans/web/018-conversation-level-controls.md",
-   "words": 2725,
+   "words": 2724,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -18719,7 +18809,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 19. Streaming and response-presentation states",
    "path": "70-qa/test-plans/web/019-streaming-and-response-presentation-states.md",
-   "words": 3673,
+   "words": 3672,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -19399,7 +19489,7 @@
    "type": "gap-list",
    "title": "Gaps: Application shell and navigation components",
    "path": "80-gaps/by-area/005-application-shell-and-navigation-components.md",
-   "words": 3082,
+   "words": 3124,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -19659,7 +19749,7 @@
    "type": "gap-list",
    "title": "Gaps: PDF and document-transformation products",
    "path": "80-gaps/by-area/031-pdf-and-document-transformation-products.md",
-   "words": 3747,
+   "words": 3799,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -19929,7 +20019,7 @@
    "type": "gap-list",
    "title": "Gaps: MCP and interactive extension products",
    "path": "80-gaps/by-area/058-mcp-and-interactive-extension-products.md",
-   "words": 5416,
+   "words": 5479,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20009,7 +20099,7 @@
    "type": "gap-list",
    "title": "Gaps: Coding-workspace frontend",
    "path": "80-gaps/by-area/066-coding-workspace-frontend.md",
-   "words": 5880,
+   "words": 5947,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20019,7 +20109,7 @@
    "type": "gap-list",
    "title": "Gaps: Coding capabilities and developer workflows",
    "path": "80-gaps/by-area/067-coding-capabilities-and-developer-workflows.md",
-   "words": 6049,
+   "words": 6093,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20069,7 +20159,7 @@
    "type": "gap-list",
    "title": "Gaps: CLI and terminal application",
    "path": "80-gaps/by-area/072-cli-and-terminal-application.md",
-   "words": 4811,
+   "words": 4854,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20109,7 +20199,7 @@
    "type": "gap-list",
    "title": "Gaps: UI gating and adaptation components",
    "path": "80-gaps/by-area/078-ui-gating-and-adaptation-components.md",
-   "words": 2699,
+   "words": 2743,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20159,7 +20249,7 @@
    "type": "gap-list",
    "title": "Gaps: General and appearance settings",
    "path": "80-gaps/by-area/084-general-and-appearance-settings.md",
-   "words": 5039,
+   "words": 5092,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20189,7 +20279,7 @@
    "type": "gap-list",
    "title": "Gaps: Enterprise administration screens",
    "path": "80-gaps/by-area/087-enterprise-administration-screens.md",
-   "words": 10174,
+   "words": 10216,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20199,7 +20289,7 @@
    "type": "gap-list",
    "title": "Gaps: Support, trust, and policy product",
    "path": "80-gaps/by-area/088-support-trust-and-policy-product.md",
-   "words": 4115,
+   "words": 4157,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20209,7 +20299,7 @@
    "type": "gap-list",
    "title": "Gaps: Account and access components",
    "path": "80-gaps/by-area/089-account-and-access-components.md",
-   "words": 2472,
+   "words": 2515,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20329,7 +20419,7 @@
    "type": "gap-list",
    "title": "Gaps: Shared package boundaries",
    "path": "80-gaps/by-area/101-shared-package-boundaries.md",
-   "words": 2625,
+   "words": 2667,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20459,7 +20549,7 @@
    "type": "meta",
    "title": "Where the capability ledger and the feature pages disagree",
    "path": "90-meta/ledger-corrections.md",
-   "words": 33875,
+   "words": 33911,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"

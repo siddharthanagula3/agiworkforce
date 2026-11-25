@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 89. Account and access components
 
-24 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+26 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S89.01
 
@@ -178,3 +178,18 @@ revision: "f51d16e747"
 
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates):
 - Feature: [F089-12 Support staff access to customer data](../../20-features/089-account-and-access-components/F089-12-support-staff-access-to-customer-data.md)
+
+## S89.25
+
+**Sign the CLI in through an organization-hosted identity gateway.** An administrator can configure identity-provider authentication, account and group restrictions, a sign-in notice, session lifetime and credential rotation. A CLI user signs in through the organization’s device flow and receives the assigned access.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F089-99 Other items in Account and access components](../../20-features/089-account-and-access-components/F089-99-other-items.md)
+
+## S89.26
+
+**Operate the workspace sign-in gateway.** An administrator can configure its public listener, trusted proxies, TLS, outbound identity-provider connection, network restrictions, secret sources, durable device grants and request and sign-in limits.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F089-99 Other items in Account and access components](../../20-features/089-account-and-access-components/F089-99-other-items.md)
+- An owner decision is open on this item.

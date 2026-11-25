@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 72. CLI and terminal application
 
-84 open gaps that touch this area. Area page: [20-features/072-cli-and-terminal-application](../../20-features/072-cli-and-terminal-application/README.md).
+85 open gaps that touch this area. Area page: [20-features/072-cli-and-terminal-application](../../20-features/072-cli-and-terminal-application/README.md).
 
 ## CMP-C387
 
@@ -778,3 +778,13 @@ revision: "f51d16e747"
 - Features: [F072-12](../../20-features/072-cli-and-terminal-application/F072-12-remote-session-attachment.md)
 - Detail: Affects: surface:cli. Work needed: Run both scenarios and record the result.
 - Evidence: no file records one
+
+## GAP-F072-99-NOTBUILT
+
+**Other items in CLI and terminal application: not built on CLI**
+
+- Kind: not built on an app (read in the code; source: capability ledger)
+- Apps: CLI
+- Features: [F072-99](../../20-features/072-cli-and-terminal-application/F072-99-other-items.md)
+- Requirement items: S72.38, S72.39
+- Detail: CLI: S72.38, S72.39

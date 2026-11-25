@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Index of every page
 
-2053 pages. Machine-readable: [index.json](index.json). Large generated sets are summarised, not listed.
+2062 pages. Machine-readable: [index.json](index.json). Large generated sets are summarised, not listed.
 
 ## 'index' (1)
 
@@ -231,9 +231,9 @@ revision: "f51d16e747"
 
 - [Evidence](70-qa/evidence/README.md) `DOC-70-qa-evidence-readme`
 
-## feature (1148)
+## feature (1157)
 
-- 1148 pages under `20-features/`; see that folder's README.
+- 1157 pages under `20-features/`; see that folder's README.
 
 ## gap-list (106)
 

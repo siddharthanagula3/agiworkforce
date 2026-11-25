@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 31. PDF and document-transformation products
 
-64 open gaps that touch this area. Area page: [20-features/031-pdf-and-document-transformation-products](../../20-features/031-pdf-and-document-transformation-products/README.md).
+65 open gaps that touch this area. Area page: [20-features/031-pdf-and-document-transformation-products](../../20-features/031-pdf-and-document-transformation-products/README.md).
 
 ## GAP-AREA031-LW09
 
@@ -598,3 +598,13 @@ revision: "f51d16e747"
 - Features: [F031-12](../../20-features/031-pdf-and-document-transformation-products/F031-12-send-a-document-for-e-signature.md)
 - Requirement items: S31.23
 - Detail: Web S31.23: owner: register the Docusign developer app (integration key, OAuth client pair, redirect URI) and set the DOCUSIGN_* env vars; catalog and endpoint entries exist (apps/web/lib/connectors/catalog.ts:248) | Desktop S31.23: owner: register the Docusign developer app (integration key, OAuth client pair, redirect URI) and set the DOCUSIGN_* env vars; catalog and endpoint entries exist (apps/web/lib/connectors/catalog.ts:248)
+
+## GAP-F031-99-PARTLY
+
+**Other items in PDF and document-transformation products: partly built on Mobile**
+
+- Kind: partly built (read in the code; source: capability ledger)
+- Apps: Mobile
+- Features: [F031-99](../../20-features/031-pdf-and-document-transformation-products/F031-99-other-items.md)
+- Requirement items: S31.26
+- Detail: Mobile S31.26: Create file offers document, presentation and spreadsheet formats. PDF is missing from that menu.

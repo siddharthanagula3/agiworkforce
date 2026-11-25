@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gap register
 
-10593 open gaps, each with an identifier, its source, the kind of evidence behind it, and the features and requirement items it affects. Machine-readable: [gaps.jsonl](gaps.jsonl). One page per product area is in [by-area/](by-area/).
+10605 open gaps, each with an identifier, its source, the kind of evidence behind it, and the features and requirement items it affects. Machine-readable: [gaps.jsonl](gaps.jsonl). One page per product area is in [by-area/](by-area/).
 
 | Kind of gap | Count | Evidence |
 |---|---:|---|
@@ -15,11 +15,11 @@ revision: "f51d16e747"
 | missing compared with Claude or ChatGPT | 1729 | competitor evidence |
 | partly there compared with Claude or ChatGPT | 1097 | competitor evidence |
 | behind a competitor | 849 | competitor evidence |
-| not built on an app | 720 | read in the code |
+| not built on an app | 729 | read in the code |
 | defect found by reading code | 296 | read in the code |
 | looks wrong in the code | 258 | read in the code |
 | problem seen in the running app | 237 | seen in a real run |
-| partly built | 196 | read in the code |
+| partly built | 199 | read in the code |
 
 ## Identifiers
 

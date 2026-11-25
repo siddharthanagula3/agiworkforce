@@ -4,10 +4,10 @@ type: "feature"
 title: "Other items in Shared package boundaries"
 aliases: ["Shared source and citation model", "AgentEventSource", "source records", "Citation chips", "Sources list", "S101.18"]
 area: "101 Shared package boundaries"
-available_on: []
-implementation: {web: "n/a", desktop: "n/a", mobile: "n/a", cli: "n/a", vscode: "n/a", chrome: "n/a"}
+available_on: ["vscode"]
+implementation: {web: "n/a", desktop: "n/a", mobile: "n/a", cli: "missing", vscode: "partial", chrome: "n/a"}
 verification: {web: "n/a", desktop: "n/a", mobile: "n/a", cli: "n/a", vscode: "n/a", chrome: "n/a"}
-requirement_items: ["S101.18"]
+requirement_items: ["S101.18", "S101.39", "S101.40"]
 depends_on: ["surface:web", "surface:mobile", "surface:chrome", "surface:vscode", "surface:cli", "surface:desktop", "SYS-api-and-contracts", "SYS-chat-turn-pipeline", "SYS-sync-and-continuity", "file:crates/agiworkforce-protocol/src/agent_events.rs", "file:packages/contracts/types/src/shared-ownership.json"]
 basis: "code inspection"
 second_reader: "not sampled: statements are code readings that nobody has re-checked"
@@ -18,7 +18,7 @@ revision: "f51d16e747"
 
 A source a turn used (link, title, optional snippet) has one shape defined in the Rust protocol and generated into TypeScript. Web, Mobile and the Chrome side panel build their source records from it. VS Code parses it. Citation marker handling is partly shared and partly copied.
 
-Area: [101. Shared package boundaries](README.md). Requirement items: [S101.18](../../10-requirements/capabilities/101-shared-package-boundaries.md#s10118).
+Area: [101. Shared package boundaries](README.md). Requirement items: [S101.18](../../10-requirements/capabilities/101-shared-package-boundaries.md#s10118), [S101.39](../../10-requirements/capabilities/101-shared-package-boundaries.md#s10139), [S101.40](../../10-requirements/capabilities/101-shared-package-boundaries.md#s10140).
 
 ## Status
 
@@ -29,11 +29,12 @@ Two separate questions: is the code there, and has a person seen it work. "Seen 
 | Web | does not apply | does not apply | n/a |
 | Desktop | does not apply | does not apply | n/a |
 | Mobile | does not apply | does not apply | n/a |
-| CLI | does not apply | does not apply | n/a |
-| VS Code | does not apply | does not apply | n/a |
+| CLI | not stated on this page | not built | n/a |
+| VS Code | partly built **(disagrees with the ledger on whether it exists)** | not built | n/a |
 | Chrome | does not apply | does not apply | n/a |
 
 The first column was derived from this page's text by a second, cheaper pass and has not been validated item by item; the ledger column is the project's own record. Neither is a test result.
+Where the two disagree on whether the feature exists on an app, the case is listed in [ledger corrections](../../90-meta/ledger-corrections.md).
 
 ## 1. Purpose and user value
 
@@ -270,6 +271,7 @@ What has actually been seen by a person is in the Status table above. This secti
 **Hands-on test plans**
 
 - none: not built on any app
+- No hands-on plan yet for VS Code: the ledger marks this area as not built there, so the plan builder made none. Use the scenarios above.
 
 ## 10. Gaps and dependencies
 
@@ -278,6 +280,7 @@ What has actually been seen by a person is in the Status table above. This secti
 - **The brief still lists Chrome and VS Code adoption as left, but Chrome's record type already extends the shared one.** Affects: Readers of the brief. Evidence: apps/extension/src/features/side-panel/chat-state.ts:13,37. Work needed: Update the brief row.
 - **The brief's evidence cites apps/web/shared/types/common.ts:203, which is a research-plan helper, not a source model.** Affects: Reviewers following the brief. Evidence: apps/web/shared/types/common.ts:203-216. Work needed: Correct the code references for S101.18.
 - **Desktop (Tauri renderer) and CLI terminal display of sources were not verified.** Affects: Desktop, CLI. Evidence: apps/desktop/src/runtime/__tests__/LocalChatTurn.reopenedSources.test.tsx exists; CLI display not read. Work needed: Read and run.
+- Not built on: CLI (from the capability ledger).
 
 **Depends on**
 

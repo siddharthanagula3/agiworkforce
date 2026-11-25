@@ -2,7 +2,7 @@
 id: "AREA-072"
 type: "area"
 title: "CLI and terminal application"
-features: ["F072-01", "F072-02", "F072-03", "F072-04", "F072-05", "F072-06", "F072-07", "F072-08", "F072-09", "F072-10", "F072-11", "F072-12"]
+features: ["F072-01", "F072-02", "F072-03", "F072-04", "F072-05", "F072-06", "F072-07", "F072-08", "F072-09", "F072-10", "F072-11", "F072-12", "F072-99"]
 basis: "code inspection"
 last_reviewed: "2026-11-24"
 revision: "f51d16e747"
@@ -29,6 +29,7 @@ The CLI is the `agi` command in a terminal. It gives a person an AI coding and t
 | [F072-10](F072-10-sign-in-settings-folders-and-environment.md) | Sign-in, settings, folders and environment | n/a | n/a | n/a | built | n/a | n/a |
 | [F072-11](F072-11-install-update-diagnostics-and-shell-completion.md) | Install, update, diagnostics and shell completion | n/a | n/a | n/a | partly | n/a | n/a |
 | [F072-12](F072-12-remote-session-attachment.md) | Remote session attachment | n/a | n/a | n/a | built | n/a | n/a |
+| [F072-99](F072-99-other-items.md) | Other items in CLI and terminal application | n/a | n/a | n/a | no | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/072-cli-and-terminal-application.md](../../10-requirements/capabilities/072-cli-and-terminal-application.md).
 

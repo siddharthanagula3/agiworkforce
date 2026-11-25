@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 89. Account and access components
 
-44 open gaps that touch this area. Area page: [20-features/089-account-and-access-components](../../20-features/089-account-and-access-components/README.md).
+45 open gaps that touch this area. Area page: [20-features/089-account-and-access-components](../../20-features/089-account-and-access-components/README.md).
 
 ## GAP-AREA089-LW01
 
@@ -404,3 +404,13 @@ revision: "f51d16e747"
 - Features: [F089-12](../../20-features/089-account-and-access-components/F089-12-support-staff-access-to-customer-data.md)
 - Detail: Affects: Workspace owners and admins on every app. Work needed: Design and build a view.
 - Evidence: No UI file found by search
+
+## GAP-F089-99-NOTBUILT
+
+**Other items in Account and access components: not built on CLI**
+
+- Kind: not built on an app (read in the code; source: capability ledger)
+- Apps: CLI
+- Features: [F089-99](../../20-features/089-account-and-access-components/F089-99-other-items.md)
+- Requirement items: S89.25, S89.26
+- Detail: CLI: S89.25, S89.26

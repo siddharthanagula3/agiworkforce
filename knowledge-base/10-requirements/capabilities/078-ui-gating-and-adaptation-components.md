@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 78. UI gating and adaptation components
 
-28 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+30 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S78.01
 
@@ -206,3 +206,19 @@ revision: "f51d16e747"
 
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web done, Desktop done, Mobile done, CLI done, VS Code done, Chrome done
 - Feature: [F078-08 Live refresh after a change](../../20-features/078-ui-gating-and-adaptation-components/F078-08-live-refresh-after-a-change.md)
+
+## S78.29
+
+**Discover bundled artifact and diagram skills in the CLI.** A user can find and invoke the built-in artifact capability and diagramming skills from a fresh CLI installation.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F078-99 Other items in UI gating and adaptation components](../../20-features/078-ui-gating-and-adaptation-components/F078-99-other-items.md)
+- An owner decision is open on this item.
+
+## S78.30
+
+**Author plugins, skills and workflows with discoverable CLI skills.** A user can invoke the bundled authoring skills to produce a plugin, generate a skill or define a workflow.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F078-99 Other items in UI gating and adaptation components](../../20-features/078-ui-gating-and-adaptation-components/F078-99-other-items.md)
+- An owner decision is open on this item.

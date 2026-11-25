@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Feature catalog
 
-1148 features in 106 product areas. Each has a stable identifier that never changes. Columns give the state of the code per app: built, partly, no (not built), n/a. Whether a person has seen it work is on each feature's page.
+1157 features in 106 product areas. Each has a stable identifier that never changes. Columns give the state of the code per app: built, partly, no (not built), n/a. Whether a person has seen it work is on each feature's page.
 
 Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [registry.json](registry.json).
 
@@ -88,6 +88,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F005-09](005-application-shell-and-navigation-components/F005-09-notification-center.md) | Notification center | built | built | built | no | no | no |
 | [F005-10](005-application-shell-and-navigation-components/F005-10-profile-help-and-upgrade-menus.md) | Profile, help and upgrade menus | partly | partly | partly | built | partly | partly |
 | [F005-11](005-application-shell-and-navigation-components/F005-11-connection-offline-and-release-status.md) | Connection, offline and release status | partly | built | partly | partly | partly | partly |
+| [F005-99](005-application-shell-and-navigation-components/F005-99-other-items.md) | Other items in Application shell and navigation components | no | n/a | n/a | n/a | n/a | n/a |
 
 ## 6. Visual foundations and spacing conventions
 
@@ -550,6 +551,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F031-10](031-pdf-and-document-transformation-products/F031-10-shrink-redact-and-edit-metadata.md) | Shrink, redact and edit metadata | no | no | no | no | no | no |
 | [F031-11](031-pdf-and-document-transformation-products/F031-11-searchable-and-accessible-pdf-output.md) | Searchable and accessible PDF output | no | no | no | no | no | no |
 | [F031-12](031-pdf-and-document-transformation-products/F031-12-send-a-document-for-e-signature.md) | Send a document for e-signature | partly | partly | no | no | no | no |
+| [F031-99](031-pdf-and-document-transformation-products/F031-99-other-items.md) | Other items in PDF and document-transformation products | n/a | n/a | partly | n/a | n/a | n/a |
 
 ## 32. Design workspace
 
@@ -1173,6 +1175,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F066-10](066-coding-workspace-frontend/F066-10-live-browser-preview-and-simulator.md) | Live browser preview and simulator | no | partly | no | no | no | n/a |
 | [F066-11](066-coding-workspace-frontend/F066-11-pull-request-checks-test-results-recap.md) | Pull request, checks, test results, recap | partly | partly | partly | partly | no | n/a |
 | [F066-12](066-coding-workspace-frontend/F066-12-continue-share-and-move-sessions.md) | Continue, share and move sessions | partly | built | partly | built | partly | n/a |
+| [F066-99](066-coding-workspace-frontend/F066-99-other-items.md) | Other items in Coding-workspace frontend | no | n/a | no | no | n/a | n/a |
 
 ## 67. Coding capabilities and developer workflows
 
@@ -1191,6 +1194,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F067-09](067-coding-capabilities-and-developer-workflows/F067-09-bounded-goal-loops.md) | Bounded goal loops | partly | n/a | no | built | n/a | n/a |
 | [F067-10](067-coding-capabilities-and-developer-workflows/F067-10-repository-memory-instruction-files-and-skills.md) | Repository memory, instruction files and skills | no | built | no | built | built | n/a |
 | [F067-11](067-coding-capabilities-and-developer-workflows/F067-11-reports-slides-and-designs-from-the-repository.md) | Reports, slides and designs from the repository | no | no | no | no | no | n/a |
+| [F067-99](067-coding-capabilities-and-developer-workflows/F067-99-other-items.md) | Other items in Coding capabilities and developer workflows | n/a | n/a | n/a | no | n/a | n/a |
 
 ## 68. Session continuity and remote-session product
 
@@ -1285,6 +1289,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F072-10](072-cli-and-terminal-application/F072-10-sign-in-settings-folders-and-environment.md) | Sign-in, settings, folders and environment | n/a | n/a | n/a | built | n/a | n/a |
 | [F072-11](072-cli-and-terminal-application/F072-11-install-update-diagnostics-and-shell-completion.md) | Install, update, diagnostics and shell completion | n/a | n/a | n/a | partly | n/a | n/a |
 | [F072-12](072-cli-and-terminal-application/F072-12-remote-session-attachment.md) | Remote session attachment | n/a | n/a | n/a | built | n/a | n/a |
+| [F072-99](072-cli-and-terminal-application/F072-99-other-items.md) | Other items in CLI and terminal application | n/a | n/a | n/a | no | n/a | n/a |
 
 ## 73. VS Code and IDE extension
 
@@ -1357,7 +1362,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F078-06](078-ui-gating-and-adaptation-components/F078-06-connections-devices-and-runtimes.md) | Connections, devices and runtimes | built | built | partly | partly | partly | no |
 | [F078-07](078-ui-gating-and-adaptation-components/F078-07-permission-explanations.md) | Permission explanations | built | built | built | built | built | built |
 | [F078-08](078-ui-gating-and-adaptation-components/F078-08-live-refresh-after-a-change.md) | Live refresh after a change | built | built | built | built | built | built |
-| [F078-99](078-ui-gating-and-adaptation-components/F078-99-other-items.md) | Other items in UI gating and adaptation components | n/a | n/a | n/a | n/a | n/a | n/a |
+| [F078-99](078-ui-gating-and-adaptation-components/F078-99-other-items.md) | Other items in UI gating and adaptation components | n/a | n/a | n/a | no | n/a | n/a |
 
 ## 79. Routing and model-neutral orchestration
 
@@ -1446,6 +1451,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F084-10](084-general-and-appearance-settings/F084-10-sidebar-items-and-layout-reset.md) | Sidebar items and layout reset | partly | partly | no | n/a | n/a | n/a |
 | [F084-11](084-general-and-appearance-settings/F084-11-desktop-launch-and-quick-access.md) | Desktop launch and quick access | no | partly | no | n/a | no | no |
 | [F084-12](084-general-and-appearance-settings/F084-12-experimental-features-and-restore-defaults.md) | Experimental features and restore defaults | partly | partly | no | n/a | no | no |
+| [F084-99](084-general-and-appearance-settings/F084-99-other-items.md) | Other items in General and appearance settings | partly | n/a | n/a | n/a | n/a | n/a |
 
 ## 85. Personalization and data settings
 
@@ -1503,6 +1509,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F087-10](087-enterprise-administration-screens/F087-10-audit-trail-and-exports.md) | Audit trail and exports | built | built | n/a | no | n/a | n/a |
 | [F087-11](087-enterprise-administration-screens/F087-11-usage-budgets-and-spend-limits.md) | Usage, budgets and spend limits | partly | partly | no | no | no | n/a |
 | [F087-12](087-enterprise-administration-screens/F087-12-billing-compliance-legal-holds-and-support-access.md) | Billing, compliance, legal holds and support access | partly | partly | no | no | no | n/a |
+| [F087-99](087-enterprise-administration-screens/F087-99-other-items.md) | Other items in Enterprise administration screens | n/a | n/a | n/a | no | n/a | n/a |
 
 ## 88. Support, trust, and policy product
 
@@ -1521,6 +1528,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F088-09](088-support-trust-and-policy-product/F088-09-reports-and-appeals-content-copyright-safety-refus.md) | Reports and appeals (content, copyright, safety refusal, suspension) | built | built | partly | no | no | no |
 | [F088-10](088-support-trust-and-policy-product/F088-10-security-accessibility-and-policy-pages.md) | Security, accessibility and policy pages | partly | partly | no | no | no | no |
 | [F088-11](088-support-trust-and-policy-product/F088-11-support-assistant-answers-email-and-whatsapp-langu.md) | Support assistant (answers, email and WhatsApp, languages, analytics) | partly | n/a | n/a | n/a | n/a | n/a |
+| [F088-99](088-support-trust-and-policy-product/F088-99-other-items.md) | Other items in Support, trust, and policy product | n/a | n/a | n/a | no | n/a | n/a |
 
 ## 89. Account and access components
 
@@ -1540,6 +1548,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F089-10](089-account-and-access-components/F089-10-pairing-a-second-device.md) | Pairing a second device | n/a | n/a | n/a | n/a | n/a | n/a |
 | [F089-11](089-account-and-access-components/F089-11-deleting-and-exporting-account-data.md) | Deleting and exporting account data | n/a | n/a | n/a | n/a | n/a | n/a |
 | [F089-12](089-account-and-access-components/F089-12-support-staff-access-to-customer-data.md) | Support staff access to customer data | n/a | n/a | n/a | n/a | n/a | n/a |
+| [F089-99](089-account-and-access-components/F089-99-other-items.md) | Other items in Account and access components | n/a | n/a | n/a | no | n/a | n/a |
 
 ## 90. Conversation and synchronization components
 
@@ -1731,7 +1740,7 @@ Machine-readable copy: [catalog.json](catalog.json). Identifier registry: [regis
 | [F101-06](101-shared-package-boundaries/F101-06-tools-approvals-skills-and-the-coding-session-prot.md) | Tools, approvals, skills and the coding-session protocol | n/a | n/a | n/a | n/a | n/a | n/a |
 | [F101-07](101-shared-package-boundaries/F101-07-design-tokens-ui-primitives-text-and-markdown.md) | Design tokens, UI primitives, text and Markdown | n/a | n/a | n/a | n/a | n/a | n/a |
 | [F101-08](101-shared-package-boundaries/F101-08-telemetry-configuration-security-helpers-and-packa.md) | Telemetry, configuration, security helpers and package runtimes | n/a | n/a | n/a | n/a | n/a | n/a |
-| [F101-99](101-shared-package-boundaries/F101-99-other-items.md) | Other items in Shared package boundaries | n/a | n/a | n/a | n/a | n/a | n/a |
+| [F101-99](101-shared-package-boundaries/F101-99-other-items.md) | Other items in Shared package boundaries | n/a | n/a | n/a | no | partly | n/a |
 
 ## 102. Runtime inventory
 

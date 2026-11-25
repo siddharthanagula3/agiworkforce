@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 84. General and appearance settings
 
-26 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+27 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S84.01
 
@@ -221,3 +221,10 @@ revision: "f51d16e747"
 
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates):
 - Feature: [F084-12 Experimental features and restore defaults](../../20-features/084-general-and-appearance-settings/F084-12-experimental-features-and-restore-defaults.md)
+
+## S84.27
+
+**Follow the browser language from display settings.** A user can select automatic display language in Settings. Changing the preferred browser language then changes the interface to the supported language on the next visit.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web partial
+- Feature: [F084-99 Other items in General and appearance settings](../../20-features/084-general-and-appearance-settings/F084-99-other-items.md)

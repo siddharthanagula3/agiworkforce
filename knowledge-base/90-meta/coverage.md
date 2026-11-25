@@ -12,15 +12,15 @@ What has been documented, read in the code, tested by a person, and what is stil
 | Measure | Count |
 |---|---:|
 | Product areas | 106 |
-| Requirement items | 3439 |
-| Features with a stable identifier | 1148 |
+| Requirement items | 3466 |
+| Features with a stable identifier | 1157 |
 | Area pages written from the code | 106 |
 | Feature pages with all ten sections | 1148 |
 | Hands-on test items (item x app) | 7200 |
 | ...with a path whose labels are confirmed in the code | 5818 |
-| Built in the code (item x app) | 7200 |
+| Built in the code (item x app) | 7202 |
 | ...seen working by a person | 149 |
-| Open gaps linked to an area | 8536 |
+| Open gaps linked to an area | 8548 |
 
 ## By area
 
@@ -29,7 +29,7 @@ What has been documented, read in the code, tested by a person, and what is stil
 | 2 | [Public website and acquisition screens](../20-features/002-public-website-and-acquisition-screens/README.md) | 40 | 12 | yes | 12 | 37 | 37 | 37 | 18 | 58 |
 | 3 | [Authentication and onboarding screens](../20-features/003-authentication-and-onboarding-screens/README.md) | 37 | 12 | yes | 12 | 96 | 85 | 96 | 0 | 102 |
 | 4 | [Signed-in application destinations](../20-features/004-signed-in-application-destinations/README.md) | 44 | 15 | yes | 15 | 171 | 153 | 171 | 15 | 105 |
-| 5 | [Application shell and navigation components](../20-features/005-application-shell-and-navigation-components/README.md) | 39 | 11 | yes | 11 | 147 | 135 | 147 | 7 | 58 |
+| 5 | [Application shell and navigation components](../20-features/005-application-shell-and-navigation-components/README.md) | 40 | 12 | yes | 11 | 147 | 135 | 147 | 7 | 59 |
 | 6 | [Visual foundations and spacing conventions](../20-features/006-visual-foundations-and-spacing-conventions/README.md) | 35 | 12 | yes | 12 | 198 | 64 | 198 | 0 | 52 |
 | 7 | [Layout systems](../20-features/007-layout-systems/README.md) | 32 | 10 | yes | 10 | 101 | 64 | 101 | 2 | 68 |
 | 8 | [Basic interactive elements](../20-features/008-basic-interactive-elements/README.md) | 50 | 12 | yes | 12 | 228 | 196 | 228 | 2 | 68 |
@@ -55,7 +55,7 @@ What has been documented, read in the code, tested by a person, and what is stil
 | 28 | [Code Canvas and application preview](../20-features/028-code-canvas-and-application-preview/README.md) | 32 | 12 | yes | 12 | 51 | 31 | 51 | 0 | 96 |
 | 29 | [Spreadsheet and data-analysis workspace](../20-features/029-spreadsheet-and-data-analysis-workspace/README.md) | 40 | 12 | yes | 12 | 30 | 23 | 30 | 0 | 74 |
 | 30 | [Presentation workspace](../20-features/030-presentation-workspace/README.md) | 33 | 12 | yes | 12 | 4 | 4 | 4 | 0 | 74 |
-| 31 | [PDF and document-transformation products](../20-features/031-pdf-and-document-transformation-products/README.md) | 25 | 12 | yes | 12 | 30 | 19 | 30 | 0 | 64 |
+| 31 | [PDF and document-transformation products](../20-features/031-pdf-and-document-transformation-products/README.md) | 26 | 13 | yes | 12 | 30 | 19 | 31 | 0 | 65 |
 | 32 | [Design workspace](../20-features/032-design-workspace/README.md) | 34 | 12 | yes | 12 | 16 | 9 | 16 | 0 | 56 |
 | 33 | [Generated Sites and published applications](../20-features/033-generated-sites-and-published-applications/README.md) | 30 | 10 | yes | 10 | 50 | 31 | 50 | 0 | 92 |
 | 34 | [Search experiences](../20-features/034-search-experiences/README.md) | 32 | 9 | yes | 9 | 75 | 65 | 75 | 3 | 85 |
@@ -82,7 +82,7 @@ What has been documented, read in the code, tested by a person, and what is stil
 | 55 | [Connector setup and account management](../20-features/055-connector-setup-and-account-management/README.md) | 32 | 12 | yes | 12 | 80 | 65 | 80 | 4 | 98 |
 | 56 | [Concrete integration families](../20-features/056-concrete-integration-families/README.md) | 47 | 11 | yes | 11 | 219 | 169 | 219 | 0 | 106 |
 | 57 | [Tool catalog and invocation experience](../20-features/057-tool-catalog-and-invocation-experience/README.md) | 38 | 12 | yes | 12 | 165 | 95 | 165 | 0 | 76 |
-| 58 | [MCP and interactive extension products](../20-features/058-mcp-and-interactive-extension-products/README.md) | 28 | 10 | yes | 10 | 66 | 49 | 66 | 0 | 94 |
+| 58 | [MCP and interactive extension products](../20-features/058-mcp-and-interactive-extension-products/README.md) | 28 | 10 | yes | 10 | 66 | 49 | 66 | 0 | 95 |
 | 59 | [Approvals and human-in-the-loop UI](../20-features/059-approvals-and-human-in-the-loop-ui/README.md) | 31 | 10 | yes | 10 | 161 | 146 | 161 | 0 | 131 |
 | 60 | [Agentic work product](../20-features/060-agentic-work-product/README.md) | 34 | 11 | yes | 11 | 128 | 115 | 128 | 0 | 117 |
 | 61 | [Persistent agents and agent rosters](../20-features/061-persistent-agents-and-agent-rosters/README.md) | 24 | 9 | yes | 9 | 16 | 15 | 16 | 0 | 76 |
@@ -90,27 +90,27 @@ What has been documented, read in the code, tested by a person, and what is stil
 | 63 | [Routines, schedules, and triggers](../20-features/063-routines-schedules-and-triggers/README.md) | 35 | 9 | yes | 9 | 106 | 105 | 106 | 0 | 152 |
 | 64 | [Browser-assistant experience](../20-features/064-browser-assistant-experience/README.md) | 32 | 12 | yes | 12 | 55 | 44 | 55 | 0 | 122 |
 | 65 | [Computer-use experience](../20-features/065-computer-use-experience/README.md) | 29 | 2 | yes | 2 | 41 | 23 | 41 | 0 | 50 |
-| 66 | [Coding-workspace frontend](../20-features/066-coding-workspace-frontend/README.md) | 41 | 12 | yes | 12 | 91 | 86 | 91 | 0 | 101 |
-| 67 | [Coding capabilities and developer workflows](../20-features/067-coding-capabilities-and-developer-workflows/README.md) | 39 | 11 | yes | 11 | 159 | 145 | 159 | 0 | 96 |
+| 66 | [Coding-workspace frontend](../20-features/066-coding-workspace-frontend/README.md) | 52 | 13 | yes | 12 | 91 | 86 | 91 | 0 | 102 |
+| 67 | [Coding capabilities and developer workflows](../20-features/067-coding-capabilities-and-developer-workflows/README.md) | 41 | 12 | yes | 11 | 159 | 145 | 159 | 0 | 97 |
 | 68 | [Session continuity and remote-session product](../20-features/068-session-continuity-and-remote-session-product/README.md) | 30 | 11 | yes | 11 | 86 | 64 | 86 | 0 | 94 |
 | 69 | [Web application](../20-features/069-web-application/README.md) | 20 | 12 | yes | 12 | 14 | 12 | 14 | 3 | 44 |
 | 70 | [Desktop application](../20-features/070-desktop-application/README.md) | 32 | 12 | yes | 12 | 24 | 20 | 24 | 2 | 79 |
 | 71 | [Mobile application](../20-features/071-mobile-application/README.md) | 32 | 12 | yes | 12 | 23 | 1 | 23 | 0 | 72 |
-| 72 | [CLI and terminal application](../20-features/072-cli-and-terminal-application/README.md) | 37 | 12 | yes | 12 | 37 | 35 | 37 | 0 | 84 |
+| 72 | [CLI and terminal application](../20-features/072-cli-and-terminal-application/README.md) | 39 | 13 | yes | 12 | 37 | 35 | 37 | 0 | 85 |
 | 73 | [VS Code and IDE extension](../20-features/073-vs-code-and-ide-extension/README.md) | 30 | 12 | yes | 12 | 30 | 27 | 30 | 0 | 41 |
 | 74 | [Browser extension](../20-features/074-browser-extension/README.md) | 28 | 11 | yes | 11 | 22 | 19 | 22 | 0 | 50 |
 | 76 | [Model-capability registry](../20-features/076-model-capability-registry/README.md) | 38 | 13 | yes | 13 | 127 | 75 | 127 | 0 | 95 |
-| 78 | [UI gating and adaptation components](../20-features/078-ui-gating-and-adaptation-components/README.md) | 28 | 9 | yes | 9 | 127 | 88 | 127 | 0 | 42 |
+| 78 | [UI gating and adaptation components](../20-features/078-ui-gating-and-adaptation-components/README.md) | 30 | 9 | yes | 9 | 127 | 88 | 127 | 0 | 43 |
 | 79 | [Routing and model-neutral orchestration](../20-features/079-routing-and-model-neutral-orchestration/README.md) | 31 | 11 | yes | 11 | 130 | 56 | 130 | 0 | 95 |
 | 81 | [Free / Basic / Pro / Max 5x / Max 20x planning structure](../20-features/081-free-basic-pro-max-5x-max-20x-planning-structure/README.md) | 28 | 7 | yes | 7 | 88 | 77 | 88 | 0 | 89 |
 | 82 | [Usage dashboard and limit UI](../20-features/082-usage-dashboard-and-limit-ui/README.md) | 33 | 12 | yes | 12 | 125 | 114 | 125 | 1 | 107 |
 | 83 | [Billing and subscription screens](../20-features/083-billing-and-subscription-screens/README.md) | 33 | 11 | yes | 11 | 77 | 68 | 77 | 0 | 86 |
-| 84 | [General and appearance settings](../20-features/084-general-and-appearance-settings/README.md) | 26 | 12 | yes | 12 | 57 | 55 | 57 | 0 | 93 |
+| 84 | [General and appearance settings](../20-features/084-general-and-appearance-settings/README.md) | 27 | 13 | yes | 12 | 57 | 55 | 58 | 0 | 94 |
 | 85 | [Personalization and data settings](../20-features/085-personalization-and-data-settings/README.md) | 26 | 12 | yes | 12 | 73 | 66 | 73 | 1 | 107 |
 | 86 | [Security and connected-access settings](../20-features/086-security-and-connected-access-settings/README.md) | 26 | 12 | yes | 12 | 69 | 68 | 69 | 1 | 103 |
-| 87 | [Enterprise administration screens](../20-features/087-enterprise-administration-screens/README.md) | 40 | 12 | yes | 12 | 81 | 78 | 81 | 0 | 186 |
-| 88 | [Support, trust, and policy product](../20-features/088-support-trust-and-policy-product/README.md) | 31 | 11 | yes | 11 | 81 | 69 | 81 | 6 | 80 |
-| 89 | [Account and access components](../20-features/089-account-and-access-components/README.md) | 24 | 12 | yes | 12 | 0 | 0 | 0 | 0 | 44 |
+| 87 | [Enterprise administration screens](../20-features/087-enterprise-administration-screens/README.md) | 42 | 13 | yes | 12 | 81 | 78 | 81 | 0 | 187 |
+| 88 | [Support, trust, and policy product](../20-features/088-support-trust-and-policy-product/README.md) | 32 | 12 | yes | 11 | 81 | 69 | 81 | 6 | 81 |
+| 89 | [Account and access components](../20-features/089-account-and-access-components/README.md) | 26 | 13 | yes | 12 | 0 | 0 | 0 | 0 | 45 |
 | 90 | [Conversation and synchronization components](../20-features/090-conversation-and-synchronization-components/README.md) | 23 | 12 | yes | 12 | 0 | 0 | 0 | 0 | 68 |
 | 91 | [Model and inference components](../20-features/091-model-and-inference-components/README.md) | 32 | 10 | yes | 10 | 0 | 0 | 0 | 0 | 44 |
 | 92 | [Tool-calling and agent-loop components](../20-features/092-tool-calling-and-agent-loop-components/README.md) | 30 | 10 | yes | 10 | 0 | 0 | 0 | 0 | 72 |
@@ -122,7 +122,7 @@ What has been documented, read in the code, tested by a person, and what is stil
 | 98 | [Integration and extensibility components](../20-features/098-integration-and-extensibility-components/README.md) | 29 | 11 | yes | 11 | 0 | 0 | 0 | 0 | 97 |
 | 99 | [Coding and local-runtime components](../20-features/099-coding-and-local-runtime-components/README.md) | 30 | 2 | yes | 2 | 0 | 0 | 0 | 0 | 25 |
 | 100 | [Commercial and administrative components](../20-features/100-commercial-and-administrative-components/README.md) | 28 | 12 | yes | 12 | 0 | 0 | 0 | 0 | 84 |
-| 101 | [Shared package boundaries](../20-features/101-shared-package-boundaries/README.md) | 38 | 9 | yes | 9 | 0 | 0 | 0 | 0 | 47 |
+| 101 | [Shared package boundaries](../20-features/101-shared-package-boundaries/README.md) | 40 | 9 | yes | 9 | 0 | 0 | 0 | 0 | 48 |
 | 102 | [Runtime inventory](../20-features/102-runtime-inventory/README.md) | 32 | 12 | yes | 12 | 0 | 0 | 0 | 0 | 49 |
 | 103 | [Data and persistence categories](../20-features/103-data-and-persistence-categories/README.md) | 38 | 10 | yes | 10 | 0 | 0 | 0 | 0 | 45 |
 | 104 | [Named technology options-not claims about competitor internals](../20-features/104-named-technology-options-not-claims-about-competitor-interna/README.md) | 39 | 11 | yes | 11 | 0 | 0 | 0 | 0 | 45 |
@@ -135,10 +135,10 @@ What has been documented, read in the code, tested by a person, and what is stil
 
 ## Checks on this knowledge base
 
-- Pages: 2053 (0 without a metadata header).
-- Links checked: 27963; broken: 0.
-- References to project files checked: 37263; not found: 198 ({'00-start': 13, '20-features': 96, '30-surfaces': 17, '40-systems': 48, '50-competitors': 14, '60-engineering': 6, '70-qa': 4}).
+- Pages: 2062 (0 without a metadata header).
+- Links checked: 28058; broken: 0.
+- References to project files checked: 37260; not found: 195 ({'00-start': 11, '20-features': 96, '30-surfaces': 17, '40-systems': 48, '50-competitors': 14, '60-engineering': 6, '70-qa': 3}).
 - Duplicate identifiers: 0.
-- Relationship map: 24946 nodes, 87738 edges.
+- Relationship map: 24996 nodes, 87849 edges.
 
 Details: [checks.json](checks.json).

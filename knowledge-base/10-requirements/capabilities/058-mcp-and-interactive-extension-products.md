@@ -31,7 +31,7 @@ revision: "f51d16e747"
 
 **Add remote server.** The user can add a remote MCP server by URL (with optional credentials) and it becomes available to the assistant.
 
-- Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web done, Desktop done, Mobile done, CLI done, VS Code missing
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web partial, Desktop done, Mobile done, CLI done, VS Code missing
 - Feature: [F058-02 Add a server (remote or local)](../../20-features/058-mcp-and-interactive-extension-products/F058-02-add-a-server-remote-or-local.md)
 - Competitor trace: CAP-connectors-apps-and-extensions-07
 

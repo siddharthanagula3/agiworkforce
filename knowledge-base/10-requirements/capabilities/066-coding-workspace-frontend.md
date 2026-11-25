@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 66. Coding-workspace frontend
 
-41 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+52 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S66.01
 
@@ -319,3 +319,90 @@ revision: "f51d16e747"
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web missing, Desktop done, Mobile done, CLI done, VS Code done
 - Feature: [F066-12 Continue, share and move sessions](../../20-features/066-coding-workspace-frontend/F066-12-continue-share-and-move-sessions.md)
 - Competitor trace: CAP-coding-workflows-20
+
+## S66.42
+
+**Choose a customer-hosted execution environment.** A workspace owner can register a runner on their own infrastructure and an authorized user can select that environment when starting a cloud coding session.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): Web missing, Mobile missing, CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+
+## S66.43
+
+**Install, update and diagnose a customer-hosted runner.** An operator can complete guided runner setup, pin or upgrade the runner version, inspect its configured health endpoint and run diagnostics.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.
+
+## S66.44
+
+**Control capacity and idle time on customer-hosted runners.** An administrator can enable customer hosting, set capacity and expected startup time, maintain warm standby capacity, launch on demand, hold or release idle capacity and stop unused runners.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.
+
+## S66.45
+
+**Drain customer-hosted runners and recover unfinished jobs.** An operator can schedule retirement, set startup, drain and termination deadlines, signal draining, finish or requeue leases and stop the orchestrator gracefully.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.
+
+## S66.46
+
+**Configure lifecycle hooks on customer-hosted runners.** An operator can install and identify checkout, command and post-session hooks, set their concurrency and time limits and see whether each hook completed.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.
+
+## S66.47
+
+**Isolate and authenticate customer-hosted sessions.** An administrator can confine repository settings, bind a runner to its workspace or account, restrict automatic approvals, supply credentials scoped to the session creator and diagnose session identity without sharing credentials across sessions.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.
+
+## S66.48
+
+**Connect customer-hosted runners through a managed network.** An operator can configure repository host and SSH rewriting, an authenticated outbound proxy, client certificates, private certificate trust and repository proxy routing.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.
+
+## S66.49
+
+**Observe customer-hosted runner and session health.** An operator can set permitted telemetry, choose log level and diagnostics destinations, and monitor runner, orchestrator and child-session metrics.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.
+
+## S66.50
+
+**Configure the workspace a customer-hosted runner gives a session.** An operator can set environment-level overrides, service endpoint, working directories, runner identity, executable and Git configuration, select the host settings copied into a session and choose its outcome and cleanup behavior.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.
+
+## S66.51
+
+**Control tools in a customer-hosted coding session.** An administrator can provide authenticated account connectors or image-local MCP servers to the session and disable the bundled remote or artifact tools.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.
+
+## S66.52
+
+**Save a reusable coding environment on mobile.** From the phone, a user can name an environment, enter or select its setup script, configure package managers, allowed domains and environment variables, then submit and select the saved environment.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): Mobile missing
+- Feature: [F066-99 Other items in Coding-workspace frontend](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- An owner decision is open on this item.

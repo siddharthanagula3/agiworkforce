@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 67. Coding capabilities and developer workflows
 
-96 open gaps that touch this area. Area page: [20-features/067-coding-capabilities-and-developer-workflows](../../20-features/067-coding-capabilities-and-developer-workflows/README.md).
+97 open gaps that touch this area. Area page: [20-features/067-coding-capabilities-and-developer-workflows](../../20-features/067-coding-capabilities-and-developer-workflows/README.md).
 
 ## CMP-D84
 
@@ -903,3 +903,13 @@ revision: "f51d16e747"
 - Features: [F067-11](../../20-features/067-coding-capabilities-and-developer-workflows/F067-11-reports-slides-and-designs-from-the-repository.md)
 - Requirement items: S67.35
 - Detail: Web: S67.35; Desktop: S67.35; Mobile: S67.35; CLI: S67.35; VS Code: S67.35
+
+## GAP-F067-99-NOTBUILT
+
+**Other items in Coding capabilities and developer workflows: not built on CLI**
+
+- Kind: not built on an app (read in the code; source: capability ledger)
+- Apps: CLI
+- Features: [F067-99](../../20-features/067-coding-capabilities-and-developer-workflows/F067-99-other-items.md)
+- Requirement items: S67.40, S67.41
+- Detail: CLI: S67.40, S67.41

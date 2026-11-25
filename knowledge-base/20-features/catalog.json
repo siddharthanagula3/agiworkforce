@@ -1,6 +1,6 @@
 {
  "built_on": "2026-11-24",
- "built_at_commit": "ab04b88ea8",
+ "built_at_commit": "8213c7ea65",
  "content_read_on": "2026-11-24",
  "content_read_at_commit": "f51d16e747",
  "features": [
@@ -3411,6 +3411,48 @@
    ],
    "page": "20-features/005-application-shell-and-navigation-components/F005-11-connection-offline-and-release-status.md",
    "written": true
+  },
+  {
+   "id": "F005-99",
+   "name": "Other items in Application shell and navigation components",
+   "aliases": [],
+   "description": "Items of this area that the area page did not place under a named feature.",
+   "area": "5",
+   "area_title": "Application shell and navigation components",
+   "implementation": {
+    "web": "missing",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "implementation_basis": "ledger audit only",
+   "implementation_ledger_audit": {
+    "web": "missing",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "existence_disagrees_with_ledger_on": [],
+   "page_lists_unfinished_parts_on": [],
+   "implementation_page_reading": {},
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "requirement_items": [
+    "S5.40"
+   ],
+   "page": "20-features/005-application-shell-and-navigation-components/F005-99-other-items.md",
+   "written": false
   },
   {
    "id": "F006-01",
@@ -22405,6 +22447,50 @@
    ],
    "page": "20-features/031-pdf-and-document-transformation-products/F031-12-send-a-document-for-e-signature.md",
    "written": true
+  },
+  {
+   "id": "F031-99",
+   "name": "Other items in PDF and document-transformation products",
+   "aliases": [],
+   "description": "Items of this area that the area page did not place under a named feature.",
+   "area": "31",
+   "area_title": "PDF and document-transformation products",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "partial",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "implementation_basis": "ledger audit only",
+   "implementation_ledger_audit": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "partial",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "existence_disagrees_with_ledger_on": [],
+   "page_lists_unfinished_parts_on": [],
+   "implementation_page_reading": {},
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "not seen by a person",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [
+    "mobile"
+   ],
+   "requirement_items": [
+    "S31.26"
+   ],
+   "page": "20-features/031-pdf-and-document-transformation-products/F031-99-other-items.md",
+   "written": false
   },
   {
    "id": "F032-01",
@@ -47467,6 +47553,58 @@
    "written": true
   },
   {
+   "id": "F066-99",
+   "name": "Other items in Coding-workspace frontend",
+   "aliases": [],
+   "description": "Items of this area that the area page did not place under a named feature.",
+   "area": "66",
+   "area_title": "Coding-workspace frontend",
+   "implementation": {
+    "web": "missing",
+    "desktop": "n/a",
+    "mobile": "missing",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "implementation_basis": "ledger audit only",
+   "implementation_ledger_audit": {
+    "web": "missing",
+    "desktop": "n/a",
+    "mobile": "missing",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "existence_disagrees_with_ledger_on": [],
+   "page_lists_unfinished_parts_on": [],
+   "implementation_page_reading": {},
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "requirement_items": [
+    "S66.42",
+    "S66.43",
+    "S66.44",
+    "S66.45",
+    "S66.46",
+    "S66.47",
+    "S66.48",
+    "S66.49",
+    "S66.50",
+    "S66.51",
+    "S66.52"
+   ],
+   "page": "20-features/066-coding-workspace-frontend/F066-99-other-items.md",
+   "written": false
+  },
+  {
    "id": "F067-01",
    "name": "Understand the repository",
    "aliases": [
@@ -48205,6 +48343,49 @@
    ],
    "page": "20-features/067-coding-capabilities-and-developer-workflows/F067-11-reports-slides-and-designs-from-the-repository.md",
    "written": true
+  },
+  {
+   "id": "F067-99",
+   "name": "Other items in Coding capabilities and developer workflows",
+   "aliases": [],
+   "description": "Items of this area that the area page did not place under a named feature.",
+   "area": "67",
+   "area_title": "Coding capabilities and developer workflows",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "implementation_basis": "ledger audit only",
+   "implementation_ledger_audit": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "existence_disagrees_with_ledger_on": [],
+   "page_lists_unfinished_parts_on": [],
+   "implementation_page_reading": {},
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "requirement_items": [
+    "S67.40",
+    "S67.41"
+   ],
+   "page": "20-features/067-coding-capabilities-and-developer-workflows/F067-99-other-items.md",
+   "written": false
   },
   {
    "id": "F068-01",
@@ -52026,6 +52207,49 @@
    "written": true
   },
   {
+   "id": "F072-99",
+   "name": "Other items in CLI and terminal application",
+   "aliases": [],
+   "description": "Items of this area that the area page did not place under a named feature.",
+   "area": "72",
+   "area_title": "CLI and terminal application",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "implementation_basis": "ledger audit only",
+   "implementation_ledger_audit": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "existence_disagrees_with_ledger_on": [],
+   "page_lists_unfinished_parts_on": [],
+   "implementation_page_reading": {},
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "requirement_items": [
+    "S72.38",
+    "S72.39"
+   ],
+   "page": "20-features/072-cli-and-terminal-application/F072-99-other-items.md",
+   "written": false
+  },
+  {
    "id": "F073-01",
    "name": "Chat in the sidebar and in an editor tab",
    "aliases": [
@@ -54949,7 +55173,7 @@
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
+    "cli": "missing",
     "vscode": "n/a",
     "chrome": "n/a"
    },
@@ -54958,7 +55182,7 @@
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
+    "cli": "missing",
     "vscode": "n/a",
     "chrome": "n/a"
    },
@@ -54968,7 +55192,7 @@
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
+    "cli": "missing",
     "vscode": "n/a",
     "chrome": "n/a"
    },
@@ -54982,7 +55206,9 @@
    },
    "available_on": [],
    "requirement_items": [
-    "S78.27"
+    "S78.27",
+    "S78.29",
+    "S78.30"
    ],
    "page": "20-features/078-ui-gating-and-adaptation-components/F078-99-other-items.md",
    "written": true
@@ -58603,6 +58829,50 @@
    "written": true
   },
   {
+   "id": "F084-99",
+   "name": "Other items in General and appearance settings",
+   "aliases": [],
+   "description": "Items of this area that the area page did not place under a named feature.",
+   "area": "84",
+   "area_title": "General and appearance settings",
+   "implementation": {
+    "web": "partial",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "implementation_basis": "ledger audit only",
+   "implementation_ledger_audit": {
+    "web": "partial",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "existence_disagrees_with_ledger_on": [],
+   "page_lists_unfinished_parts_on": [],
+   "implementation_page_reading": {},
+   "verification": {
+    "web": "not seen by a person",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [
+    "web"
+   ],
+   "requirement_items": [
+    "S84.27"
+   ],
+   "page": "20-features/084-general-and-appearance-settings/F084-99-other-items.md",
+   "written": false
+  },
+  {
    "id": "F085-01",
    "name": "Profile and account deletion",
    "aliases": [
@@ -61047,6 +61317,49 @@
    "written": true
   },
   {
+   "id": "F087-99",
+   "name": "Other items in Enterprise administration screens",
+   "aliases": [],
+   "description": "Items of this area that the area page did not place under a named feature.",
+   "area": "87",
+   "area_title": "Enterprise administration screens",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "implementation_basis": "ledger audit only",
+   "implementation_ledger_audit": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "existence_disagrees_with_ledger_on": [],
+   "page_lists_unfinished_parts_on": [],
+   "implementation_page_reading": {},
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "requirement_items": [
+    "S87.41",
+    "S87.42"
+   ],
+   "page": "20-features/087-enterprise-administration-screens/F087-99-other-items.md",
+   "written": false
+  },
+  {
    "id": "F088-01",
    "name": "Help centre and help links",
    "aliases": [
@@ -61811,6 +62124,48 @@
    "written": true
   },
   {
+   "id": "F088-99",
+   "name": "Other items in Support, trust, and policy product",
+   "aliases": [],
+   "description": "Items of this area that the area page did not place under a named feature.",
+   "area": "88",
+   "area_title": "Support, trust, and policy product",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "implementation_basis": "ledger audit only",
+   "implementation_ledger_audit": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "existence_disagrees_with_ledger_on": [],
+   "page_lists_unfinished_parts_on": [],
+   "implementation_page_reading": {},
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "requirement_items": [
+    "S88.32"
+   ],
+   "page": "20-features/088-support-trust-and-policy-product/F088-99-other-items.md",
+   "written": false
+  },
+  {
    "id": "F089-01",
    "name": "Sign-in and account standing",
    "aliases": [
@@ -62499,6 +62854,49 @@
    ],
    "page": "20-features/089-account-and-access-components/F089-12-support-staff-access-to-customer-data.md",
    "written": true
+  },
+  {
+   "id": "F089-99",
+   "name": "Other items in Account and access components",
+   "aliases": [],
+   "description": "Items of this area that the area page did not place under a named feature.",
+   "area": "89",
+   "area_title": "Account and access components",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "implementation_basis": "ledger audit only",
+   "implementation_ledger_audit": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "existence_disagrees_with_ledger_on": [],
+   "page_lists_unfinished_parts_on": [],
+   "implementation_page_reading": {},
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "requirement_items": [
+    "S89.25",
+    "S89.26"
+   ],
+   "page": "20-features/089-account-and-access-components/F089-99-other-items.md",
+   "written": false
   },
   {
    "id": "F090-01",
@@ -68957,8 +69355,8 @@
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
-    "vscode": "n/a",
+    "cli": "missing",
+    "vscode": "partial",
     "chrome": "n/a"
    },
    "implementation_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md",
@@ -68966,18 +69364,20 @@
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
-    "vscode": "n/a",
+    "cli": "missing",
+    "vscode": "missing",
     "chrome": "n/a"
    },
-   "existence_disagrees_with_ledger_on": [],
+   "existence_disagrees_with_ledger_on": [
+    "vscode"
+   ],
    "page_lists_unfinished_parts_on": [],
    "implementation_page_reading": {
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
-    "vscode": "n/a",
+    "cli": "not stated",
+    "vscode": "partial",
     "chrome": "n/a"
    },
    "verification": {
@@ -68988,9 +69388,13 @@
     "vscode": "n/a",
     "chrome": "n/a"
    },
-   "available_on": [],
+   "available_on": [
+    "vscode"
+   ],
    "requirement_items": [
-    "S101.18"
+    "S101.18",
+    "S101.39",
+    "S101.40"
    ],
    "page": "20-features/101-shared-package-boundaries/F101-99-other-items.md",
    "written": true

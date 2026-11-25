@@ -65,20 +65,21 @@ It answers, for any feature: what it is, why it exists, how a person uses it, ho
 
 ## State
 
-Built on 2026-11-24 against the project at commit `f51d16e747`.
+The pages were written from the code as it stood at commit `f51d16e747` on 2026-11-24. The lists of requirement items, gaps and test items were rebuilt the same day from the capability ledger after 27 items were added to it; the nine features that hold those new items have a list page only, not a ten-section page.
 
 | | Count |
 |---|---:|
-| Pages | 2053 |
-| Features with a stable identifier and a ten-section page | 1148 |
-| Requirement items, each placed in one feature | 3439 |
+| Pages | 2062 |
+| Features with a stable identifier | 1157 |
+| Features with a ten-section page | 1148 |
+| Requirement items, each placed in one feature | 3466 |
 | Competitor capabilities traced to requirements | 877 in 31 topics |
 | System, app and engineering pages | 37 |
 | Hands-on test items (item and app) | 7200 |
-| Open gaps | 10441 |
-| Relationship map | 24795 nodes, 87587 edges |
-| Links checked / broken | 28903 / 0 |
-| References to project files checked / not found | 37260 / 186 |
+| Open gaps | 10605 |
+| Relationship map | 24996 nodes, 87849 edges |
+| Links checked / broken | 28058 / 0 |
+| References to project files checked / not found | 37260 / 195 |
 
 **How far to trust it.** Almost everything here was written by reading code; very little has been run. A second reader of the same model checked 535 statements on 48 sampled feature pages: 356 fully correct, 153 partly wrong, 16 wrong. Those pages were corrected. The other feature pages have not been re-read, so expect about one statement in three to be imprecise and about one in thirty to be wrong until they are. Details: [90-meta/review.md](90-meta/review.md).
 

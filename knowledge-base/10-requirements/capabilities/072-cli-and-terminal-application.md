@@ -9,7 +9,7 @@ revision: "f51d16e747"
 ---
 # Requirement items: 72. CLI and terminal application
 
-37 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
+39 items. Each is an established requirement: the acceptance criterion recorded for it in the project's capability ledger (`audit/ledger/ecosystem-capability-ledger.jsonl`). The status per app is what reading the code found; a result from a real run is given where one exists.
 
 ## S72.01
 
@@ -271,3 +271,19 @@ revision: "f51d16e747"
 
 - Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI done
 - Feature: [F072-08 Exit codes and CI automation](../../20-features/072-cli-and-terminal-application/F072-08-exit-codes-and-ci-automation.md)
+
+## S72.38
+
+**Monitor and organize multiple coding sessions from a terminal view.** A user can filter and group live sessions, pin, reorder and rename them, and see summaries, pull-request state and sessions requiring attention using documented keyboard shortcuts.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F072-99 Other items in CLI and terminal application](../../20-features/072-cli-and-terminal-application/F072-99-other-items.md)
+- An owner decision is open on this item.
+
+## S72.39
+
+**Dispatch and reply to sessions without leaving the terminal session list.** A user can choose an agent, repository, command or pull request, paste task context and reply to the selected session in an inline preview.
+
+- Status in the code (capability ledger, audit of 2026-09-26 and later updates): CLI missing
+- Feature: [F072-99 Other items in CLI and terminal application](../../20-features/072-cli-and-terminal-application/F072-99-other-items.md)
+- An owner decision is open on this item.

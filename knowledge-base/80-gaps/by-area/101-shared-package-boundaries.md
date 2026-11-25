@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 101. Shared package boundaries
 
-47 open gaps that touch this area. Area page: [20-features/101-shared-package-boundaries](../../20-features/101-shared-package-boundaries/README.md).
+48 open gaps that touch this area. Area page: [20-features/101-shared-package-boundaries](../../20-features/101-shared-package-boundaries/README.md).
 
 ## GAP-F101-01-01
 
@@ -431,3 +431,13 @@ revision: "f51d16e747"
 - Features: [F101-99](../../20-features/101-shared-package-boundaries/F101-99-other-items.md)
 - Detail: Affects: Desktop, CLI. Work needed: Read and run.
 - Evidence: apps/desktop/src/runtime/__tests__/LocalChatTurn.reopenedSources.test.tsx exists; CLI display not read
+
+## GAP-F101-99-NOTBUILT
+
+**Other items in Shared package boundaries: not built on CLI**
+
+- Kind: not built on an app (read in the code; source: capability ledger)
+- Apps: CLI
+- Features: [F101-99](../../20-features/101-shared-package-boundaries/F101-99-other-items.md)
+- Requirement items: S101.39, S101.40
+- Detail: CLI: S101.39, S101.40

@@ -13,12 +13,12 @@ Every app, package, service and crate in the project (78 folders), with how many
 
 | Folder | Features citing its code | Pages describing it | Pages |
 |---|---:|---:|---|
-| `apps/cli` | 592 | 27 | [glossary](../00-start/glossary.md), [system-architecture](../00-start/system-architecture.md), [cli](../30-surfaces/cli.md), [desktop](../30-surfaces/desktop.md) |
+| `apps/cli` | 598 | 27 | [glossary](../00-start/glossary.md), [system-architecture](../00-start/system-architecture.md), [cli](../30-surfaces/cli.md), [desktop](../30-surfaces/desktop.md) |
 | `apps/desktop` | 352 | 29 | [glossary](../00-start/glossary.md), [system-architecture](../00-start/system-architecture.md), [cli](../30-surfaces/cli.md), [desktop](../30-surfaces/desktop.md) |
 | `apps/extension` | 418 | 30 | [glossary](../00-start/glossary.md), [system-architecture](../00-start/system-architecture.md), [chrome](../30-surfaces/chrome.md), [cli](../30-surfaces/cli.md) |
 | `apps/extension-vscode` | 433 | 25 | [glossary](../00-start/glossary.md), [system-architecture](../00-start/system-architecture.md), [cli](../30-surfaces/cli.md), [vscode](../30-surfaces/vscode.md) |
-| `apps/mobile` | 829 | 27 | [glossary](../00-start/glossary.md), [system-architecture](../00-start/system-architecture.md), [mobile](../30-surfaces/mobile.md), [api-and-contracts](../40-systems/api-and-contracts.md) |
-| `apps/web` | 1106 | 38 | [evidence-and-status](../00-start/evidence-and-status.md), [glossary](../00-start/glossary.md), [product-overview](../00-start/product-overview.md), [system-architecture](../00-start/system-architecture.md) |
+| `apps/mobile` | 831 | 27 | [glossary](../00-start/glossary.md), [system-architecture](../00-start/system-architecture.md), [mobile](../30-surfaces/mobile.md), [api-and-contracts](../40-systems/api-and-contracts.md) |
+| `apps/web` | 1109 | 38 | [evidence-and-status](../00-start/evidence-and-status.md), [glossary](../00-start/glossary.md), [product-overview](../00-start/product-overview.md), [system-architecture](../00-start/system-architecture.md) |
 | `packages/ai/agent-core` | 6 | 2 | [system-architecture](../00-start/system-architecture.md), [agents-tools-and-automation](../40-systems/agents-tools-and-automation.md) |
 | `packages/ai/model-registry` | 30 | 15 | [glossary](../00-start/glossary.md), [system-architecture](../00-start/system-architecture.md), [cli](../30-surfaces/cli.md), [mobile](../30-surfaces/mobile.md) |
 | `packages/ai/provider-protocol` | 8 | 2 | [system-architecture](../00-start/system-architecture.md), [inference-providers](../40-systems/inference-providers.md) |
@@ -29,7 +29,7 @@ Every app, package, service and crate in the project (78 folders), with how many
 | `packages/client/desktop-command-client` | 1 | 1 | [system-architecture](../00-start/system-architecture.md) |
 | `packages/client/ide-runtime` | 1 | 1 | [system-architecture](../00-start/system-architecture.md) |
 | `packages/client/sync` | 2 | 1 | [system-architecture](../00-start/system-architecture.md) |
-| `packages/contracts/cloud-contracts` | 292 | 15 | [system-architecture](../00-start/system-architecture.md), [mobile](../30-surfaces/mobile.md), [agents-tools-and-automation](../40-systems/agents-tools-and-automation.md), [api-and-contracts](../40-systems/api-and-contracts.md) |
+| `packages/contracts/cloud-contracts` | 294 | 15 | [system-architecture](../00-start/system-architecture.md), [mobile](../30-surfaces/mobile.md), [agents-tools-and-automation](../40-systems/agents-tools-and-automation.md), [api-and-contracts](../40-systems/api-and-contracts.md) |
 | `packages/contracts/compliance` | 1 | 1 | [system-architecture](../00-start/system-architecture.md) |
 | `packages/contracts/context` | 9 | 3 | [system-architecture](../00-start/system-architecture.md), [api-and-contracts](../40-systems/api-and-contracts.md), [memory-projects-and-context](../40-systems/memory-projects-and-context.md) |
 | `packages/contracts/licensing` | 0 | 2 | [system-architecture](../00-start/system-architecture.md), [subscriptions-entitlements-and-usage](../40-systems/subscriptions-entitlements-and-usage.md) |

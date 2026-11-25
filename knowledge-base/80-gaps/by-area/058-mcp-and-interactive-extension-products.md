@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 58. MCP and interactive extension products
 
-94 open gaps that touch this area. Area page: [20-features/058-mcp-and-interactive-extension-products](../../20-features/058-mcp-and-interactive-extension-products/README.md).
+95 open gaps that touch this area. Area page: [20-features/058-mcp-and-interactive-extension-products](../../20-features/058-mcp-and-interactive-extension-products/README.md).
 
 ## CMP-C292
 
@@ -487,6 +487,16 @@ revision: "f51d16e747"
 - Features: [F058-02](../../20-features/058-mcp-and-interactive-extension-products/F058-02-add-a-server-remote-or-local.md)
 - Requirement items: S58.16, S58.27
 - Detail: Web: S58.16, S58.27; Desktop: S58.16, S58.27; Mobile: S58.16, S58.27; Chrome: S58.16, S58.27
+
+## GAP-F058-02-PARTLY
+
+**Add a server (remote or local): partly built on Web**
+
+- Kind: partly built (read in the code; source: capability ledger)
+- Apps: Web
+- Features: [F058-02](../../20-features/058-mcp-and-interactive-extension-products/F058-02-add-a-server-remote-or-local.md)
+- Requirement items: S58.03
+- Detail: Web S58.03: The settings adapter exposes the custom server wizard only when the general connector release switch is on. Verify the entitlement and authorization flow before releasing it.
 
 ## GAP-F058-03-01
 

@@ -3437,6 +3437,33 @@
 {"from": "S110.28", "rel": "part_of", "to": "AREA-110", "evidence": [], "basis": "requirement", "source": "capability ledger"}
 {"from": "S110.29", "rel": "part_of", "to": "AREA-110", "evidence": [], "basis": "requirement", "source": "capability ledger"}
 {"from": "S110.30", "rel": "part_of", "to": "AREA-110", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S5.40", "rel": "part_of", "to": "AREA-005", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S84.27", "rel": "part_of", "to": "AREA-084", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S31.26", "rel": "part_of", "to": "AREA-031", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.42", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.43", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.44", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.45", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.46", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.47", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.48", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.49", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.50", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.51", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S66.52", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S89.25", "rel": "part_of", "to": "AREA-089", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S89.26", "rel": "part_of", "to": "AREA-089", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S87.41", "rel": "part_of", "to": "AREA-087", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S87.42", "rel": "part_of", "to": "AREA-087", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S101.39", "rel": "part_of", "to": "AREA-101", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S101.40", "rel": "part_of", "to": "AREA-101", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S88.32", "rel": "part_of", "to": "AREA-088", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S72.38", "rel": "part_of", "to": "AREA-072", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S72.39", "rel": "part_of", "to": "AREA-072", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S78.29", "rel": "part_of", "to": "AREA-078", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S78.30", "rel": "part_of", "to": "AREA-078", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S67.40", "rel": "part_of", "to": "AREA-067", "evidence": [], "basis": "requirement", "source": "capability ledger"}
+{"from": "S67.41", "rel": "part_of", "to": "AREA-067", "evidence": [], "basis": "requirement", "source": "capability ledger"}
 {"from": "F002-01", "rel": "part_of", "to": "AREA-002", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F002-01", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "built", "verification": "seen failing"}
 {"from": "F002-01", "rel": "satisfies", "to": "S2.01", "evidence": [], "basis": "requirement", "source": "feature registry"}
@@ -6869,6 +6896,10 @@
 {"from": "F005-11", "rel": "tested_by", "to": "test:packages/client/client-runtime/src/offline-sync/__tests__/offline-sync.test.ts", "evidence": ["file exists"], "basis": "code", "source": "feature page"}
 {"from": "F005-11", "rel": "tested_by", "to": "test:apps/web/features/desktop-host/__tests__/DesktopUpdateNotice.test.tsx", "evidence": ["file exists"], "basis": "code", "source": "feature page"}
 {"from": "F005-11", "rel": "configured_by", "to": "file:apps/desktop/electron/appMenu.ts", "evidence": ["appMenu.ts:136,574"], "basis": "code", "source": "feature page"}
+{"from": "F005-99", "rel": "part_of", "to": "AREA-005", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F005-99", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F005-99", "rel": "satisfies", "to": "S5.40", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F005-99", "rel": "implemented_by", "to": "file:apps/web/shared/components/layout/AccountMenuItems.tsx", "evidence": ["apps/web/shared/components/layout/AccountMenuItems.tsx"], "basis": "code", "source": "capability ledger"}
 {"from": "F006-01", "rel": "part_of", "to": "AREA-006", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F006-01", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "built", "verification": "not seen by a person"}
 {"from": "F006-01", "rel": "available_on", "to": "surface:desktop", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "built", "verification": "not seen by a person"}
@@ -24382,6 +24413,11 @@
 {"from": "F031-12", "rel": "tested_by", "to": "test:apps/web/lib/connectors/__tests__/catalog-endpoints.test.ts", "evidence": ["Endpoint auth and risk class parity (lines 1-40)."], "basis": "code", "source": "feature page"}
 {"from": "F031-12", "rel": "depends_on", "to": "SYS-connectors-plugins-and-skills", "evidence": ["Docusign is one entry in the shared connector catalog and directory."], "basis": "code", "source": "feature page"}
 {"from": "F031-12", "rel": "depends_on", "to": "SYS-authorization-and-workspaces", "evidence": ["Workspace connector policy gate applies (apps/web/lib/services/connector-policy-gate.ts:101-136)."], "basis": "code", "source": "feature page"}
+{"from": "F031-99", "rel": "part_of", "to": "AREA-031", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F031-99", "rel": "available_on", "to": "surface:mobile", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "partial", "ledger_status": "partial", "verification": "not seen by a person"}
+{"from": "F031-99", "rel": "satisfies", "to": "S31.26", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F031-99", "rel": "implemented_by", "to": "file:apps/mobile/src/features/chat/components/AddToChatSheet.tsx", "evidence": ["apps/mobile/src/features/chat/components/AddToChatSheet.tsx"], "basis": "code", "source": "capability ledger"}
+{"from": "F031-99", "rel": "implemented_by", "to": "file:packages/contracts/cloud-contracts/src/skills.ts", "evidence": ["packages/contracts/cloud-contracts/src/skills.ts"], "basis": "code", "source": "capability ledger"}
 {"from": "F032-01", "rel": "part_of", "to": "AREA-032", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F032-01", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "missing", "verification": "n/a"}
 {"from": "F032-01", "rel": "available_on", "to": "surface:desktop", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "missing", "verification": "n/a"}
@@ -42042,10 +42078,11 @@
 {"from": "F058-02", "rel": "satisfies", "to": "S58.16", "evidence": [], "basis": "requirement", "source": "feature registry"}
 {"from": "F058-02", "rel": "satisfies", "to": "S58.27", "evidence": [], "basis": "requirement", "source": "feature registry"}
 {"from": "F058-02", "rel": "implemented_by", "to": "file:apps/cli/src/lib.rs", "evidence": ["apps/cli/src/lib.rs"], "basis": "code", "source": "capability ledger"}
+{"from": "F058-02", "rel": "implemented_by", "to": "file:apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx", "evidence": ["apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx"], "basis": "code", "source": "capability ledger"}
 {"from": "F058-02", "rel": "implemented_by", "to": "file:apps/cli/src/mcp/registry.rs", "evidence": ["apps/cli/src/mcp/registry.rs"], "basis": "code", "source": "capability ledger"}
 {"from": "F058-02", "rel": "implemented_by", "to": "file:packages/ui/ui/src/settings-modal/SettingsModal.tsx", "evidence": ["packages/ui/ui/src/settings-modal/SettingsModal.tsx"], "basis": "code", "source": "capability ledger"}
-{"from": "F058-02", "rel": "implemented_by", "to": "file:apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx", "evidence": ["apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx"], "basis": "code", "source": "capability ledger"}
 {"from": "F058-02", "rel": "implemented_by", "to": "file:apps/web/app/api/connectors/custom/route.ts", "evidence": ["apps/web/app/api/connectors/custom/route.ts"], "basis": "code", "source": "capability ledger"}
+{"from": "F058-02", "rel": "implemented_by", "to": "file:packages/contracts/types/src/connector-release.ts", "evidence": ["packages/contracts/types/src/connector-release.ts"], "basis": "code", "source": "capability ledger"}
 {"from": "F058-02", "rel": "implemented_by", "to": "file:apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx", "evidence": ["apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx"], "basis": "code", "source": "capability ledger"}
 {"from": "F058-02", "rel": "implemented_by", "to": "file:apps/desktop/src/api/cloudConnectors.ts", "evidence": ["apps/desktop/src/api/cloudConnectors.ts"], "basis": "code", "source": "capability ledger"}
 {"from": "F058-02", "rel": "implemented_by", "to": "file:apps/mobile/src/features/settings/cloud-connectors/index.tsx", "evidence": ["apps/mobile/src/features/settings/cloud-connectors/index.tsx"], "basis": "code", "source": "capability ledger"}
@@ -47832,6 +47869,25 @@
 {"from": "F066-12", "rel": "tested_by", "to": "test:apps/web/features/code/SharedCodeSessionPage.test.tsx", "evidence": ["cases at lines 102-143"], "basis": "code", "source": "feature page"}
 {"from": "F066-12", "rel": "tested_by", "to": "test:apps/desktop/electron/__tests__/codeRemoteController.test.ts", "evidence": ["file exists"], "basis": "code", "source": "feature page"}
 {"from": "F066-12", "rel": "blocked_by", "to": "mode:local", "evidence": ["Local sessions are unshareable by decision (docs/decisions/2026-09-27-founder-decisions.md:334-341)"], "basis": "code", "source": "feature page"}
+{"from": "F066-99", "rel": "part_of", "to": "AREA-066", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F066-99", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F066-99", "rel": "available_on", "to": "surface:mobile", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F066-99", "rel": "available_on", "to": "surface:cli", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.42", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.43", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.44", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.45", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.46", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.47", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.48", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.49", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.50", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.51", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "satisfies", "to": "S66.52", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F066-99", "rel": "implemented_by", "to": "file:packages/contracts/cloud-contracts/src/managed-cloud-code-client.ts", "evidence": ["packages/contracts/cloud-contracts/src/managed-cloud-code-client.ts"], "basis": "code", "source": "capability ledger"}
+{"from": "F066-99", "rel": "implemented_by", "to": "file:apps/cli/src/lib.rs", "evidence": ["apps/cli/src/lib.rs"], "basis": "code", "source": "capability ledger"}
+{"from": "F066-99", "rel": "implemented_by", "to": "file:apps/web/app/api/code/environments/route.ts", "evidence": ["apps/web/app/api/code/environments/route.ts"], "basis": "code", "source": "capability ledger"}
+{"from": "F066-99", "rel": "implemented_by", "to": "file:apps/mobile/src/features/cloud-code/components/NewCloudCodeSessionSheet.tsx", "evidence": ["apps/mobile/src/features/cloud-code/components/NewCloudCodeSessionSheet.tsx"], "basis": "code", "source": "capability ledger"}
 {"from": "F067-01", "rel": "part_of", "to": "AREA-067", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F067-01", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "partial", "ledger_status": "partial", "verification": "not seen by a person"}
 {"from": "F067-01", "rel": "available_on", "to": "surface:desktop", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "built", "verification": "not seen by a person"}
@@ -48548,6 +48604,12 @@
 {"from": "F067-11", "rel": "depends_on", "to": "SYS-agents-tools-and-automation", "evidence": ["A generating agent would call tools; the read tool exists (apps/cli/src/platform/runtime/tool_catalog.rs:509)"], "basis": "code", "source": "feature page"}
 {"from": "F067-11", "rel": "implemented_by", "to": "file:apps/cli/src/documents.rs", "evidence": ["Only the reading half: apps/cli/src/documents.rs:262"], "basis": "code", "source": "feature page"}
 {"from": "F067-11", "rel": "available_on", "to": "surface:cli", "evidence": ["Reading of pptx only (documents.rs); generation absent"], "basis": "code", "source": "feature page"}
+{"from": "F067-99", "rel": "part_of", "to": "AREA-067", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F067-99", "rel": "available_on", "to": "surface:cli", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F067-99", "rel": "satisfies", "to": "S67.40", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F067-99", "rel": "satisfies", "to": "S67.41", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F067-99", "rel": "implemented_by", "to": "file:apps/cli/src/lib.rs", "evidence": ["apps/cli/src/lib.rs"], "basis": "code", "source": "capability ledger"}
+{"from": "F067-99", "rel": "implemented_by", "to": "file:apps/cli/src/claude_parity.rs", "evidence": ["apps/cli/src/claude_parity.rs"], "basis": "code", "source": "capability ledger"}
 {"from": "F068-01", "rel": "part_of", "to": "AREA-068", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F068-01", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "partial", "ledger_status": "partial", "verification": "not seen by a person"}
 {"from": "F068-01", "rel": "available_on", "to": "surface:desktop", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "partial", "ledger_status": "partial", "verification": "not seen by a person"}
@@ -51827,6 +51889,11 @@
 {"from": "F072-12", "rel": "tested_by", "to": "test:apps/cli/src/cloud/code_teleport.rs", "evidence": ["tests at lines 190-288"], "basis": "code", "source": "feature page"}
 {"from": "F072-12", "rel": "tested_by", "to": "test:apps/cli/src/remote_control/mod.rs", "evidence": ["tests at lines 926-1360"], "basis": "code", "source": "feature page"}
 {"from": "F072-12", "rel": "depends_on", "to": "F072-10", "evidence": ["Sign-in token read by tier_cache::load_jwt (apps/cli/src/remote_control/mod.rs:769-770)"], "basis": "code", "source": "feature page"}
+{"from": "F072-99", "rel": "part_of", "to": "AREA-072", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F072-99", "rel": "available_on", "to": "surface:cli", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F072-99", "rel": "satisfies", "to": "S72.38", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F072-99", "rel": "satisfies", "to": "S72.39", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F072-99", "rel": "implemented_by", "to": "file:apps/cli/src/lib.rs", "evidence": ["apps/cli/src/lib.rs"], "basis": "code", "source": "capability ledger"}
 {"from": "F073-01", "rel": "part_of", "to": "AREA-073", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F073-01", "rel": "available_on", "to": "surface:vscode", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "built", "verification": "not seen by a person"}
 {"from": "F073-01", "rel": "satisfies", "to": "S73.01", "evidence": [], "basis": "requirement", "source": "feature registry"}
@@ -54564,7 +54631,11 @@
 {"from": "F078-08", "rel": "depends_on", "to": "F078-07", "evidence": ["Dictation gate in use-dictation.ts reads the refreshed disabled-features list and Voice setting."], "basis": "code", "source": "feature page"}
 {"from": "F078-08", "rel": "blocked_by", "to": "mode:local", "evidence": ["Mobile refresh is skipped when the app is not in Cloud mode (capabilities.tsx canRefreshRemoteCapabilities)."], "basis": "code", "source": "feature page"}
 {"from": "F078-99", "rel": "part_of", "to": "AREA-078", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F078-99", "rel": "available_on", "to": "surface:cli", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
 {"from": "F078-99", "rel": "satisfies", "to": "S78.27", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F078-99", "rel": "satisfies", "to": "S78.29", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F078-99", "rel": "satisfies", "to": "S78.30", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F078-99", "rel": "implemented_by", "to": "file:apps/cli/src/init.rs", "evidence": ["apps/cli/src/init.rs"], "basis": "code", "source": "capability ledger"}
 {"from": "F078-99", "rel": "implemented_by", "to": "file:apps/web/app/api/me/route.ts", "evidence": ["apps/web/app/api/me/route.ts"], "basis": "code", "source": "feature page"}
 {"from": "F078-99", "rel": "implemented_by", "to": "file:apps/cli/src/tier_cache.rs", "evidence": ["apps/cli/src/tier_cache.rs"], "basis": "code", "source": "feature page"}
 {"from": "F078-99", "rel": "implemented_by", "to": "file:apps/mobile/src/features/billing/store.ts", "evidence": ["apps/mobile/src/features/billing/store.ts"], "basis": "code", "source": "feature page"}
@@ -58241,6 +58312,10 @@
 {"from": "F084-12", "rel": "depends_on", "to": "F084-07", "evidence": ["Restore defaults is part of the same Keyboard pane"], "basis": "code", "source": "feature page"}
 {"from": "F084-12", "rel": "depends_on", "to": "SYS-shared-ui-and-design", "evidence": ["useConfirmAction from the shared UI package"], "basis": "code", "source": "feature page"}
 {"from": "F084-12", "rel": "blocked_by", "to": "SYS-subscriptions-entitlements-and-usage", "evidence": ["Not blocked today; an experimental opt-in could need entitlement rules (unknown)"], "basis": "code", "source": "feature page"}
+{"from": "F084-99", "rel": "part_of", "to": "AREA-084", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F084-99", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "partial", "ledger_status": "partial", "verification": "not seen by a person"}
+{"from": "F084-99", "rel": "satisfies", "to": "S84.27", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F084-99", "rel": "implemented_by", "to": "file:apps/web/features/settings/components/LanguageSelector.tsx", "evidence": ["apps/web/features/settings/components/LanguageSelector.tsx"], "basis": "code", "source": "capability ledger"}
 {"from": "F085-01", "rel": "part_of", "to": "AREA-085", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F085-01", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "built", "verification": "not seen by a person"}
 {"from": "F085-01", "rel": "available_on", "to": "surface:desktop", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "built", "verification": "not seen by a person"}
@@ -60838,6 +60913,12 @@
 {"from": "F087-12", "rel": "blocked_by", "to": "SYS-authorization-and-workspaces", "evidence": ["No workspace-side approval path for support access"], "basis": "code", "source": "feature page"}
 {"from": "F087-12", "rel": "tested_by", "to": "test:apps/web/lib/server/support-access-service.test.ts", "evidence": ["support-access-service.test.ts:321-391"], "basis": "code", "source": "feature page"}
 {"from": "F087-12", "rel": "tested_by", "to": "test:apps/web/features/workspace-console/components/__tests__/WorkspaceDataControls.release.test.tsx", "evidence": ["WorkspaceDataControls.release.test.tsx:81"], "basis": "code", "source": "feature page"}
+{"from": "F087-99", "rel": "part_of", "to": "AREA-087", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F087-99", "rel": "available_on", "to": "surface:cli", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F087-99", "rel": "satisfies", "to": "S87.41", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F087-99", "rel": "satisfies", "to": "S87.42", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F087-99", "rel": "implemented_by", "to": "file:apps/cli/src/lib.rs", "evidence": ["apps/cli/src/lib.rs"], "basis": "code", "source": "capability ledger"}
+{"from": "F087-99", "rel": "implemented_by", "to": "file:apps/cli/src/cloud/workspace_policy.rs", "evidence": ["apps/cli/src/cloud/workspace_policy.rs"], "basis": "code", "source": "capability ledger"}
 {"from": "F088-01", "rel": "part_of", "to": "AREA-088", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F088-01", "rel": "available_on", "to": "surface:web", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "built", "verification": "seen working"}
 {"from": "F088-01", "rel": "available_on", "to": "surface:desktop", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "built", "ledger_status": "built", "verification": "not seen by a person"}
@@ -61611,6 +61692,11 @@
 {"from": "F088-11", "rel": "tested_by", "to": "test:apps/web/lib/support/agent/__tests__/hard-abstain.test.ts", "evidence": ["search of apps/web/lib/support/agent/__tests__"], "basis": "code", "source": "feature page"}
 {"from": "F088-11", "rel": "tested_by", "to": "test:apps/web/features/support/__tests__/SupportWidgetMount.test.tsx", "evidence": ["apps/web/features/support/__tests__/SupportWidgetMount.test.tsx:58-68"], "basis": "code", "source": "feature page"}
 {"from": "F088-11", "rel": "tested_by", "to": "test:apps/web/app/api/support/ask/route.test.ts", "evidence": ["file exists at apps/web/app/api/support/ask/route.test.ts"], "basis": "code", "source": "feature page"}
+{"from": "F088-99", "rel": "part_of", "to": "AREA-088", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F088-99", "rel": "available_on", "to": "surface:cli", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F088-99", "rel": "satisfies", "to": "S88.32", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F088-99", "rel": "implemented_by", "to": "file:apps/cli/src/cloud/workspace_policy.rs", "evidence": ["apps/cli/src/cloud/workspace_policy.rs"], "basis": "code", "source": "capability ledger"}
+{"from": "F088-99", "rel": "implemented_by", "to": "file:apps/cli/src/lib.rs", "evidence": ["apps/cli/src/lib.rs"], "basis": "code", "source": "capability ledger"}
 {"from": "F089-01", "rel": "part_of", "to": "AREA-089", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F089-01", "rel": "satisfies", "to": "S89.01", "evidence": [], "basis": "requirement", "source": "feature registry"}
 {"from": "F089-01", "rel": "satisfies", "to": "S89.02", "evidence": [], "basis": "requirement", "source": "feature registry"}
@@ -62383,6 +62469,12 @@
 {"from": "F089-12", "rel": "blocked_by", "to": "SYS-authorization-and-workspaces", "evidence": ["Platform operator allow-list (auth-guards.ts:26-50)"], "basis": "code", "source": "feature page"}
 {"from": "F089-12", "rel": "available_on", "to": "mode:cloud", "evidence": ["Server-side admin API"], "basis": "code", "source": "feature page"}
 {"from": "F089-12", "rel": "depends_on", "to": "api:GET /api/cron/expire-support-access-grants", "evidence": ["apps/web/app/api/cron/expire-support-access-grants/route.ts"], "basis": "code", "source": "feature page"}
+{"from": "F089-99", "rel": "part_of", "to": "AREA-089", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F089-99", "rel": "available_on", "to": "surface:cli", "evidence": [], "basis": "code", "source": "ledger audit only", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F089-99", "rel": "satisfies", "to": "S89.25", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F089-99", "rel": "satisfies", "to": "S89.26", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F089-99", "rel": "implemented_by", "to": "file:apps/cli/src/lib.rs", "evidence": ["apps/cli/src/lib.rs"], "basis": "code", "source": "capability ledger"}
+{"from": "F089-99", "rel": "implemented_by", "to": "file:apps/cli/src/cloud/workspace_policy.rs", "evidence": ["apps/cli/src/cloud/workspace_policy.rs"], "basis": "code", "source": "capability ledger"}
 {"from": "F090-01", "rel": "part_of", "to": "AREA-090", "evidence": [], "basis": "code", "source": "feature registry"}
 {"from": "F090-01", "rel": "satisfies", "to": "S90.01", "evidence": [], "basis": "requirement", "source": "feature registry"}
 {"from": "F090-01", "rel": "satisfies", "to": "S90.02", "evidence": [], "basis": "requirement", "source": "feature registry"}
@@ -68834,9 +68926,16 @@
 {"from": "F101-08", "rel": "depends_on", "to": "SYS-observability-and-operations", "evidence": ["Configuration-state metric recorded at start-up (apps/web/instrumentation.ts:46-50)."], "basis": "code", "source": "feature page"}
 {"from": "F101-08", "rel": "stores_data_in", "to": "table:product_analytics_events", "evidence": ["Table name is a guess from the helper name; not verified, see unknowns."], "basis": "code", "source": "feature page"}
 {"from": "F101-99", "rel": "part_of", "to": "AREA-101", "evidence": [], "basis": "code", "source": "feature registry"}
+{"from": "F101-99", "rel": "available_on", "to": "surface:cli", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "missing", "ledger_status": "missing", "verification": "n/a"}
+{"from": "F101-99", "rel": "available_on", "to": "surface:vscode", "evidence": [], "basis": "code", "source": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md", "status": "partial", "ledger_status": "missing", "verification": "n/a"}
 {"from": "F101-99", "rel": "satisfies", "to": "S101.18", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F101-99", "rel": "satisfies", "to": "S101.39", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F101-99", "rel": "satisfies", "to": "S101.40", "evidence": [], "basis": "requirement", "source": "feature registry"}
+{"from": "F101-99", "rel": "implemented_by", "to": "file:apps/cli/src/cloud/product_analytics.rs", "evidence": ["apps/cli/src/cloud/product_analytics.rs"], "basis": "code", "source": "capability ledger"}
+{"from": "F101-99", "rel": "implemented_by", "to": "file:apps/extension-vscode/src/core/telemetry.ts", "evidence": ["apps/extension-vscode/src/core/telemetry.ts"], "basis": "code", "source": "capability ledger"}
 {"from": "F101-99", "rel": "implemented_by", "to": "file:apps/web/shared/types/common.ts", "evidence": ["apps/web/shared/types/common.ts"], "basis": "code", "source": "capability ledger"}
 {"from": "F101-99", "rel": "implemented_by", "to": "file:apps/web/features/chat/utils/research-plan.ts", "evidence": ["apps/web/features/chat/utils/research-plan.ts"], "basis": "code", "source": "capability ledger"}
+{"from": "F101-99", "rel": "implemented_by", "to": "file:apps/cli/src/cloud/workspace_policy.rs", "evidence": ["apps/cli/src/cloud/workspace_policy.rs"], "basis": "code", "source": "capability ledger"}
 {"from": "F101-99", "rel": "implemented_by", "to": "file:crates/agiworkforce-protocol/src/agent_events.rs", "evidence": ["crates/agiworkforce-protocol/src/agent_events.rs"], "basis": "code", "source": "feature page"}
 {"from": "F101-99", "rel": "implemented_by", "to": "file:packages/contracts/types/src/generated/protocol/AgentEventSource.ts", "evidence": ["packages/contracts/types/src/generated/protocol/AgentEventSource.ts"], "basis": "code", "source": "feature page"}
 {"from": "F101-99", "rel": "implemented_by", "to": "file:packages/contracts/types/src/shared-ownership.json", "evidence": ["packages/contracts/types/src/shared-ownership.json"], "basis": "code", "source": "feature page"}
@@ -78454,6 +78553,7 @@
 {"from": "F005-11", "rel": "blocked_by", "to": "GAP-F005-11-02", "evidence": ["brief S5.34"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F005-11", "rel": "blocked_by", "to": "GAP-F005-11-03", "evidence": ["brief S5.33"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F005-11", "rel": "blocked_by", "to": "GAP-F005-11-04", "evidence": ["Mobile copy says so (copy.ts:21); Web message from manager has no such text"], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F005-99", "rel": "blocked_by", "to": "GAP-F005-99-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F006-01", "rel": "blocked_by", "to": "GAP-F006-01-01", "evidence": ["packages/ui/design-tokens/src/chat.css:60-61 (both #ffffff); requirement S6.02"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F006-01", "rel": "blocked_by", "to": "GAP-F006-01-02", "evidence": ["packages/ui/ui/src/primitives/Dialog.tsx:115; AlertDialog.tsx:104"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F006-01", "rel": "blocked_by", "to": "GAP-F006-01-03", "evidence": ["apps/mobile/src/features/settings/appearance/index.tsx lists theme rows only"], "basis": "code", "source": "feature page (code reading)"}
@@ -80057,6 +80157,7 @@
 {"from": "F031-12", "rel": "blocked_by", "to": "GAP-F031-12-05", "evidence": ["rg for docusign in apps/web tests found only enterprise contract tests, not connector tests."], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F031-12", "rel": "blocked_by", "to": "GAP-F031-12-06", "evidence": ["Only generic tool approval is documented (apps/web/content/support/connectors-and-mcp.md)."], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F031-12", "rel": "blocked_by", "to": "GAP-F031-12-07", "evidence": ["rg found no Docusign in apps/mobile/src or apps/cli/src."], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F031-99", "rel": "blocked_by", "to": "GAP-F031-99-PARTLY", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F032-01", "rel": "blocked_by", "to": "GAP-F032-01-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F032-01", "rel": "blocked_by", "to": "GAP-F032-01-01", "evidence": ["design-brief.ts; NewArtifactMenu.tsx:87"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F032-01", "rel": "blocked_by", "to": "GAP-F032-01-02", "evidence": ["no matches in app source searches"], "basis": "code", "source": "feature page (code reading)"}
@@ -81663,6 +81764,7 @@
 {"from": "F058-01", "rel": "blocked_by", "to": "GAP-F058-01-05", "evidence": ["apps/cli/src/lib.rs:1325-1375 is project/archive code"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F058-01", "rel": "blocked_by", "to": "GAP-F058-01-06", "evidence": ["apps/web/lib/services/free-plan-entitlements.ts:69-82 holds the text only in errors"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F058-02", "rel": "blocked_by", "to": "GAP-F058-02-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
+{"from": "F058-02", "rel": "blocked_by", "to": "GAP-F058-02-PARTLY", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F058-02", "rel": "blocked_by", "to": "GAP-F058-02-01", "evidence": ["packages/contracts/types/src/connector-release.ts:14; apps/web/app/api/connectors/custom/route.test.ts:350-370"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F058-02", "rel": "blocked_by", "to": "GAP-F058-02-02", "evidence": ["apps/extension-vscode/src/features/surfaces/capabilityManagement.ts:566-668"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F058-02", "rel": "blocked_by", "to": "GAP-F058-02-03", "evidence": ["apps/web/lib/mcp-url-validation.ts:6-28; apps/cli/src/mcp/registry.rs:358-370"], "basis": "code", "source": "feature page (code reading)"}
@@ -82200,6 +82302,7 @@
 {"from": "F066-12", "rel": "blocked_by", "to": "GAP-F066-12-03", "evidence": ["Only the writer-conflict error was found (developerSessionService.ts:813)"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F066-12", "rel": "blocked_by", "to": "GAP-F066-12-04", "evidence": ["Files opened"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F066-12", "rel": "blocked_by", "to": "GAP-F066-12-05", "evidence": ["memory note only"], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F066-99", "rel": "blocked_by", "to": "GAP-F066-99-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F067-01", "rel": "blocked_by", "to": "GAP-F067-01-PARTLY", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F067-01", "rel": "blocked_by", "to": "GAP-F067-01-01", "evidence": ["apps/web/features/code/hooks/use-local-sessions.ts:121; apps/web/lib/e2b/gate.ts:20-30"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F067-01", "rel": "blocked_by", "to": "GAP-F067-01-02", "evidence": ["No citation check found in apps/cli/src/features/exec/tools/mod.rs or the web session panel."], "basis": "code", "source": "feature page (code reading)"}
@@ -82271,6 +82374,7 @@
 {"from": "F067-11", "rel": "blocked_by", "to": "GAP-F067-11-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F067-11", "rel": "blocked_by", "to": "GAP-F067-11-01", "evidence": ["brief S67.35 'missing' on every app; no code found"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F067-11", "rel": "blocked_by", "to": "GAP-F067-11-02", "evidence": ["docs/product/requirements.md describes deck and design generation without a repository source"], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F067-99", "rel": "blocked_by", "to": "GAP-F067-99-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F068-01", "rel": "blocked_by", "to": "GAP-F068-01-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F068-01", "rel": "blocked_by", "to": "GAP-F068-01-PARTLY", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F068-01", "rel": "blocked_by", "to": "GAP-F068-01-01", "evidence": ["packages/contracts/types/src/cloud-code.ts:99-135"], "basis": "code", "source": "feature page (code reading)"}
@@ -82537,6 +82641,7 @@
 {"from": "F072-12", "rel": "blocked_by", "to": "GAP-F072-12-03", "evidence": ["doc: docs/product/surface-feature-matrix.md:562-570 vs apps/cli/src/lib.rs:6659"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F072-12", "rel": "blocked_by", "to": "GAP-F072-12-04", "evidence": ["apps/cli/src/cloud/code_teleport.rs:119-128"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F072-12", "rel": "blocked_by", "to": "GAP-F072-12-05", "evidence": ["no file records one"], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F072-99", "rel": "blocked_by", "to": "GAP-F072-99-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F073-01", "rel": "blocked_by", "to": "GAP-F073-01-01", "evidence": ["No result file read; only unit test files exist."], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F073-01", "rel": "blocked_by", "to": "GAP-F073-01-02", "evidence": ["Not opened."], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F073-02", "rel": "blocked_by", "to": "GAP-F073-02-01", "evidence": ["composerContext.ts builders at 126-188 and 548-609"], "basis": "code", "source": "feature page (code reading)"}
@@ -82724,6 +82829,7 @@
 {"from": "F078-08", "rel": "blocked_by", "to": "GAP-F078-08-04", "evidence": ["mobile connector screen calls refreshTier (apps/mobile/src/features/settings/cloud-connectors/index.tsx:529); equivalents elsewhere not read."], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F078-08", "rel": "blocked_by", "to": "GAP-F078-08-05", "evidence": ["apps/web/features/billing/hooks/use-billing-queries.ts callers; ChatComposerNew.tsx:1055."], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F078-08", "rel": "blocked_by", "to": "GAP-F078-08-06", "evidence": ["apps/web test listing for useBillingStore (UpgradeChooser, UpgradeOrderScreen, pricing page, UpgradeWelcome tests only)."], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F078-99", "rel": "blocked_by", "to": "GAP-F078-99-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F078-99", "rel": "blocked_by", "to": "GAP-F078-99-01", "evidence": ["audit/checklist/views/legacy/partial/078-ui-gating-and-adaptation-components.md (S78.27 table); docs/decisions/2026-09-27-founder-decisions.md lines 187-197."], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F078-99", "rel": "blocked_by", "to": "GAP-F078-99-02", "evidence": ["No inspector file found; server document already available (apps/web/app/api/me/route.ts:342)."], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F079-01", "rel": "blocked_by", "to": "GAP-F079-01-01", "evidence": ["weightedScore only in packages/ai/routing/src/profiles/index.ts:169, index.ts:324 and tests; auto.ts:1466 only labels the decision."], "basis": "code", "source": "feature page (code reading)"}
@@ -83008,6 +83114,7 @@
 {"from": "F084-12", "rel": "blocked_by", "to": "GAP-F084-12-01", "evidence": ["S84.25; search found nothing"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F084-12", "rel": "blocked_by", "to": "GAP-F084-12-02", "evidence": ["web-settings-store.ts:158"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F084-12", "rel": "blocked_by", "to": "GAP-F084-12-03", "evidence": ["KeyboardShortcutsDialog.tsx:330-340"], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F084-99", "rel": "blocked_by", "to": "GAP-F084-99-PARTLY", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F085-01", "rel": "blocked_by", "to": "GAP-F085-01-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F085-01", "rel": "blocked_by", "to": "GAP-F085-01-01", "evidence": ["S85.01 and S85.26 brief status missing; no CLI file found"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F085-01", "rel": "blocked_by", "to": "GAP-F085-01-02", "evidence": ["Only a read of /api/me found (capabilityDocument.ts:72)"], "basis": "code", "source": "feature page (code reading)"}
@@ -83196,6 +83303,7 @@
 {"from": "F087-12", "rel": "blocked_by", "to": "GAP-F087-12-04", "evidence": ["export route is under legal-holds/[holdId]"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F087-12", "rel": "blocked_by", "to": "GAP-F087-12-05", "evidence": ["organization-policy-evaluator.ts:110 only"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F087-12", "rel": "blocked_by", "to": "GAP-F087-12-06", "evidence": ["doc: docs/compliance/legal-hold-and-ediscovery.md section 'What a hold can name'"], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F087-99", "rel": "blocked_by", "to": "GAP-F087-99-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F088-01", "rel": "blocked_by", "to": "GAP-F088-01-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F088-01", "rel": "blocked_by", "to": "GAP-F088-01-PARTLY", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F088-01", "rel": "blocked_by", "to": "GAP-F088-01-01", "evidence": ["apps/mobile/src/features/support/HelpArticleLink.tsx:43; brief S88.01 'mobile missing'"], "basis": "code", "source": "feature page (code reading)"}
@@ -83267,6 +83375,7 @@
 {"from": "F088-11", "rel": "blocked_by", "to": "GAP-F088-11-04", "evidence": ["No code found"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F088-11", "rel": "blocked_by", "to": "GAP-F088-11-05", "evidence": ["apps/web/features/support/lib/route-visibility.ts:1"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F088-11", "rel": "blocked_by", "to": "GAP-F088-11-06", "evidence": ["apps/web/app/api/support/ask/route.ts:93"], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F088-99", "rel": "blocked_by", "to": "GAP-F088-99-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F089-01", "rel": "blocked_by", "to": "GAP-F089-01-01", "evidence": ["packages/platform/identity/src/types.ts:1; factory.ts:47-52"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F089-01", "rel": "blocked_by", "to": "GAP-F089-01-02", "evidence": ["brief S89.01 lists status n/a for every app"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F089-01", "rel": "blocked_by", "to": "GAP-F089-01-03", "evidence": ["apps/web/lib/api-auth.ts:245 uses getCachedAccountStatus; its implementation not opened"], "basis": "code", "source": "feature page (code reading)"}
@@ -83308,6 +83417,7 @@
 {"from": "F089-12", "rel": "blocked_by", "to": "GAP-F089-12-02", "evidence": ["Search for assertSupportAccess and readOperatorContentUnderGrants usage"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F089-12", "rel": "blocked_by", "to": "GAP-F089-12-03", "evidence": ["apps/web/lib/server/admin-data-access.ts:38-60"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F089-12", "rel": "blocked_by", "to": "GAP-F089-12-04", "evidence": ["No UI file found by search"], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F089-99", "rel": "blocked_by", "to": "GAP-F089-99-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F090-01", "rel": "blocked_by", "to": "GAP-F090-01-01", "evidence": ["apps/web/lib/hooks/useConversations.ts:196, :552, :729-766"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F090-01", "rel": "blocked_by", "to": "GAP-F090-01-02", "evidence": ["apps/web/app/api/chat/conversations/[id]/messages/lib/message-thread.ts:33-45 versus messages/route.ts:68"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F090-01", "rel": "blocked_by", "to": "GAP-F090-01-03", "evidence": ["apps/web/lib/identity/pagination.ts:45-57"], "basis": "code", "source": "feature page (code reading)"}
@@ -83803,6 +83913,7 @@
 {"from": "F101-08", "rel": "blocked_by", "to": "GAP-F101-08-04", "evidence": ["apps/mobile/services/productAnalytics.ts; apps/extension-vscode/src/features/analytics/productAnalytics.ts; apps/extension/src/features/observability/productAnalytics.ts; apps/cli/src/cloud/product_analytics.rs:9"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F101-08", "rel": "blocked_by", "to": "GAP-F101-08-05", "evidence": ["apps/web/instrumentation.ts:68-72"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F101-08", "rel": "blocked_by", "to": "GAP-F101-08-06", "evidence": ["apps/extension/src/background/policy.ts:2; apps/extension-vscode/src/core/telemetry.ts:1"], "basis": "code", "source": "feature page (code reading)"}
+{"from": "F101-99", "rel": "blocked_by", "to": "GAP-F101-99-NOTBUILT", "evidence": [], "basis": "code", "source": "capability ledger"}
 {"from": "F101-99", "rel": "blocked_by", "to": "GAP-F101-99-01", "evidence": ["apps/extension/src/features/side-panel/sources.ts:6 versus packages/ui/unified-chat/src/components/markdown/citationMarkers.ts:4"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F101-99", "rel": "blocked_by", "to": "GAP-F101-99-02", "evidence": ["No citation or source rendering in apps/extension-vscode/src/webview or sidebar-webview; only schema and message posting"], "basis": "code", "source": "feature page (code reading)"}
 {"from": "F101-99", "rel": "blocked_by", "to": "GAP-F101-99-03", "evidence": ["apps/extension/src/features/side-panel/chat-state.ts:13,37"], "basis": "code", "source": "feature page (code reading)"}

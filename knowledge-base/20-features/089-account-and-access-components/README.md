@@ -2,7 +2,7 @@
 id: "AREA-089"
 type: "area"
 title: "Account and access components"
-features: ["F089-01", "F089-02", "F089-03", "F089-04", "F089-05", "F089-06", "F089-07", "F089-08", "F089-09", "F089-10", "F089-11", "F089-12"]
+features: ["F089-01", "F089-02", "F089-03", "F089-04", "F089-05", "F089-06", "F089-07", "F089-08", "F089-09", "F089-10", "F089-11", "F089-12", "F089-99"]
 basis: "code inspection"
 last_reviewed: "2026-11-24"
 revision: "f51d16e747"
@@ -29,6 +29,7 @@ This area is the server side of "who you are and what you may touch". It maps ea
 | [F089-10](F089-10-pairing-a-second-device.md) | Pairing a second device | n/a | n/a | n/a | n/a | n/a | n/a |
 | [F089-11](F089-11-deleting-and-exporting-account-data.md) | Deleting and exporting account data | n/a | n/a | n/a | n/a | n/a | n/a |
 | [F089-12](F089-12-support-staff-access-to-customer-data.md) | Support staff access to customer data | n/a | n/a | n/a | n/a | n/a | n/a |
+| [F089-99](F089-99-other-items.md) | Other items in Account and access components | n/a | n/a | n/a | no | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/089-account-and-access-components.md](../../10-requirements/capabilities/089-account-and-access-components.md).
 

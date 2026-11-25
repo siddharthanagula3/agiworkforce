@@ -25,7 +25,7 @@ This area keeps the six apps (Web, Desktop, Mobile, CLI, VS Code extension, Chro
 | [F101-06](F101-06-tools-approvals-skills-and-the-coding-session-prot.md) | Tools, approvals, skills and the coding-session protocol | n/a | n/a | n/a | n/a | n/a | n/a |
 | [F101-07](F101-07-design-tokens-ui-primitives-text-and-markdown.md) | Design tokens, UI primitives, text and Markdown | n/a | n/a | n/a | n/a | n/a | n/a |
 | [F101-08](F101-08-telemetry-configuration-security-helpers-and-packa.md) | Telemetry, configuration, security helpers and package runtimes | n/a | n/a | n/a | n/a | n/a | n/a |
-| [F101-99](F101-99-other-items.md) | Other items in Shared package boundaries | n/a | n/a | n/a | n/a | n/a | n/a |
+| [F101-99](F101-99-other-items.md) | Other items in Shared package boundaries | n/a | n/a | n/a | no | partly | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/101-shared-package-boundaries.md](../../10-requirements/capabilities/101-shared-package-boundaries.md).
 

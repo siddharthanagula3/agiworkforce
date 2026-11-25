@@ -1,6 +1,6 @@
 {
  "built_on": "2026-11-24",
- "built_at_commit": "ab04b88ea8",
+ "built_at_commit": "8213c7ea65",
  "content_read_on": "2026-11-24",
  "content_read_at_commit": "f51d16e747",
  "features": [
@@ -3789,6 +3789,51 @@
     "desktop": "No reconnect action when offline"
    },
    "status_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md"
+  },
+  {
+   "id": "F005-99",
+   "area": "5",
+   "area_slug": "005-application-shell-and-navigation-components",
+   "area_title": "Application shell and navigation components",
+   "name": "Other items in Application shell and navigation components",
+   "slug": "other-items",
+   "items": [
+    "S5.40"
+   ],
+   "use": "Items of this area that the area page did not place under a named feature.",
+   "how_people_use_it": [],
+   "how_it_should_work": [],
+   "on_each_app": "",
+   "implementation": {
+    "web": "missing",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "server": {
+    "api": "n/a",
+    "platform": "n/a"
+   },
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "implementation_ledger": {
+    "web": "missing",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "status_basis": "ledger audit only"
   },
   {
    "id": "F006-01",
@@ -25135,6 +25180,53 @@
    "status_unfinished_noted": [],
    "status_quotes": {},
    "status_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md"
+  },
+  {
+   "id": "F031-99",
+   "area": "31",
+   "area_slug": "031-pdf-and-document-transformation-products",
+   "area_title": "PDF and document-transformation products",
+   "name": "Other items in PDF and document-transformation products",
+   "slug": "other-items",
+   "items": [
+    "S31.26"
+   ],
+   "use": "Items of this area that the area page did not place under a named feature.",
+   "how_people_use_it": [],
+   "how_it_should_work": [],
+   "on_each_app": "",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "partial",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "server": {
+    "api": "n/a",
+    "platform": "n/a"
+   },
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "not seen by a person",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [
+    "mobile"
+   ],
+   "implementation_ledger": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "partial",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "status_basis": "ledger audit only"
   },
   {
    "id": "F032-01",
@@ -53203,6 +53295,61 @@
    "status_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md"
   },
   {
+   "id": "F066-99",
+   "area": "66",
+   "area_slug": "066-coding-workspace-frontend",
+   "area_title": "Coding-workspace frontend",
+   "name": "Other items in Coding-workspace frontend",
+   "slug": "other-items",
+   "items": [
+    "S66.42",
+    "S66.43",
+    "S66.44",
+    "S66.45",
+    "S66.46",
+    "S66.47",
+    "S66.48",
+    "S66.49",
+    "S66.50",
+    "S66.51",
+    "S66.52"
+   ],
+   "use": "Items of this area that the area page did not place under a named feature.",
+   "how_people_use_it": [],
+   "how_it_should_work": [],
+   "on_each_app": "",
+   "implementation": {
+    "web": "missing",
+    "desktop": "n/a",
+    "mobile": "missing",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "server": {
+    "api": "n/a",
+    "platform": "n/a"
+   },
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "implementation_ledger": {
+    "web": "missing",
+    "desktop": "n/a",
+    "mobile": "missing",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "status_basis": "ledger audit only"
+  },
+  {
    "id": "F067-01",
    "area": "67",
    "area_slug": "067-coding-capabilities-and-developer-workflows",
@@ -54041,6 +54188,52 @@
     "chrome": "none: sections 2, 3 and 10 do not mention Chrome"
    },
    "status_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md"
+  },
+  {
+   "id": "F067-99",
+   "area": "67",
+   "area_slug": "067-coding-capabilities-and-developer-workflows",
+   "area_title": "Coding capabilities and developer workflows",
+   "name": "Other items in Coding capabilities and developer workflows",
+   "slug": "other-items",
+   "items": [
+    "S67.40",
+    "S67.41"
+   ],
+   "use": "Items of this area that the area page did not place under a named feature.",
+   "how_people_use_it": [],
+   "how_it_should_work": [],
+   "on_each_app": "",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "server": {
+    "api": "n/a",
+    "platform": "n/a"
+   },
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "implementation_ledger": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "status_basis": "ledger audit only"
   },
   {
    "id": "F068-01",
@@ -58414,6 +58607,52 @@
    "status_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md"
   },
   {
+   "id": "F072-99",
+   "area": "72",
+   "area_slug": "072-cli-and-terminal-application",
+   "area_title": "CLI and terminal application",
+   "name": "Other items in CLI and terminal application",
+   "slug": "other-items",
+   "items": [
+    "S72.38",
+    "S72.39"
+   ],
+   "use": "Items of this area that the area page did not place under a named feature.",
+   "how_people_use_it": [],
+   "how_it_should_work": [],
+   "on_each_app": "",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "server": {
+    "api": "n/a",
+    "platform": "n/a"
+   },
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "implementation_ledger": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "status_basis": "ledger audit only"
+  },
+  {
    "id": "F073-01",
    "area": "73",
    "area_slug": "073-vs-code-and-ide-extension",
@@ -61780,7 +62019,9 @@
    "name": "Other items in UI gating and adaptation components",
    "slug": "other-items",
    "items": [
-    "S78.27"
+    "S78.27",
+    "S78.29",
+    "S78.30"
    ],
    "use": "Items of this area that the area page did not place under a named feature.",
    "how_people_use_it": [],
@@ -61790,7 +62031,7 @@
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
+    "cli": "missing",
     "vscode": "n/a",
     "chrome": "n/a"
    },
@@ -61811,7 +62052,7 @@
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
+    "cli": "missing",
     "vscode": "n/a",
     "chrome": "n/a"
    },
@@ -61819,7 +62060,7 @@
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
+    "cli": "missing",
     "vscode": "n/a",
     "chrome": "n/a"
    },
@@ -65921,6 +66162,53 @@
    "status_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md"
   },
   {
+   "id": "F084-99",
+   "area": "84",
+   "area_slug": "084-general-and-appearance-settings",
+   "area_title": "General and appearance settings",
+   "name": "Other items in General and appearance settings",
+   "slug": "other-items",
+   "items": [
+    "S84.27"
+   ],
+   "use": "Items of this area that the area page did not place under a named feature.",
+   "how_people_use_it": [],
+   "how_it_should_work": [],
+   "on_each_app": "",
+   "implementation": {
+    "web": "partial",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "server": {
+    "api": "n/a",
+    "platform": "n/a"
+   },
+   "verification": {
+    "web": "not seen by a person",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [
+    "web"
+   ],
+   "implementation_ledger": {
+    "web": "partial",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "status_basis": "ledger audit only"
+  },
+  {
    "id": "F085-01",
    "area": "85",
    "area_slug": "085-personalization-and-data-settings",
@@ -68718,6 +69006,52 @@
    "status_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md"
   },
   {
+   "id": "F087-99",
+   "area": "87",
+   "area_slug": "087-enterprise-administration-screens",
+   "area_title": "Enterprise administration screens",
+   "name": "Other items in Enterprise administration screens",
+   "slug": "other-items",
+   "items": [
+    "S87.41",
+    "S87.42"
+   ],
+   "use": "Items of this area that the area page did not place under a named feature.",
+   "how_people_use_it": [],
+   "how_it_should_work": [],
+   "on_each_app": "",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "server": {
+    "api": "n/a",
+    "platform": "n/a"
+   },
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "implementation_ledger": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "status_basis": "ledger audit only"
+  },
+  {
    "id": "F088-01",
    "area": "88",
    "area_slug": "088-support-trust-and-policy-product",
@@ -69569,6 +69903,51 @@
     "chrome": "Desktop, mobile, CLI, VS Code, Chrome: not part of the brief; none found."
    },
    "status_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md"
+  },
+  {
+   "id": "F088-99",
+   "area": "88",
+   "area_slug": "088-support-trust-and-policy-product",
+   "area_title": "Support, trust, and policy product",
+   "name": "Other items in Support, trust, and policy product",
+   "slug": "other-items",
+   "items": [
+    "S88.32"
+   ],
+   "use": "Items of this area that the area page did not place under a named feature.",
+   "how_people_use_it": [],
+   "how_it_should_work": [],
+   "on_each_app": "",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "server": {
+    "api": "n/a",
+    "platform": "n/a"
+   },
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "implementation_ledger": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "status_basis": "ledger audit only"
   },
   {
    "id": "F089-01",
@@ -70472,6 +70851,52 @@
     "chrome": "Desktop, mobile, CLI, VS Code and Chrome: none."
    },
    "status_basis": "capability ledger audit of 2026-09-26 and later updates; where the feature page's reading of 2026-11-24 disagrees on whether the feature exists on an app, the page's reading is used and the case is listed in 90-meta/ledger-corrections.md"
+  },
+  {
+   "id": "F089-99",
+   "area": "89",
+   "area_slug": "089-account-and-access-components",
+   "area_title": "Account and access components",
+   "name": "Other items in Account and access components",
+   "slug": "other-items",
+   "items": [
+    "S89.25",
+    "S89.26"
+   ],
+   "use": "Items of this area that the area page did not place under a named feature.",
+   "how_people_use_it": [],
+   "how_it_should_work": [],
+   "on_each_app": "",
+   "implementation": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "server": {
+    "api": "n/a",
+    "platform": "n/a"
+   },
+   "verification": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "n/a",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "available_on": [],
+   "implementation_ledger": {
+    "web": "n/a",
+    "desktop": "n/a",
+    "mobile": "n/a",
+    "cli": "missing",
+    "vscode": "n/a",
+    "chrome": "n/a"
+   },
+   "status_basis": "ledger audit only"
   },
   {
    "id": "F090-01",
@@ -78311,7 +78736,9 @@
    "name": "Other items in Shared package boundaries",
    "slug": "other-items",
    "items": [
-    "S101.18"
+    "S101.18",
+    "S101.39",
+    "S101.40"
    ],
    "use": "Items of this area that the area page did not place under a named feature.",
    "how_people_use_it": [],
@@ -78321,8 +78748,8 @@
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
-    "vscode": "n/a",
+    "cli": "missing",
+    "vscode": "partial",
     "chrome": "n/a"
    },
    "server": {
@@ -78337,24 +78764,28 @@
     "vscode": "n/a",
     "chrome": "n/a"
    },
-   "available_on": [],
+   "available_on": [
+    "vscode"
+   ],
    "implementation_ledger": {
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
-    "vscode": "n/a",
+    "cli": "missing",
+    "vscode": "missing",
     "chrome": "n/a"
    },
    "implementation_page": {
     "web": "n/a",
     "desktop": "n/a",
     "mobile": "n/a",
-    "cli": "n/a",
-    "vscode": "n/a",
+    "cli": "not stated",
+    "vscode": "partial",
     "chrome": "n/a"
    },
-   "status_differs": [],
+   "status_differs": [
+    "vscode"
+   ],
    "status_unfinished_noted": [],
    "status_quotes": {
     "web": "Web chat: citation markers and sources under an answer",

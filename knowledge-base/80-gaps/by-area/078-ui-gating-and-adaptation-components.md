@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 78. UI gating and adaptation components
 
-42 open gaps that touch this area. Area page: [20-features/078-ui-gating-and-adaptation-components](../../20-features/078-ui-gating-and-adaptation-components/README.md).
+43 open gaps that touch this area. Area page: [20-features/078-ui-gating-and-adaptation-components](../../20-features/078-ui-gating-and-adaptation-components/README.md).
 
 ## GAP-AREA078-LW03
 
@@ -388,3 +388,13 @@ revision: "f51d16e747"
 - Features: [F078-99](../../20-features/078-ui-gating-and-adaptation-components/F078-99-other-items.md)
 - Detail: Affects: All six apps.. Work needed: A shared list component plus per-app entry points and reason wording for each denying layer.
 - Evidence: No inspector file found; server document already available (apps/web/app/api/me/route.ts:342).
+
+## GAP-F078-99-NOTBUILT
+
+**Other items in UI gating and adaptation components: not built on CLI**
+
+- Kind: not built on an app (read in the code; source: capability ledger)
+- Apps: CLI
+- Features: [F078-99](../../20-features/078-ui-gating-and-adaptation-components/F078-99-other-items.md)
+- Requirement items: S78.29, S78.30
+- Detail: CLI: S78.29, S78.30

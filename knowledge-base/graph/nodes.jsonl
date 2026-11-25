@@ -3552,6 +3552,33 @@
 {"id": "S110.28", "type": "requirement item", "title": "Published output \u2192 versioned update.", "path": "10-requirements/capabilities/110-cross-product-experiences-to-include-in-the-product-map.md"}
 {"id": "S110.29", "type": "requirement item", "title": "Public creation \u2192 private fork.", "path": "10-requirements/capabilities/110-cross-product-experiences-to-include-in-the-product-map.md"}
 {"id": "S110.30", "type": "requirement item", "title": "Personal resource \u2192 explicitly shared workspace resource.", "path": "10-requirements/capabilities/110-cross-product-experiences-to-include-in-the-product-map.md"}
+{"id": "S5.40", "type": "requirement item", "title": "Find downloads from the account menu.", "path": "10-requirements/capabilities/005-application-shell-and-navigation-components.md"}
+{"id": "S84.27", "type": "requirement item", "title": "Follow the browser language from display settings.", "path": "10-requirements/capabilities/084-general-and-appearance-settings.md"}
+{"id": "S31.26", "type": "requirement item", "title": "Create a PDF from a mobile chat.", "path": "10-requirements/capabilities/031-pdf-and-document-transformation-products.md"}
+{"id": "S66.42", "type": "requirement item", "title": "Choose a customer-hosted execution environment.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.43", "type": "requirement item", "title": "Install, update and diagnose a customer-hosted runner.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.44", "type": "requirement item", "title": "Control capacity and idle time on customer-hosted runners.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.45", "type": "requirement item", "title": "Drain customer-hosted runners and recover unfinished jobs.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.46", "type": "requirement item", "title": "Configure lifecycle hooks on customer-hosted runners.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.47", "type": "requirement item", "title": "Isolate and authenticate customer-hosted sessions.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.48", "type": "requirement item", "title": "Connect customer-hosted runners through a managed network.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.49", "type": "requirement item", "title": "Observe customer-hosted runner and session health.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.50", "type": "requirement item", "title": "Configure the workspace a customer-hosted runner gives a session.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.51", "type": "requirement item", "title": "Control tools in a customer-hosted coding session.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S66.52", "type": "requirement item", "title": "Save a reusable coding environment on mobile.", "path": "10-requirements/capabilities/066-coding-workspace-frontend.md"}
+{"id": "S89.25", "type": "requirement item", "title": "Sign the CLI in through an organization-hosted identity gateway.", "path": "10-requirements/capabilities/089-account-and-access-components.md"}
+{"id": "S89.26", "type": "requirement item", "title": "Operate the workspace sign-in gateway.", "path": "10-requirements/capabilities/089-account-and-access-components.md"}
+{"id": "S87.41", "type": "requirement item", "title": "Apply gateway policy for an organization or identity group.", "path": "10-requirements/capabilities/087-enterprise-administration-screens.md"}
+{"id": "S87.42", "type": "requirement item", "title": "Operate and monitor a workspace gateway telemetry relay.", "path": "10-requirements/capabilities/087-enterprise-administration-screens.md"}
+{"id": "S101.39", "type": "requirement item", "title": "Export coding-client telemetry to a customer collector.", "path": "10-requirements/capabilities/101-shared-package-boundaries.md"}
+{"id": "S101.40", "type": "requirement item", "title": "Control what coding-client telemetry leaves a machine.", "path": "10-requirements/capabilities/101-shared-package-boundaries.md"}
+{"id": "S88.32", "type": "requirement item", "title": "Present and enforce the workspace\u2019s contracted retention and compliance scope in the CLI.", "path": "10-requirements/capabilities/088-support-trust-and-policy-product.md"}
+{"id": "S72.38", "type": "requirement item", "title": "Monitor and organize multiple coding sessions from a terminal view.", "path": "10-requirements/capabilities/072-cli-and-terminal-application.md"}
+{"id": "S72.39", "type": "requirement item", "title": "Dispatch and reply to sessions without leaving the terminal session list.", "path": "10-requirements/capabilities/072-cli-and-terminal-application.md"}
+{"id": "S78.29", "type": "requirement item", "title": "Discover bundled artifact and diagram skills in the CLI.", "path": "10-requirements/capabilities/078-ui-gating-and-adaptation-components.md"}
+{"id": "S78.30", "type": "requirement item", "title": "Author plugins, skills and workflows with discoverable CLI skills.", "path": "10-requirements/capabilities/078-ui-gating-and-adaptation-components.md"}
+{"id": "S67.40", "type": "requirement item", "title": "Configure a defensive repository scan from the CLI.", "path": "10-requirements/capabilities/067-coding-capabilities-and-developer-workflows.md"}
+{"id": "S67.41", "type": "requirement item", "title": "Review and act on saved repository scan results.", "path": "10-requirements/capabilities/067-coding-capabilities-and-developer-workflows.md"}
 {"id": "F002-01", "type": "feature", "title": "Product entry and sign-in redirect", "path": "20-features/002-public-website-and-acquisition-screens/F002-01-product-entry-and-sign-in-redirect.md"}
 {"id": "file:apps/web/app/BrowserIdentityBoundary.tsx", "type": "file", "title": "apps/web/app/BrowserIdentityBoundary.tsx", "path": "apps/web/app/BrowserIdentityBoundary.tsx"}
 {"id": "file:apps/web/lib/identity/browser-provider-routes.ts", "type": "file", "title": "apps/web/lib/identity/browser-provider-routes.ts", "path": "apps/web/lib/identity/browser-provider-routes.ts"}
@@ -4898,6 +4925,7 @@
 {"id": "test:apps/web/features/desktop-host/__tests__/DesktopUpdateNotice.test.tsx", "type": "test", "title": "apps/web/features/desktop-host/__tests__/DesktopUpdateNotice.test.tsx", "path": "apps/web/features/desktop-host/__tests__/DesktopUpdateNotice.test.tsx"}
 {"id": "test:apps/web/features/desktop-host/__tests__/DesktopUpdateRow.test.tsx", "type": "test", "title": "apps/web/features/desktop-host/__tests__/DesktopUpdateRow.test.tsx", "path": "apps/web/features/desktop-host/__tests__/DesktopUpdateRow.test.tsx"}
 {"id": "store:offline-queue", "type": "store", "title": "", "path": ""}
+{"id": "F005-99", "type": "feature", "title": "Other items in Application shell and navigation components", "path": "20-features/005-application-shell-and-navigation-components/F005-99-other-items.md"}
 {"id": "F006-01", "type": "feature", "title": "Colour roles", "path": "20-features/006-visual-foundations-and-spacing-conventions/F006-01-colour-roles.md"}
 {"id": "file:packages/ui/design-tokens/src/foundation.css", "type": "file", "title": "packages/ui/design-tokens/src/foundation.css", "path": "packages/ui/design-tokens/src/foundation.css"}
 {"id": "file:apps/web/app/globals.css", "type": "file", "title": "apps/web/app/globals.css", "path": "apps/web/app/globals.css"}
@@ -7989,6 +8017,7 @@
 {"id": "plan:paid", "type": "plan", "title": "", "path": ""}
 {"id": "api:GET /api/connectors/oauth/start", "type": "endpoint", "title": "", "path": ""}
 {"id": "api:GET /api/connectors/oauth/callback", "type": "endpoint", "title": "", "path": ""}
+{"id": "F031-99", "type": "feature", "title": "Other items in PDF and document-transformation products", "path": "20-features/031-pdf-and-document-transformation-products/F031-99-other-items.md"}
 {"id": "F032-01", "type": "feature", "title": "Start a design from a brief", "path": "20-features/032-design-workspace/F032-01-start-a-design-from-a-brief.md"}
 {"id": "file:apps/web/features/chat/components/artifacts/design/design-brief.ts", "type": "file", "title": "apps/web/features/chat/components/artifacts/design/design-brief.ts", "path": "apps/web/features/chat/components/artifacts/design/design-brief.ts"}
 {"id": "file:apps/web/features/chat/components/artifacts/design/DesignBriefDialog.tsx", "type": "file", "title": "apps/web/features/chat/components/artifacts/design/DesignBriefDialog.tsx", "path": "apps/web/features/chat/components/artifacts/design/DesignBriefDialog.tsx"}
@@ -11075,6 +11104,9 @@
 {"id": "api:PATCH /api/code/sessions/{sessionId}", "type": "endpoint", "title": "", "path": ""}
 {"id": "api:GET /api/code/shared/{token}", "type": "endpoint", "title": "", "path": ""}
 {"id": "api:POST /api/code/sessions/handoff", "type": "endpoint", "title": "", "path": ""}
+{"id": "F066-99", "type": "feature", "title": "Other items in Coding-workspace frontend", "path": "20-features/066-coding-workspace-frontend/F066-99-other-items.md"}
+{"id": "file:packages/contracts/cloud-contracts/src/managed-cloud-code-client.ts", "type": "file", "title": "packages/contracts/cloud-contracts/src/managed-cloud-code-client.ts", "path": "packages/contracts/cloud-contracts/src/managed-cloud-code-client.ts"}
+{"id": "file:apps/web/app/api/code/environments/route.ts", "type": "file", "title": "apps/web/app/api/code/environments/route.ts", "path": "apps/web/app/api/code/environments/route.ts"}
 {"id": "F067-01", "type": "feature", "title": "Understand the repository", "path": "20-features/067-coding-capabilities-and-developer-workflows/F067-01-understand-the-repository.md"}
 {"id": "file:apps/desktop/electron/runtime/agentAccess.ts", "type": "file", "title": "apps/desktop/electron/runtime/agentAccess.ts", "path": "apps/desktop/electron/runtime/agentAccess.ts"}
 {"id": "test:apps/mobile/src/features/companion/components/__tests__/codeSessionTimeline.test.ts", "type": "test", "title": "apps/mobile/src/features/companion/components/__tests__/codeSessionTimeline.test.ts", "path": "apps/mobile/src/features/companion/components/__tests__/codeSessionTimeline.test.ts"}
@@ -11149,6 +11181,7 @@
 {"id": "store:project CLAUDE.md and user instruction files", "type": "store", "title": "", "path": ""}
 {"id": "store:skill consent file", "type": "store", "title": "", "path": ""}
 {"id": "F067-11", "type": "feature", "title": "Reports, slides and designs from the repository", "path": "20-features/067-coding-capabilities-and-developer-workflows/F067-11-reports-slides-and-designs-from-the-repository.md"}
+{"id": "F067-99", "type": "feature", "title": "Other items in Coding capabilities and developer workflows", "path": "20-features/067-coding-capabilities-and-developer-workflows/F067-99-other-items.md"}
 {"id": "F068-01", "type": "feature", "title": "One session on every client", "path": "20-features/068-session-continuity-and-remote-session-product/F068-01-one-session-on-every-client.md"}
 {"id": "file:apps/mobile/src/features/cloud-code/useCloudCodeSession.ts", "type": "file", "title": "apps/mobile/src/features/cloud-code/useCloudCodeSession.ts", "path": "apps/mobile/src/features/cloud-code/useCloudCodeSession.ts"}
 {"id": "file:apps/mobile/app/(app)/cloud-code/[sessionId].tsx", "type": "file", "title": "apps/mobile/app/(app)/cloud-code/[sessionId].tsx", "path": "apps/mobile/app/(app)/cloud-code/[sessionId].tsx"}
@@ -11643,6 +11676,7 @@
 {"id": "test:apps/cli/src/doctor.rs", "type": "test", "title": "apps/cli/src/doctor.rs", "path": "apps/cli/src/doctor.rs"}
 {"id": "F072-12", "type": "feature", "title": "Remote session attachment", "path": "20-features/072-cli-and-terminal-application/F072-12-remote-session-attachment.md"}
 {"id": "file:apps/cli/src/remote_control/envelope.rs", "type": "file", "title": "apps/cli/src/remote_control/envelope.rs", "path": "apps/cli/src/remote_control/envelope.rs"}
+{"id": "F072-99", "type": "feature", "title": "Other items in CLI and terminal application", "path": "20-features/072-cli-and-terminal-application/F072-99-other-items.md"}
 {"id": "F073-01", "type": "feature", "title": "Chat in the sidebar and in an editor tab", "path": "20-features/073-vs-code-and-ide-extension/F073-01-chat-in-the-sidebar-and-in-an-editor-tab.md"}
 {"id": "test:apps/extension-vscode/src/__tests__/chatEditorPanel.test.ts", "type": "test", "title": "apps/extension-vscode/src/__tests__/chatEditorPanel.test.ts", "path": "apps/extension-vscode/src/__tests__/chatEditorPanel.test.ts"}
 {"id": "test:apps/extension-vscode/src/__tests__/sidebarShell.webview.test.ts", "type": "test", "title": "apps/extension-vscode/src/__tests__/sidebarShell.webview.test.ts", "path": "apps/extension-vscode/src/__tests__/sidebarShell.webview.test.ts"}
@@ -11989,6 +12023,7 @@
 {"id": "test:apps/extension/__tests__/side-panel-account-clients.test.ts", "type": "test", "title": "apps/extension/__tests__/side-panel-account-clients.test.ts", "path": "apps/extension/__tests__/side-panel-account-clients.test.ts"}
 {"id": "store:tierStore", "type": "store", "title": "", "path": ""}
 {"id": "F078-99", "type": "feature", "title": "Other items in UI gating and adaptation components", "path": "20-features/078-ui-gating-and-adaptation-components/F078-99-other-items.md"}
+{"id": "file:apps/cli/src/init.rs", "type": "file", "title": "apps/cli/src/init.rs", "path": "apps/cli/src/init.rs"}
 {"id": "file:apps/web/features/settings/sections/SettingsCapabilityBoundaries.test.tsx", "type": "file", "title": "apps/web/features/settings/sections/SettingsCapabilityBoundaries.test.tsx", "path": "apps/web/features/settings/sections/SettingsCapabilityBoundaries.test.tsx"}
 {"id": "file:apps/extension-vscode/src/__tests__/GAP-012-settings-webview.webview.test.ts", "type": "file", "title": "apps/extension-vscode/src/__tests__/GAP-012-settings-webview.webview.test.ts", "path": "apps/extension-vscode/src/__tests__/GAP-012-settings-webview.webview.test.ts"}
 {"id": "test:apps/extension-vscode/src/__tests__/GAP-012-settings-webview.webview.test.ts", "type": "test", "title": "apps/extension-vscode/src/__tests__/GAP-012-settings-webview.webview.test.ts", "path": "apps/extension-vscode/src/__tests__/GAP-012-settings-webview.webview.test.ts"}
@@ -12525,6 +12560,7 @@
 {"id": "F084-12", "type": "feature", "title": "Experimental features and restore defaults", "path": "20-features/084-general-and-appearance-settings/F084-12-experimental-features-and-restore-defaults.md"}
 {"id": "file:apps/web/features/chat/hooks/use-keyboard-shortcuts.test.ts", "type": "file", "title": "apps/web/features/chat/hooks/use-keyboard-shortcuts.test.ts", "path": "apps/web/features/chat/hooks/use-keyboard-shortcuts.test.ts"}
 {"id": "file:knowledge-base/data/area-briefs/084-general-and-appearance-settings.md", "type": "file", "title": "knowledge-base/data/area-briefs/084-general-and-appearance-settings.md", "path": "knowledge-base/data/area-briefs/084-general-and-appearance-settings.md"}
+{"id": "F084-99", "type": "feature", "title": "Other items in General and appearance settings", "path": "20-features/084-general-and-appearance-settings/F084-99-other-items.md"}
 {"id": "F085-01", "type": "feature", "title": "Profile and account deletion", "path": "20-features/085-personalization-and-data-settings/F085-01-profile-and-account-deletion.md"}
 {"id": "file:apps/web/app/api/user/delete-account/cancel/route.ts", "type": "file", "title": "apps/web/app/api/user/delete-account/cancel/route.ts", "path": "apps/web/app/api/user/delete-account/cancel/route.ts"}
 {"id": "file:apps/web/app/api/user/delete-account/cancel-schedule/route.ts", "type": "file", "title": "apps/web/app/api/user/delete-account/cancel-schedule/route.ts", "path": "apps/web/app/api/user/delete-account/cancel-schedule/route.ts"}
@@ -12546,7 +12582,6 @@
 {"id": "file:apps/web/features/models/lib/free-offering-request.ts", "type": "file", "title": "apps/web/features/models/lib/free-offering-request.ts", "path": "apps/web/features/models/lib/free-offering-request.ts"}
 {"id": "file:apps/web/features/chat/components/Composer/FreeQuotaModelSection.tsx", "type": "file", "title": "apps/web/features/chat/components/Composer/FreeQuotaModelSection.tsx", "path": "apps/web/features/chat/components/Composer/FreeQuotaModelSection.tsx"}
 {"id": "file:apps/mobile/app/(app)/settings/personalization.tsx", "type": "file", "title": "apps/mobile/app/(app)/settings/personalization.tsx", "path": "apps/mobile/app/(app)/settings/personalization.tsx"}
-{"id": "file:apps/cli/src/init.rs", "type": "file", "title": "apps/cli/src/init.rs", "path": "apps/cli/src/init.rs"}
 {"id": "file:apps/web/lib/preferences/response-style-preferences.ts", "type": "file", "title": "apps/web/lib/preferences/response-style-preferences.ts", "path": "apps/web/lib/preferences/response-style-preferences.ts"}
 {"id": "F085-03", "type": "feature", "title": "", "path": ""}
 {"id": "api:PATCH /api/projects/[id]", "type": "endpoint", "title": "", "path": ""}
@@ -13029,6 +13064,7 @@
 {"id": "table:support_access_events", "type": "table", "title": "", "path": ""}
 {"id": "api:POST /api/settings/organization/legal-holds", "type": "endpoint", "title": "", "path": ""}
 {"id": "api:POST /api/admin/support-access", "type": "endpoint", "title": "", "path": ""}
+{"id": "F087-99", "type": "feature", "title": "Other items in Enterprise administration screens", "path": "20-features/087-enterprise-administration-screens/F087-99-other-items.md"}
 {"id": "F088-01", "type": "feature", "title": "Help centre and help links", "path": "20-features/088-support-trust-and-policy-product/F088-01-help-centre-and-help-links.md"}
 {"id": "file:apps/web/features/workspace-console/components/ConsolePage.tsx", "type": "file", "title": "apps/web/features/workspace-console/components/ConsolePage.tsx", "path": "apps/web/features/workspace-console/components/ConsolePage.tsx"}
 {"id": "file:apps/web/content/support/configuration.md", "type": "file", "title": "apps/web/content/support/configuration.md", "path": "apps/web/content/support/configuration.md"}
@@ -13231,6 +13267,7 @@
 {"id": "test:apps/web/e2e/support-only.spec.ts", "type": "test", "title": "apps/web/e2e/support-only.spec.ts", "path": "apps/web/e2e/support-only.spec.ts"}
 {"id": "api:POST /api/support/ask", "type": "endpoint", "title": "", "path": ""}
 {"id": "api:GET /api/support/handoff/availability", "type": "endpoint", "title": "", "path": ""}
+{"id": "F088-99", "type": "feature", "title": "Other items in Support, trust, and policy product", "path": "20-features/088-support-trust-and-policy-product/F088-99-other-items.md"}
 {"id": "F089-01", "type": "feature", "title": "Sign-in and account standing", "path": "20-features/089-account-and-access-components/F089-01-sign-in-and-account-standing.md"}
 {"id": "file:apps/web/lib/server/identity-account.ts", "type": "file", "title": "apps/web/lib/server/identity-account.ts", "path": "apps/web/lib/server/identity-account.ts"}
 {"id": "file:apps/web/lib/server/identity.ts", "type": "file", "title": "apps/web/lib/server/identity.ts", "path": "apps/web/lib/server/identity.ts"}
@@ -13379,6 +13416,7 @@
 {"id": "file:apps/web/lib/server/support-access-service.test.ts", "type": "file", "title": "apps/web/lib/server/support-access-service.test.ts", "path": "apps/web/lib/server/support-access-service.test.ts"}
 {"id": "api:GET /api/admin/support-access", "type": "endpoint", "title": "", "path": ""}
 {"id": "api:GET /api/cron/expire-support-access-grants", "type": "endpoint", "title": "", "path": ""}
+{"id": "F089-99", "type": "feature", "title": "Other items in Account and access components", "path": "20-features/089-account-and-access-components/F089-99-other-items.md"}
 {"id": "F090-01", "type": "feature", "title": "Saved conversations and messages", "path": "20-features/090-conversation-and-synchronization-components/F090-01-saved-conversations-and-messages.md"}
 {"id": "file:packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts", "type": "file", "title": "packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts", "path": "packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts"}
 {"id": "file:apps/desktop/src/lib/cloudChatPersistence.ts", "type": "file", "title": "apps/desktop/src/lib/cloudChatPersistence.ts", "path": "apps/desktop/src/lib/cloudChatPersistence.ts"}
@@ -16563,6 +16601,7 @@
 {"id": "GAP-F005-11-02", "type": "gap", "title": "No release indicator on Web and Mobile", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F005-11-03", "type": "gap", "title": "No offline indicator on CLI, VS Code, Chrome", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F005-11-04", "type": "gap", "title": "Web bar does not say whether Local chat still works offline", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F005-99-NOTBUILT", "type": "gap", "title": "Other items in Application shell and navigation components: not built on Web", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F006-01-01", "type": "gap", "title": "Light chat surface base and elevated are the same colour", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F006-01-02", "type": "gap", "title": "Dialog and AlertDialog use the page background at 95 percent, not the elevated token", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F006-01-03", "type": "gap", "title": "Mobile has no in-app contrast control and no accent control outside a separate screen", "path": "80-gaps/gaps.jsonl"}
@@ -18166,6 +18205,7 @@
 {"id": "GAP-F031-12-05", "type": "gap", "title": "No Docusign-specific test, no live test of an envelope from chat, and no traced path for passing a chat file into createEnvelope.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F031-12-06", "type": "gap", "title": "No send-confirmation specific to signing.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F031-12-07", "type": "gap", "title": "Mobile, CLI, VS Code, Chrome have no path.", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F031-99-PARTLY", "type": "gap", "title": "Other items in PDF and document-transformation products: partly built on Mobile", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F032-01-NOTBUILT", "type": "gap", "title": "Start a design from a brief: not built on Mobile, Chrome", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F032-01-01", "type": "gap", "title": "Area brief says S32.01 is missing, but web code exists", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F032-01-02", "type": "gap", "title": "No brief on mobile, Chrome, VS Code, CLI", "path": "80-gaps/gaps.jsonl"}
@@ -19772,6 +19812,7 @@
 {"id": "GAP-F058-01-05", "type": "gap", "title": "Brief code references for the CLI (apps/cli/src/lib.rs:1363, :2485) point at unrelated code now; current MCP list code is at lib.rs:5149.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F058-01-06", "type": "gap", "title": "No place shows the plan's connector cap.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F058-02-NOTBUILT", "type": "gap", "title": "Add a server (remote or local): not built on Web, Desktop, Mobile, Chrome", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F058-02-PARTLY", "type": "gap", "title": "Add a server (remote or local): partly built on Web", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F058-02-01", "type": "gap", "title": "Cloud add is switched off by release state, so web, Desktop and mobile users cannot add a server today.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F058-02-02", "type": "gap", "title": "Brief says VS Code add is missing; the code has it.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F058-02-03", "type": "gap", "title": "No private-network or tunnel route exists for cloud users; brief marks CLI done but the CLI only accepts direct http addresses and no distinct route was found.", "path": "80-gaps/gaps.jsonl"}
@@ -20309,6 +20350,7 @@
 {"id": "GAP-F066-12-03", "type": "gap", "title": "Whether phone and desktop can both drive a session is not verified.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F066-12-04", "type": "gap", "title": "Brief line numbers for continue (dispatcher.ts:874, lib.rs:829, tui_app.rs:2708) point at unrelated code.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F066-12-05", "type": "gap", "title": "Remote Control is hidden in the mobile review build per project notes; the gate was not located.", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F066-99-NOTBUILT", "type": "gap", "title": "Other items in Coding-workspace frontend: not built on Web, Mobile, CLI", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F067-01-PARTLY", "type": "gap", "title": "Understand the repository: partly built on Web", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F067-01-01", "type": "gap", "title": "Brief marks Web partial but the local path is Desktop-shell only; a browser tab has only the cloud sandbox, which depends on a deployment switch.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F067-01-02", "type": "gap", "title": "Required file-and-line citing is not enforced by code.", "path": "80-gaps/gaps.jsonl"}
@@ -20380,6 +20422,7 @@
 {"id": "GAP-F067-11-NOTBUILT", "type": "gap", "title": "Reports, slides and designs from the repository: not built on Web, Desktop, Mobile, CLI, VS Code", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F067-11-01", "type": "gap", "title": "Whole feature missing", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F067-11-02", "type": "gap", "title": "No defined product requirement text specific to repository-grounded reports", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F067-99-NOTBUILT", "type": "gap", "title": "Other items in Coding capabilities and developer workflows: not built on CLI", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F068-01-NOTBUILT", "type": "gap", "title": "One session on every client: not built on Web, Desktop, Mobile", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F068-01-PARTLY", "type": "gap", "title": "One session on every client: partly built on Web, Desktop", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F068-01-01", "type": "gap", "title": "Model is not part of the session; clients can disagree.", "path": "80-gaps/gaps.jsonl"}
@@ -20646,6 +20689,7 @@
 {"id": "GAP-F072-12-03", "type": "gap", "title": "Surface-feature matrix says CLI remote control is absent.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F072-12-04", "type": "gap", "title": "Teleport supports GitHub repositories only.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F072-12-05", "type": "gap", "title": "No run record of a real teleport or pairing in the repo.", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F072-99-NOTBUILT", "type": "gap", "title": "Other items in CLI and terminal application: not built on CLI", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F073-01-01", "type": "gap", "title": "No recorded run proves the full flow in a real VS Code window in this knowledge base.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F073-01-02", "type": "gap", "title": "Where the local runtime stores threads on disk was not established.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F073-02-01", "type": "gap", "title": "Brief line references for this feature are stale (155-163, 177-188).", "path": "80-gaps/gaps.jsonl"}
@@ -20833,6 +20877,7 @@
 {"id": "GAP-F078-08-04", "type": "gap", "title": "Refresh on a connection change (connector connect or disconnect) and a device change (paired desktop) is not established for web, CLI, VS Code or Chrome.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F078-08-05", "type": "gap", "title": "The brief points to ChatComposerNew.tsx:879 and the web billing query as the refresh path; the composer path found is the billing store, and the billing query is used only by pricing and upgrade pages.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F078-08-06", "type": "gap", "title": "No test was found that asserts web keeps the last plan after a failed refresh.", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F078-99-NOTBUILT", "type": "gap", "title": "Other items in UI gating and adaptation components: not built on CLI", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F078-99-01", "type": "gap", "title": "The brief and the audit view disagree: the brief marks S78.27 not applicable everywhere, while the audit view lists web, desktop, mobile and VS Code as partial with a 'ui' gap and CLI and Chrome as missing.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F078-99-02", "type": "gap", "title": "If the owner reverses the decision, no inspector exists on any app and the document needs a shared rendering component.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F079-01-01", "type": "gap", "title": "Named profiles Instant, High, Code, Research are not used to order candidates.", "path": "80-gaps/gaps.jsonl"}
@@ -21117,6 +21162,7 @@
 {"id": "GAP-F084-12-01", "type": "gap", "title": "No experimental or preview opt-in on any app.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F084-12-02", "type": "gap", "title": "No general restore-defaults action; only shortcuts.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F084-12-03", "type": "gap", "title": "The brief says restore defaults is not applicable, but a shortcut reset exists.", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F084-99-PARTLY", "type": "gap", "title": "Other items in General and appearance settings: partly built on Web", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F085-01-NOTBUILT", "type": "gap", "title": "Profile and account deletion: not built on CLI, Chrome", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F085-01-01", "type": "gap", "title": "CLI has no profile or deletion control.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F085-01-02", "type": "gap", "title": "Chrome cannot edit profile or delete the account.", "path": "80-gaps/gaps.jsonl"}
@@ -21305,6 +21351,7 @@
 {"id": "GAP-F087-12-04", "type": "gap", "title": "No general workspace content export; export is per hold", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F087-12-05", "type": "gap", "title": "seat_purchase billing hold has no caller", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F087-12-06", "type": "gap", "title": "Holds do not preserve connector or mailbox data", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F087-99-NOTBUILT", "type": "gap", "title": "Other items in Enterprise administration screens: not built on CLI", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F088-01-NOTBUILT", "type": "gap", "title": "Help centre and help links: not built on CLI", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F088-01-PARTLY", "type": "gap", "title": "Help centre and help links: partly built on Chrome", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F088-01-01", "type": "gap", "title": "Brief says mobile contextual links are missing, but code has them.", "path": "80-gaps/gaps.jsonl"}
@@ -21376,6 +21423,7 @@
 {"id": "GAP-F088-11-04", "type": "gap", "title": "No content-gap report.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F088-11-05", "type": "gap", "title": "The widget is limited to help and support pages; the chat app has no entry.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F088-11-06", "type": "gap", "title": "The brief status says web missing while the assistant itself works for the in-scope parts.", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F088-99-NOTBUILT", "type": "gap", "title": "Other items in Support, trust, and policy product: not built on CLI", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F089-01-01", "type": "gap", "title": "Brief says adapters cover password, social, passkey and SSO; the code has one provider adapter (Clerk).", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F089-01-02", "type": "gap", "title": "No record of how each app renders the denial notice.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F089-01-03", "type": "gap", "title": "The status cache TTL and its invalidation on lock/suspend were not read.", "path": "80-gaps/gaps.jsonl"}
@@ -21417,6 +21465,7 @@
 {"id": "GAP-F089-12-02", "type": "gap", "title": "Coverage of 'every read' is not demonstrated: only the background-jobs listing and the customer-managed key path were found using the gate", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F089-12-03", "type": "gap", "title": "Failure to log a read through logAdminDataAccess does not stop the read", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F089-12-04", "type": "gap", "title": "No customer-facing screen to see grants and trail", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F089-99-NOTBUILT", "type": "gap", "title": "Other items in Account and access components: not built on CLI", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F090-01-01", "type": "gap", "title": "Web lists chats and opens a chat by offset, not by the keyset cursor the brief requires.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F090-01-02", "type": "gap", "title": "Message provider and token usage are not written by the POST message insert, though S90.02 asks for usage.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F090-01-03", "type": "gap", "title": "A malformed cursor silently returns page one.", "path": "80-gaps/gaps.jsonl"}
@@ -21912,6 +21961,7 @@
 {"id": "GAP-F101-08-04", "type": "gap", "title": "Brief says analytics vocabulary is web only. Code shows Web, VS Code, Chrome, Mobile and the CLI use it.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F101-08-05", "type": "gap", "title": "Validator crash lets production boot.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F101-08-06", "type": "gap", "title": "Chrome and VS Code redaction use different functions (logger redactor vs telemetry policy), so their markers differ.", "path": "80-gaps/gaps.jsonl"}
+{"id": "GAP-F101-99-NOTBUILT", "type": "gap", "title": "Other items in Shared package boundaries: not built on CLI", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F101-99-01", "type": "gap", "title": "Chrome carries its own citation marker pattern instead of the shared helper.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F101-99-02", "type": "gap", "title": "VS Code rendering of sources was not found.", "path": "80-gaps/gaps.jsonl"}
 {"id": "GAP-F101-99-03", "type": "gap", "title": "The brief still lists Chrome and VS Code adoption as left, but Chrome's record type already extends the shared one.", "path": "80-gaps/gaps.jsonl"}

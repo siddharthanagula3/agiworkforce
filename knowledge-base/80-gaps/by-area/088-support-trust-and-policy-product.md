@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 88. Support, trust, and policy product
 
-80 open gaps that touch this area. Area page: [20-features/088-support-trust-and-policy-product](../../20-features/088-support-trust-and-policy-product/README.md).
+81 open gaps that touch this area. Area page: [20-features/088-support-trust-and-policy-product](../../20-features/088-support-trust-and-policy-product/README.md).
 
 ## CMP-CP283
 
@@ -740,3 +740,13 @@ revision: "f51d16e747"
 - Features: [F088-11](../../20-features/088-support-trust-and-policy-product/F088-11-support-assistant-answers-email-and-whatsapp-langu.md)
 - Detail: Affects: Knowledge base accuracy. Work needed: Split the brief into built assistant and missing extras.
 - Evidence: apps/web/app/api/support/ask/route.ts:93
+
+## GAP-F088-99-NOTBUILT
+
+**Other items in Support, trust, and policy product: not built on CLI**
+
+- Kind: not built on an app (read in the code; source: capability ledger)
+- Apps: CLI
+- Features: [F088-99](../../20-features/088-support-trust-and-policy-product/F088-99-other-items.md)
+- Requirement items: S88.32
+- Detail: CLI: S88.32

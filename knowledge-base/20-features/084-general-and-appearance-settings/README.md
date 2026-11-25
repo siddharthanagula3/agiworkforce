@@ -2,7 +2,7 @@
 id: "AREA-084"
 type: "area"
 title: "General and appearance settings"
-features: ["F084-01", "F084-02", "F084-03", "F084-04", "F084-05", "F084-06", "F084-07", "F084-08", "F084-09", "F084-10", "F084-11", "F084-12"]
+features: ["F084-01", "F084-02", "F084-03", "F084-04", "F084-05", "F084-06", "F084-07", "F084-08", "F084-09", "F084-10", "F084-11", "F084-12", "F084-99"]
 basis: "code inspection"
 last_reviewed: "2026-11-24"
 revision: "f51d16e747"
@@ -29,6 +29,7 @@ This area holds the settings that decide how AGI Workforce looks and behaves for
 | [F084-10](F084-10-sidebar-items-and-layout-reset.md) | Sidebar items and layout reset | partly | partly | no | n/a | n/a | n/a |
 | [F084-11](F084-11-desktop-launch-and-quick-access.md) | Desktop launch and quick access | no | partly | no | n/a | no | no |
 | [F084-12](F084-12-experimental-features-and-restore-defaults.md) | Experimental features and restore defaults | partly | partly | no | n/a | no | no |
+| [F084-99](F084-99-other-items.md) | Other items in General and appearance settings | partly | n/a | n/a | n/a | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/084-general-and-appearance-settings.md](../../10-requirements/capabilities/084-general-and-appearance-settings.md).
 

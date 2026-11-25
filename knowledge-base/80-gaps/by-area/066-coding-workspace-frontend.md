@@ -7,7 +7,7 @@ revision: "f51d16e747"
 ---
 # Gaps: 66. Coding-workspace frontend
 
-101 open gaps that touch this area. Area page: [20-features/066-coding-workspace-frontend](../../20-features/066-coding-workspace-frontend/README.md).
+102 open gaps that touch this area. Area page: [20-features/066-coding-workspace-frontend](../../20-features/066-coding-workspace-frontend/README.md).
 
 ## CMP-C48
 
@@ -944,3 +944,13 @@ revision: "f51d16e747"
 - Features: [F066-12](../../20-features/066-coding-workspace-frontend/F066-12-continue-share-and-move-sessions.md)
 - Requirement items: S66.40, S66.41
 - Detail: Web: S66.41; Mobile: S66.40; VS Code: S66.40
+
+## GAP-F066-99-NOTBUILT
+
+**Other items in Coding-workspace frontend: not built on Web, Mobile, CLI**
+
+- Kind: not built on an app (read in the code; source: capability ledger)
+- Apps: Web, Mobile, CLI
+- Features: [F066-99](../../20-features/066-coding-workspace-frontend/F066-99-other-items.md)
+- Requirement items: S66.42, S66.43, S66.44, S66.45, S66.46, S66.47, S66.48, S66.49, S66.50, S66.51, S66.52
+- Detail: Web: S66.42; Mobile: S66.42, S66.52; CLI: S66.42, S66.43, S66.44, S66.45, S66.46, S66.47, S66.48, S66.49, S66.50, S66.51

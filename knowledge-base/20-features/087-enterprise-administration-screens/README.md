@@ -2,7 +2,7 @@
 id: "AREA-087"
 type: "area"
 title: "Enterprise administration screens"
-features: ["F087-01", "F087-02", "F087-03", "F087-04", "F087-05", "F087-06", "F087-07", "F087-08", "F087-09", "F087-10", "F087-11", "F087-12"]
+features: ["F087-01", "F087-02", "F087-03", "F087-04", "F087-05", "F087-06", "F087-07", "F087-08", "F087-09", "F087-10", "F087-11", "F087-12", "F087-99"]
 basis: "code inspection"
 last_reviewed: "2026-11-24"
 revision: "f51d16e747"
@@ -29,6 +29,7 @@ A workspace administrator uses this area to run a shared team workspace: see who
 | [F087-10](F087-10-audit-trail-and-exports.md) | Audit trail and exports | built | built | n/a | no | n/a | n/a |
 | [F087-11](F087-11-usage-budgets-and-spend-limits.md) | Usage, budgets and spend limits | partly | partly | no | no | no | n/a |
 | [F087-12](F087-12-billing-compliance-legal-holds-and-support-access.md) | Billing, compliance, legal holds and support access | partly | partly | no | no | no | n/a |
+| [F087-99](F087-99-other-items.md) | Other items in Enterprise administration screens | n/a | n/a | n/a | no | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/087-enterprise-administration-screens.md](../../10-requirements/capabilities/087-enterprise-administration-screens.md).
 

@@ -2,7 +2,7 @@
 id: "AREA-005"
 type: "area"
 title: "Application shell and navigation components"
-features: ["F005-01", "F005-02", "F005-03", "F005-04", "F005-05", "F005-06", "F005-07", "F005-08", "F005-09", "F005-10", "F005-11"]
+features: ["F005-01", "F005-02", "F005-03", "F005-04", "F005-05", "F005-06", "F005-07", "F005-08", "F005-09", "F005-10", "F005-11", "F005-99"]
 basis: "code inspection"
 last_reviewed: "2026-11-24"
 revision: "f51d16e747"
@@ -28,6 +28,7 @@ The shell is the frame around every screen: the header, the left navigation with
 | [F005-09](F005-09-notification-center.md) | Notification center | built | built | built | no | no | no |
 | [F005-10](F005-10-profile-help-and-upgrade-menus.md) | Profile, help and upgrade menus | partly | partly | partly | built | partly | partly |
 | [F005-11](F005-11-connection-offline-and-release-status.md) | Connection, offline and release status | partly | built | partly | partly | partly | partly |
+| [F005-99](F005-99-other-items.md) | Other items in Application shell and navigation components | no | n/a | n/a | n/a | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/005-application-shell-and-navigation-components.md](../../10-requirements/capabilities/005-application-shell-and-navigation-components.md).
 

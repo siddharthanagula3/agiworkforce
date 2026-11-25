@@ -2,7 +2,7 @@
 id: "AREA-067"
 type: "area"
 title: "Coding capabilities and developer workflows"
-features: ["F067-01", "F067-02", "F067-03", "F067-04", "F067-05", "F067-06", "F067-07", "F067-08", "F067-09", "F067-10", "F067-11"]
+features: ["F067-01", "F067-02", "F067-03", "F067-04", "F067-05", "F067-06", "F067-07", "F067-08", "F067-09", "F067-10", "F067-11", "F067-99"]
 basis: "code inspection"
 last_reviewed: "2026-11-24"
 revision: "f51d16e747"
@@ -28,6 +28,7 @@ This area lets a person hand a coding task to the AI agent: read a project, answ
 | [F067-09](F067-09-bounded-goal-loops.md) | Bounded goal loops | partly | n/a | no | built | n/a | n/a |
 | [F067-10](F067-10-repository-memory-instruction-files-and-skills.md) | Repository memory, instruction files and skills | no | built | no | built | built | n/a |
 | [F067-11](F067-11-reports-slides-and-designs-from-the-repository.md) | Reports, slides and designs from the repository | no | no | no | no | no | n/a |
+| [F067-99](F067-99-other-items.md) | Other items in Coding capabilities and developer workflows | n/a | n/a | n/a | no | n/a | n/a |
 
 Requirement items for this area: [10-requirements/capabilities/067-coding-capabilities-and-developer-workflows.md](../../10-requirements/capabilities/067-coding-capabilities-and-developer-workflows.md).
 
