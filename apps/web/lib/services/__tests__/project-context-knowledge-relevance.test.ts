@@ -49,6 +49,7 @@ describe('project knowledge retrieval by relevance', () => {
       {
         projectId: 'proj-1',
         userId: 'user-1',
+        organizationId: null,
         currentUserQuery: 'what is our refund window?',
       },
     );
@@ -67,7 +68,12 @@ describe('project knowledge retrieval by relevance', () => {
 
     const context = await loadProjectContext(
       { query },
-      { projectId: 'proj-1', userId: 'user-1', currentUserQuery: 'unrelated request' },
+      {
+        projectId: 'proj-1',
+        userId: 'user-1',
+        organizationId: null,
+        currentUserQuery: 'unrelated request',
+      },
     );
 
     expect(context?.knowledgeFiles.map((file) => file.fileName)).toEqual(['a.md', 'b.md']);
@@ -108,6 +114,7 @@ describe('project knowledge retrieval across scripts', () => {
       {
         projectId: 'proj-1',
         userId: 'user-1',
+        organizationId: null,
         currentUserQuery: 'какой у нас срок возврата средств?',
       },
     );
@@ -137,6 +144,7 @@ describe('project knowledge retrieval across scripts', () => {
       {
         projectId: 'proj-1',
         userId: 'user-1',
+        organizationId: null,
         currentUserQuery: '我们的退款期限是多久？',
       },
     );

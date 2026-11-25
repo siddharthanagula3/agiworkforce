@@ -44,7 +44,7 @@ function stubDb(extractedText: string) {
 async function promptFor(document: string, query: string): Promise<string> {
   const context = await loadProjectContext(
     { query: stubDb(document) },
-    { projectId: 'proj-1', userId: 'user-1', currentUserQuery: query },
+    { projectId: 'proj-1', userId: 'user-1', organizationId: null, currentUserQuery: query },
   );
   const prompt = formatProjectSystemPrompt(context!);
   expect(prompt).not.toBeNull();

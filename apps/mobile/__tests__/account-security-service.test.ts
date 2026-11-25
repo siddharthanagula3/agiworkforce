@@ -179,7 +179,7 @@ describe('Mobile account security service', () => {
     await saveSessionTimeout(120, options);
     expect(apiMock.put).toHaveBeenLastCalledWith(
       expect.any(String),
-      { settings: { session_timeout: 120 } },
+      { settings: { session_timeout: 120, session_timeout_off: false } },
       options,
     );
     apiMock.get.mockResolvedValueOnce({ settings: { enabled: true } });
@@ -202,9 +202,37 @@ describe('Mobile account security service', () => {
     },
   );
 
-  it.each([null, '60', 0, 45, false])('rejects a defined invalid timeout: %j', async (value) => {
+  it.each([null, '60', 10, 2000, 30.5, false])(
+    'rejects a defined invalid timeout: %j',
+    async (value) => {
+      apiMock.get.mockResolvedValue({ settings: { session_timeout: value } });
+      await expect(fetchSessionTimeout()).rejects.toThrow();
+    },
+  );
+
+  it.each([0, 15, 240, 1440])('reads the web timeout %j', async (value) => {
     apiMock.get.mockResolvedValue({ settings: { session_timeout: value } });
-    await expect(fetchSessionTimeout()).rejects.toThrow();
+    await expect(fetchSessionTimeout()).resolves.toBe(value);
+  });
+
+  it('saves Never as a flag and leaves session_timeout untouched', async () => {
+    const options = { accountEpoch: { ownerId: 'fixture-account', epoch: 5 } };
+    await saveSessionTimeout(0, options);
+    expect(apiMock.put).toHaveBeenLastCalledWith(
+      expect.any(String),
+      { settings: { session_timeout_off: true } },
+      options,
+    );
+  });
+
+  it('reads the Never flag over a stored limit', async () => {
+    apiMock.get.mockResolvedValue({ settings: { session_timeout: 60, session_timeout_off: true } });
+    await expect(fetchSessionTimeout()).resolves.toBe(0);
+  });
+
+  it('treats an unset timeout as Never', async () => {
+    apiMock.get.mockResolvedValue({ settings: {} });
+    await expect(fetchSessionTimeout()).resolves.toBe(0);
   });
 
   it.each([null, 'false', 0, {}])('rejects a defined invalid lockdown flag: %j', async (value) => {
@@ -214,7 +242,7 @@ describe('Mobile account security service', () => {
 
   it('preserves defaults for valid empty settings and strips strictSettings before transport', async () => {
     apiMock.get.mockResolvedValue({ settings: {} });
-    await expect(fetchSessionTimeout()).resolves.toBe(60);
+    await expect(fetchSessionTimeout()).resolves.toBe(0);
     await expect(fetchLockdownMode()).resolves.toBe(false);
     expect(apiMock.get).toHaveBeenLastCalledWith(expect.any(String), {});
     for (const call of apiMock.get.mock.calls) {

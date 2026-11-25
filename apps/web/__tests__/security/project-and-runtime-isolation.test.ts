@@ -85,6 +85,7 @@ describe('project A cannot read project B', () => {
     const context = await loadProjectContext(store.db, {
       projectId: PROJECT_A,
       userId: OWNER,
+      organizationId: null,
     });
 
     expect(context?.name).toBe('Alpha');
@@ -97,22 +98,30 @@ describe('project A cannot read project B', () => {
 
   it('refuses another member project even when the id is known', async () => {
     await expect(
-      loadProjectContext(store.db, { projectId: PROJECT_B, userId: OWNER }),
+      loadProjectContext(store.db, { projectId: PROJECT_B, userId: OWNER, organizationId: null }),
     ).resolves.toBeNull();
   });
 
   it('binds the owner alongside the project id on the project read', async () => {
-    await loadProjectContext(store.db, { projectId: PROJECT_A, userId: OWNER });
+    await loadProjectContext(store.db, {
+      projectId: PROJECT_A,
+      userId: OWNER,
+      organizationId: null,
+    });
 
     const projectCall = store.query.mock.calls.find((call) =>
       String(call[0]).toLowerCase().includes('from user_projects'),
     );
-    expect(projectCall?.[1]).toEqual([PROJECT_A, OWNER]);
+    expect(projectCall?.[1]).toEqual([PROJECT_A, OWNER, null]);
     expect(String(projectCall?.[0])).toMatch(/user_id\s*=\s*\$2/u);
   });
 
   it('scopes sibling conversations to the project and the user together', async () => {
-    await loadProjectContext(store.db, { projectId: PROJECT_A, userId: OWNER });
+    await loadProjectContext(store.db, {
+      projectId: PROJECT_A,
+      userId: OWNER,
+      organizationId: null,
+    });
 
     const siblingCall = store.query.mock.calls.find((call) =>
       String(call[0]).toLowerCase().includes('from web_conversations'),

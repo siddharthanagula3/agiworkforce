@@ -30,6 +30,57 @@ export const READABLE_PROJECT_SCOPE_SQL = `p.id = $1
           )
         )`;
 
+export const LOADABLE_PROJECT_SCOPE_SQL = `p.id = $1
+        and p.deleted_at is null
+        and (
+          p.user_id = $2
+          or (
+            $3::uuid is not null
+            and (p.organization_id is null or p.organization_id = $3::uuid)
+            and exists (
+              select 1
+                from public.organization_shared_projects s
+                join public.organization_members m
+                  on m.organization_id = s.organization_id
+                 and m.user_id = $2
+                 and m.status = 'active'
+                left join public.organization_project_access a
+                  on a.organization_id = s.organization_id
+                 and a.project_id = s.project_id
+                 and a.user_id = $2
+               where s.project_id = p.id
+                 and s.organization_id = $3::uuid
+                 and public.app_org_resource_is_readable(s.organization_id)
+                 and coalesce(a.access, s.default_access) in ('read', 'write')
+            )
+          )
+        )`;
+
+// The statement names the project row p itself; caller and admitted workspace stay $2 and $3.
+export const SYNCABLE_PROJECT_ACCESS_SQL = `(
+          (p.user_id = $2 and p.organization_id is not distinct from $3::uuid)
+          or (p.deleted_at is null and (
+            $3::uuid is not null
+            and (p.organization_id is null or p.organization_id = $3::uuid)
+            and exists (
+              select 1
+                from public.organization_shared_projects s
+                join public.organization_members m
+                  on m.organization_id = s.organization_id
+                 and m.user_id = $2
+                 and m.status = 'active'
+                left join public.organization_project_access a
+                  on a.organization_id = s.organization_id
+                 and a.project_id = s.project_id
+                 and a.user_id = $2
+               where s.project_id = p.id
+                 and s.organization_id = $3::uuid
+                 and public.app_org_resource_is_readable(s.organization_id)
+                 and coalesce(a.access, s.default_access) in ('read', 'write')
+            )
+          ))
+        )`;
+
 export async function selectReadableProject(
   db: DatabaseAdapter,
   scope: WorkspaceScope,
@@ -39,6 +90,22 @@ export async function selectReadableProject(
     `select p.id
        from user_projects p
       where ${READABLE_PROJECT_SCOPE_SQL}
+      limit 1`,
+    [projectId, scope.userId, scope.organizationId],
+  );
+  return project;
+}
+
+export async function selectChatProject(
+  db: DatabaseAdapter,
+  scope: WorkspaceScope,
+  projectId: string,
+): Promise<{ id: string } | undefined> {
+  const [project] = await db.query<{ id: string }>(
+    `select p.id
+       from user_projects p
+      where ${READABLE_PROJECT_SCOPE_SQL}
+        and p.is_archived = false
       limit 1`,
     [projectId, scope.userId, scope.organizationId],
   );

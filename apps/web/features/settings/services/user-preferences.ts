@@ -10,6 +10,7 @@ import type { ApiKeyScope } from '@/lib/api-key-scopes';
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { invalidatePreferencesSnapshot } from '@/app/settings/_lib/preferences-client';
 import { SITE_NAME } from '@/lib/seo/site';
+import { SESSION_TIMEOUT_OFF } from '@agiworkforce/cloud-contracts/account-security';
 
 const TOTP_CONFIG = {
   ISSUER: SITE_NAME,
@@ -43,6 +44,7 @@ export interface UserProfile {
 export interface UserSettings {
   two_factor_enabled?: boolean;
   session_timeout?: number;
+  session_timeout_off?: boolean;
 }
 
 export interface APIKey {
@@ -280,7 +282,7 @@ class SettingsService {
   async getSettings(): Promise<{ data: UserSettings; error?: string }> {
     const hardcodedDefaults: UserSettings = {
       two_factor_enabled: false,
-      session_timeout: 60,
+      session_timeout: SESSION_TIMEOUT_OFF,
     };
 
     try {

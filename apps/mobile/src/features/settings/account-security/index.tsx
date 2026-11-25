@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, View, type ScrollView, type LayoutChangeEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useUser } from '@clerk/expo';
+import { formatSessionTimeout } from '@agiworkforce/cloud-contracts/account-security';
 import {
   ExternalLink,
   Fingerprint,
@@ -64,7 +65,6 @@ import {
   type AccountSessions,
   type AuditLogEntry,
   type PasswordChange,
-  type SessionTimeoutMinutes,
   type SignInKey,
   type SignInMethods,
 } from './service';
@@ -86,10 +86,6 @@ const PROVIDER_LABELS: Readonly<Record<string, string>> = {
 
 function providerLabel(provider: string): string {
   return PROVIDER_LABELS[provider] ?? provider.charAt(0).toUpperCase() + provider.slice(1);
-}
-
-function formatTimeout(minutes: SessionTimeoutMinutes): string {
-  return minutes < 60 ? `${minutes} min` : `${minutes / 60} hr`;
 }
 
 function formatAuditAction(action: string): string {
@@ -682,7 +678,7 @@ export default function AccountSecurityScreen() {
         />
         <SettingsGroup>
           <SettingsRow
-            label="Session timeout"
+            label="Sign out after inactivity"
             icon={Timer}
             value={
               appMode !== 'cloud'
@@ -693,7 +689,7 @@ export default function AccountSecurityScreen() {
                     ? 'Checking…'
                     : savingTimeout
                       ? 'Saving…'
-                      : formatTimeout(sessionTimeout)
+                      : formatSessionTimeout(sessionTimeout)
             }
             onPress={
               appMode === 'cloud' && sessionTimeout !== null && !savingTimeout

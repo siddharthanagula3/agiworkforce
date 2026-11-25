@@ -57,7 +57,12 @@ describe('loadProjectContext', () => {
 
     const context = await loadProjectContext(
       { query },
-      { projectId: 'proj-1', userId: 'user-1', currentConversationId: 'conv-current' },
+      {
+        projectId: 'proj-1',
+        userId: 'user-1',
+        organizationId: null,
+        currentConversationId: 'conv-current',
+      },
     );
 
     expect(context).toMatchObject({
@@ -72,8 +77,8 @@ describe('loadProjectContext', () => {
         },
       ],
     });
-    expect(query.mock.calls[0]?.[0]).toContain('user_id = $2');
-    expect(query.mock.calls[0]?.[1]).toEqual(['proj-1', 'user-1']);
+    expect(query.mock.calls[0]?.[0]).toContain('p.user_id = $2');
+    expect(query.mock.calls[0]?.[1]).toEqual(['proj-1', 'user-1', null]);
     expect(query.mock.calls[1]?.[0]).toContain('extracted_text, extracted_anchors');
     expect(context?.siblingChats).toEqual([
       { title: 'Pricing chat', preview: 'User: How much is Pro?' },
@@ -87,7 +92,7 @@ describe('loadProjectContext', () => {
     const query = vi.fn().mockResolvedValueOnce([]);
     const context = await loadProjectContext(
       { query },
-      { projectId: 'proj-foreign', userId: 'user-1' },
+      { projectId: 'proj-foreign', userId: 'user-1', organizationId: null },
     );
     expect(context).toBeNull();
     expect(query).toHaveBeenCalledTimes(1);
@@ -111,7 +116,12 @@ describe('loadProjectContext', () => {
     await expect(
       loadProjectContext(
         { query },
-        { projectId: 'proj-1', userId: 'user-1', currentConversationId: 'conv-current' },
+        {
+          projectId: 'proj-1',
+          userId: 'user-1',
+          organizationId: null,
+          currentConversationId: 'conv-current',
+        },
       ),
     ).rejects.toMatchObject({ code: '42703' });
     expect(query).toHaveBeenCalledTimes(2);
@@ -153,6 +163,7 @@ describe('loadProjectContext', () => {
       {
         projectId: 'proj-1',
         userId: 'user-1',
+        organizationId: null,
         currentConversationId: 'conv-current',
         currentUserQuery: 'Check past conversations for the investor demo checkpoint',
       },

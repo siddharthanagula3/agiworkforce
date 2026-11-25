@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SESSION_TIMEOUT_MINUTES } from '@agiworkforce/cloud-contracts/account-security';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -12,7 +13,6 @@ import {
   fetchSessionTimeout,
   saveLockdownMode,
   saveSessionTimeout,
-  SESSION_TIMEOUT_MINUTES,
   type SessionTimeoutMinutes,
 } from './service';
 
@@ -165,11 +165,9 @@ export function useSecurityPreferences() {
       : null;
   const cycleTimeout = async () => {
     if (!owner || !current(owner) || owner.timeout.busy || owner.timeout.value === null) return;
+    const stored = owner.timeout.value;
     const next =
-      SESSION_TIMEOUT_MINUTES[
-        (SESSION_TIMEOUT_MINUTES.indexOf(owner.timeout.value) + 1) % SESSION_TIMEOUT_MINUTES.length
-      ];
-    if (next === undefined) return;
+      SESSION_TIMEOUT_MINUTES.find((minutes) => minutes > stored) ?? SESSION_TIMEOUT_MINUTES[0];
     owner.timeout.busy = true;
     publish(owner);
     let uncertain = false;

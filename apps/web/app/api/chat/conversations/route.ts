@@ -23,6 +23,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isConfiguredManagedModelRoute } from '@/lib/server/model-catalogue';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { TEMPORARY_CHAT_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
+import { selectChatProject } from '@/lib/server/project-read-access';
 import { formatMaintenanceEnd, maintenanceUnderway } from '@/lib/server/service-notices';
 
 const PAGE_SORT_COLUMN = 'page_sort_key';
@@ -232,20 +233,14 @@ async function handleCreateConversation(request: NextRequest) {
   }
 
   if (body.projectId) {
-    let ownedProject: { id: string } | undefined;
+    let project: { id: string } | undefined;
     try {
-      [ownedProject] = await db.query<{ id: string }>(
-        `select id
-           from user_projects
-          where id = $1 and user_id = $2 and organization_id is not distinct from $3::uuid and is_archived = false and deleted_at is null
-          limit 1`,
-        [body.projectId, userId, organizationId],
-      );
+      project = await selectChatProject(db, { userId, organizationId }, body.projectId);
     } catch (error) {
       logger.error({ error, userId }, 'Failed to validate conversation project');
       throw createError.internal('Failed to validate project');
     }
-    if (!ownedProject) {
+    if (!project) {
       throw createError.notFound('Project not found');
     }
     if (body.id) {

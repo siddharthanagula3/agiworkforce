@@ -1,10 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
-import type { TwoFactorStatus } from '../services/user-preferences';
+import type { TwoFactorStatus, UserSettings } from '../services/user-preferences';
 
 const fixture = vi.hoisted(() => ({
-  settings: { two_factor_enabled: false, session_timeout: 240 },
+  settings: { two_factor_enabled: false, session_timeout: 240 } as UserSettings,
   status: undefined as TwoFactorStatus | undefined,
   mutate: vi.fn(),
   readStatus: vi.fn(),
@@ -157,6 +157,23 @@ describe('SecuritySection mocked child composition (not enrollment integration)'
     );
   });
 
+  it('saves Never as a flag without writing 0 to session_timeout', async () => {
+    fixture.settings = {
+      two_factor_enabled: false,
+      session_timeout: 240,
+      session_timeout_off: true,
+    };
+    render(<SecuritySection />);
+    await waitFor(() =>
+      expect(screen.getByTestId('timeout-form')).toHaveTextContent('{"session_timeout":0}'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save timeout' }));
+    await waitFor(() => expect(fixture.mutate).toHaveBeenCalledWith({ session_timeout_off: true }));
+    expect(fixture.mutate.mock.calls.every(([payload]) => payload.session_timeout !== 0)).toBe(
+      true,
+    );
+  });
+
   it.each([true, false])(
     'keeps stale preference %s and authoritative status out of timeout form and submissions',
     async (stale) => {
@@ -168,12 +185,20 @@ describe('SecuritySection mocked child composition (not enrollment integration)'
       );
       expect(screen.getByTestId('timeout-form')).not.toHaveTextContent('two_factor_enabled');
       fireEvent.click(screen.getByRole('button', { name: 'Save timeout' }));
-      await waitFor(() => expect(fixture.mutate).toHaveBeenCalledWith({ session_timeout: 240 }));
+      await waitFor(() =>
+        expect(fixture.mutate).toHaveBeenCalledWith({
+          session_timeout: 240,
+          session_timeout_off: false,
+        }),
+      );
       fixture.status = { enabled: stale, backupCodesReady: stale, enrollmentAvailable: true };
       view.rerender(<SecuritySection />);
       expect(screen.getByTestId('timeout-form')).not.toHaveTextContent('two_factor_enabled');
       fireEvent.click(screen.getByRole('button', { name: 'Submit stale caller data' }));
-      expect(fixture.mutate).toHaveBeenLastCalledWith({ session_timeout: 240 });
+      expect(fixture.mutate).toHaveBeenLastCalledWith({
+        session_timeout: 240,
+        session_timeout_off: false,
+      });
       expect(
         fixture.mutate.mock.calls.every(([payload]) => !('two_factor_enabled' in payload)),
       ).toBe(true);

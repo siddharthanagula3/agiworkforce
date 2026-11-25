@@ -855,3 +855,35 @@ describe('managed turn slot age-out', () => {
     expect(ttlSeconds).toBeLessThan(routeMaxDurationSeconds * 2);
   });
 });
+
+describe('image job status and cancel have a bucket of their own', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env['VERCEL_ENV'];
+  });
+
+  it('allows more than one two-second poller, fails open and is not tier scaled', async () => {
+    const { rateLimitConfigs, resolveTierRateLimit } = await import('../rate-limit');
+
+    expect(rateLimitConfigs['image-status'].limit).toBeGreaterThan(30);
+    expect(rateLimitConfigs['image-status'].failClosed).toBe(false);
+    expect(resolveTierRateLimit('image-status', 'max')).toBe(resolveTierRateLimit('image-status'));
+  });
+
+  it('keeps answering polls after the generation budget is spent', async () => {
+    const { checkRateLimit, rateLimitConfigs } = await import('../rate-limit');
+
+    for (let call = 0; call < rateLimitConfigs['image-generation'].limit; call++) {
+      await checkRateLimit(req, 'image-generation', 'user:image-1');
+    }
+    const generation = await checkRateLimit(req, 'image-generation', 'user:image-1');
+    expect(generation.success).toBe(false);
+
+    for (let call = 0; call < 30; call++) {
+      const poll = await checkRateLimit(req, 'image-status', 'user:image-1');
+      expect(poll.success).toBe(true);
+    }
+  });
+});

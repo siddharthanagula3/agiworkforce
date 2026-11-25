@@ -152,8 +152,7 @@ jest.mock('../src/features/settings/account-security/service', () => ({
   changeAccountPassword: (...args: unknown[]) => mockChangeAccountPassword(...args),
   groupAuditEntries: jest.requireActual('../src/features/settings/account-security/service')
     .groupAuditEntries,
-  SESSION_TIMEOUT_MINUTES: [15, 30, 60, 120, 480],
-  DEFAULT_SESSION_TIMEOUT: 60,
+  DEFAULT_SESSION_TIMEOUT: 0,
   WEB_SECURITY_URL: 'https://agiworkforce.com/settings/security',
   fetchLockdownMode: (...args: unknown[]) => mockFetchLockdown(...args),
   saveLockdownMode: (...args: unknown[]) => mockSaveLockdown(...args),
@@ -420,8 +419,8 @@ describe('Mobile Account Security screen', () => {
 
     const screen = render(<AccountSecurityScreen />);
 
-    await waitFor(() => expect(screen.getByText('Session timeout')).toBeTruthy());
-    expect(screen.getByText('30 min')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Sign out after inactivity')).toBeTruthy());
+    expect(screen.getByText('30 minutes')).toBeTruthy();
     expect(screen.getByText('Change password')).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Rate limit exceeded ×2')).toBeTruthy());
     expect(screen.getByText('Login success')).toBeTruthy();
@@ -463,8 +462,8 @@ describe('Mobile Account Security screen', () => {
     mockSaveSessionTimeout.mockRejectedValue(new Error('nope'));
     const screen = render(<AccountSecurityScreen />);
 
-    await waitFor(() => expect(screen.getByText('1 hr')).toBeTruthy());
-    fireEvent.press(screen.getByText('Session timeout'));
+    await waitFor(() => expect(screen.getByText('1 hour')).toBeTruthy());
+    fireEvent.press(screen.getByText('Sign out after inactivity'));
 
     await waitFor(() =>
       expect(mockSaveSessionTimeout).toHaveBeenCalledWith(
@@ -472,7 +471,7 @@ describe('Mobile Account Security screen', () => {
         expect.objectContaining({ accountEpoch: { ownerId: 'account-a', epoch: 1 } }),
       ),
     );
-    await waitFor(() => expect(screen.getByText('1 hr')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1 hour')).toBeTruthy());
   });
 
   it('lists the account devices the server reports and marks this device', async () => {
@@ -889,8 +888,10 @@ describe('Mobile Account Security screen', () => {
   it('does not make a failed timeout read editable through a fallback', async () => {
     mockFetchSessionTimeout.mockRejectedValueOnce(new Error('offline'));
     const screen = render(<AccountSecurityScreen />);
-    await waitFor(() => expect(screen.getByLabelText('Session timeout. Unavailable')).toBeTruthy());
-    fireEvent.press(screen.getByText('Session timeout'));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Sign out after inactivity. Unavailable')).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByText('Sign out after inactivity'));
     expect(mockSaveSessionTimeout).not.toHaveBeenCalled();
   });
 
@@ -902,7 +903,7 @@ describe('Mobile Account Security screen', () => {
       }),
     );
     const screen = render(<AccountSecurityScreen />);
-    fireEvent.press(await screen.findByLabelText('Session timeout. 1 hr'));
+    fireEvent.press(await screen.findByLabelText('Sign out after inactivity. 1 hour'));
     await act(async () => {
       mockOwnerId = 'account-b';
       mockAuthState.clerkUserId = 'account-b';
@@ -910,12 +911,14 @@ describe('Mobile Account Security screen', () => {
       mockFetchSessionTimeout.mockResolvedValue(15);
       mockEpochListeners.forEach((listener) => listener());
     });
-    await waitFor(() => expect(screen.getByLabelText('Session timeout. 15 min')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByLabelText('Sign out after inactivity. 15 minutes')).toBeTruthy(),
+    );
     await act(async () => {
       reject(new Error('old write failed'));
     });
-    expect(screen.getByLabelText('Session timeout. 15 min')).toBeTruthy();
-    fireEvent.press(screen.getByText('Session timeout'));
+    expect(screen.getByLabelText('Sign out after inactivity. 15 minutes')).toBeTruthy();
+    fireEvent.press(screen.getByText('Sign out after inactivity'));
     await waitFor(() =>
       expect(mockSaveSessionTimeout).toHaveBeenLastCalledWith(
         30,
@@ -932,15 +935,17 @@ describe('Mobile Account Security screen', () => {
       }),
     );
     const screen = render(<AccountSecurityScreen />);
-    const row = await screen.findByLabelText('Session timeout. 1 hr');
+    const row = await screen.findByLabelText('Sign out after inactivity. 1 hour');
     fireEvent.press(row);
-    fireEvent.press(screen.getByText('Session timeout'));
+    fireEvent.press(screen.getByText('Sign out after inactivity'));
     expect(mockSaveSessionTimeout).toHaveBeenCalledTimes(1);
     mockFetchSessionTimeout.mockResolvedValue(480);
     await act(async () => {
       finish();
     });
-    await waitFor(() => expect(screen.getByLabelText('Session timeout. 8 hr')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByLabelText('Sign out after inactivity. 8 hours')).toBeTruthy(),
+    );
   });
 
   it('does not retain lockdown from a previous account while its replacement loads', async () => {
@@ -1027,11 +1032,11 @@ describe('Mobile Account Security screen', () => {
   it('holds timeout edits closed until an uncertain write can be reconciled', async () => {
     mockSaveSessionTimeout.mockRejectedValueOnce(new Error('receipt lost'));
     const screen = render(<AccountSecurityScreen />);
-    await screen.findByLabelText('Session timeout. 1 hr');
+    await screen.findByLabelText('Sign out after inactivity. 1 hour');
     mockFetchSessionTimeout.mockRejectedValueOnce(new Error('offline'));
-    fireEvent.press(screen.getByText('Session timeout'));
-    await screen.findByLabelText('Session timeout. Unavailable');
-    fireEvent.press(screen.getByText('Session timeout'));
+    fireEvent.press(screen.getByText('Sign out after inactivity'));
+    await screen.findByLabelText('Sign out after inactivity. Unavailable');
+    fireEvent.press(screen.getByText('Sign out after inactivity'));
     expect(mockSaveSessionTimeout).toHaveBeenCalledTimes(1);
     mockFetchSessionTimeout.mockResolvedValue(120);
     fireEvent.press(
@@ -1039,7 +1044,7 @@ describe('Mobile Account Security screen', () => {
         'The save could not be confirmed. Retry loading the setting before changing it.',
       ),
     );
-    await screen.findByLabelText('Session timeout. 2 hr');
+    await screen.findByLabelText('Sign out after inactivity. 2 hours');
     expect(mockSaveSessionTimeout).toHaveBeenCalledTimes(1);
   });
 

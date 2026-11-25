@@ -40,6 +40,7 @@ import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/mess
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@agiworkforce/cloud-contracts';
 import { SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL } from '@/lib/server/assistant-content-edits';
+import { SYNCABLE_PROJECT_ACCESS_SQL } from '@/lib/server/project-read-access';
 import {
   recordStoppedRunAssistantTurn,
   recordedTurnEndingKeptSql,
@@ -89,16 +90,15 @@ async function assertProjectsBelongToActiveWorkspace(
   if (projectIds.length === 0) return;
 
   const owned = await db.query<{ id: string }>(
-    `select id::text as id
-       from public.user_projects
-      where user_id = $1
-        and organization_id is not distinct from $2::uuid
-        and id::text = any($3::text[])`,
-    [userId, organizationId, projectIds],
+    `select p.id::text as id
+       from public.user_projects p
+      where p.id::text = any($1::text[])
+        and ${SYNCABLE_PROJECT_ACCESS_SQL}`,
+    [projectIds, userId, organizationId],
   );
   const ownedIds = new Set(owned.map((row) => row.id));
   if (projectIds.some((projectId) => !ownedIds.has(projectId))) {
-    throw createError.validation('projectId is not owned in the active workspace');
+    throw createError.validation('projectId is not available in the active workspace');
   }
 }
 
@@ -613,7 +613,7 @@ async function handlePush(request: NextRequest) {
                    item ? 'pinned' as has_pinned,
                    (item ->> 'baseVersion')::bigint as base_version,
                    coalesce((item ->> 'isDeleted')::boolean, false) as should_delete
-              from jsonb_array_elements($2::jsonb) as source(item)
+              from jsonb_array_elements($1::jsonb) as source(item)
           ), updated as (
             update web_conversations as existing
                set title = case when incoming.has_title then incoming.title else existing.title end,
@@ -624,7 +624,7 @@ async function handlePush(request: NextRequest) {
                    deleted_at = case when incoming.should_delete then now() else null end
               from input as incoming
              where existing.id = incoming.id
-               and existing.user_id = $1
+               and existing.user_id = $2
                and existing.server_version = incoming.base_version
                and (existing.deleted_at is null or incoming.should_delete)
                and not (
@@ -636,17 +636,16 @@ async function handlePush(request: NextRequest) {
                  not incoming.has_project_id
                  or incoming.project_id is null
                  or exists (
-                   select 1 from public.user_projects as project
-                    where project.id::text = incoming.project_id
-                      and project.user_id = $1
-                      and project.organization_id is not distinct from $3::uuid
+                   select 1 from public.user_projects as p
+                    where p.id::text = incoming.project_id
+                      and ${SYNCABLE_PROJECT_ACCESS_SQL}
                  )
                )
             returning existing.id, existing.server_version
           ), inserted as (
             insert into web_conversations
               (id, user_id, title, model, project_id, pinned, created_at, updated_at, deleted_at)
-            select incoming.id, $1, incoming.title, incoming.model, incoming.project_id,
+            select incoming.id, $2, incoming.title, incoming.model, incoming.project_id,
                    incoming.pinned, now(), now(),
                    case when incoming.should_delete then now() else null end
               from input as incoming
@@ -655,10 +654,9 @@ async function handlePush(request: NextRequest) {
                  not incoming.has_project_id
                  or incoming.project_id is null
                  or exists (
-                   select 1 from public.user_projects as project
-                    where project.id::text = incoming.project_id
-                      and project.user_id = $1
-                      and project.organization_id is not distinct from $3::uuid
+                   select 1 from public.user_projects as p
+                    where p.id::text = incoming.project_id
+                      and ${SYNCABLE_PROJECT_ACCESS_SQL}
                  )
                )
             on conflict (id) do nothing
@@ -679,7 +677,7 @@ async function handlePush(request: NextRequest) {
                    ) end as current
               from input as incoming
               left join web_conversations as current
-                on current.id = incoming.id and current.user_id = $1
+                on current.id = incoming.id and current.user_id = $2
              where not exists (select 1 from applied_rows where applied_rows.id = incoming.id)
           )
           select 'applied'::text as kind, id::text, server_version::text, null::jsonb as current
@@ -687,7 +685,7 @@ async function handlePush(request: NextRequest) {
           union all
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-          [userId, JSON.stringify(conversations), organizationId],
+          [JSON.stringify(conversations), userId, organizationId],
         );
         const deletedNow = pushed
           .filter((row) => row.kind === 'applied' && deletedIds.has(row.id))

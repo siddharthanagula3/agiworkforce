@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { SCHEDULED_RUN_LEASE_SECONDS } from '@/lib/deadline-policy';
 import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import { createPostgresContextManifestStore, resolveContext } from '@agiworkforce/context-engine';
 import {
@@ -990,7 +991,11 @@ async function runScheduledAgent(
     const readsProject = Boolean(task.projectId) && sources.project;
     const projectContext =
       task.projectId && readsProject
-        ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
+        ? await loadProjectContext(scope.db, {
+            projectId: task.projectId,
+            userId: scope.userId,
+            organizationId: scope.organizationId,
+          })
         : null;
     if (task.projectId && readsProject && !projectContext) {
       throw new ScheduledProjectContextUnavailableError(task.projectId);
@@ -1061,7 +1066,7 @@ async function runScheduledAgent(
     provider: route.provider,
     model: route.modelKey,
     estimatedCostMicrousd,
-    leaseSeconds: 120,
+    leaseSeconds: SCHEDULED_RUN_LEASE_SECONDS,
     planTier: subscriptionTier,
     isFlagship: isFlagshipRoute,
   });

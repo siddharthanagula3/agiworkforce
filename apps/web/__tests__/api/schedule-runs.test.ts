@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SCHEDULED_RUN_BUDGET_MS, SCHEDULED_RUN_LEASE_SECONDS } from '@/lib/deadline-policy';
 import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
@@ -101,6 +102,16 @@ describe('/api/schedules/[id]/runs', () => {
     );
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({ run: { status: 'success' } });
+    expect(createManualScheduleRun).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ leaseSeconds: SCHEDULED_RUN_LEASE_SECONDS }),
+    );
+    expect(processClaimedScheduleRun).toHaveBeenCalledWith(
+      expect.anything(),
+      claimed,
+      expect.anything(),
+      expect.objectContaining({ timeoutMs: SCHEDULED_RUN_BUDGET_MS }),
+    );
   });
 
   it('replays a completed manual occurrence without executing it twice', async () => {

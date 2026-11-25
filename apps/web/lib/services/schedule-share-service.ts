@@ -93,7 +93,7 @@ export async function getSharedSchedule(
   const [row] = await db.query<ShareRow>(
     `select token, snapshot, created_at
        from scheduled_task_shares
-      where token = $1 and revoked_at is null
+      where token = $1 and revoked_at is null and task_id is not null
         and ${ownerMayRunUnattendedSql('scheduled_task_shares.user_id', 2)}
       limit 1`,
     [token, UNATTENDED_RUN_DENIED_STATUSES],

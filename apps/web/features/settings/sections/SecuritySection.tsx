@@ -8,6 +8,11 @@ import { useConfirmAction } from '@agiworkforce/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useUserSettings, useUpdateSettings } from '@features/settings/hooks/use-settings-queries';
 import {
+  SESSION_TIMEOUT_OFF,
+  resolveSessionTimeout,
+  sessionTimeoutSettingsPatch,
+} from '@agiworkforce/cloud-contracts/account-security';
+import {
   securitySettingsSchema,
   type SecuritySettingsFormData,
 } from '@features/settings/schemas/settings-validation';
@@ -189,7 +194,7 @@ export function SecuritySection({
   const securityForm = useForm<SecuritySettingsFormData>({
     resolver: zodResolver(securitySettingsSchema) as Resolver<SecuritySettingsFormData>,
     defaultValues: {
-      session_timeout: 60,
+      session_timeout: SESSION_TIMEOUT_OFF,
     },
   });
 
@@ -202,7 +207,7 @@ export function SecuritySection({
   useEffect(() => {
     if (serverSettings) {
       securityForm.reset({
-        session_timeout: serverSettings.session_timeout ?? 60,
+        session_timeout: resolveSessionTimeout(serverSettings),
       });
     }
     // securityForm is stable from useForm; only re-run when server data changes.
@@ -211,7 +216,7 @@ export function SecuritySection({
 
   const handleSaveSecurity = useCallback(
     (data: SecuritySettingsFormData) => {
-      updateSettingsMutation.mutate({ session_timeout: data.session_timeout });
+      updateSettingsMutation.mutate(sessionTimeoutSettingsPatch(data.session_timeout));
     },
     [updateSettingsMutation],
   );

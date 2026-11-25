@@ -376,6 +376,8 @@ export function managedCloudScheduleSharePath(scheduleId: string): string {
   return `${managedCloudSchedulePath(scheduleId)}/share`;
 }
 
+export const MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS = 300_000;
+
 export function managedCloudScheduleRunsPath(scheduleId: string): string {
   return `${managedCloudSchedulePath(scheduleId)}/runs`;
 }

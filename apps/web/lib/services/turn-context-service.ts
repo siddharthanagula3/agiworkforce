@@ -357,6 +357,7 @@ export async function resolveFreeOfferingPersonalContext(
       const loaded = await loadProjectContext(db, {
         projectId: input.projectId,
         userId: input.userId,
+        organizationId: input.organizationId,
         currentConversationId: input.conversationId,
         currentUserQuery: input.query,
         semanticRetrieval: false,

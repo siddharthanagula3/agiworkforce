@@ -11,6 +11,7 @@ import {
   ManagedCloudScheduleDeleteResponseSchema,
   ManagedCloudScheduleRunListResponseSchema,
   ManagedCloudScheduleRunResponseSchema,
+  MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS,
   managedCloudSchedulePath,
   managedCloudScheduleRunApprovalPath,
   managedCloudScheduleRunsPath,
@@ -261,6 +262,7 @@ export async function resolveScheduleRunApproval(
   const value = await api.post<unknown>(
     managedCloudScheduleRunApprovalPath(scheduleId, runId),
     approval,
+    { timeout: MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS },
   );
   const data = parseResponse(
     ManagedCloudScheduleRunApprovalResponseSchema,
@@ -275,6 +277,7 @@ export async function triggerScheduleNow(id: string): Promise<ScheduleRun> {
   const idempotencyKey = `agi.schedule.mobile.${Crypto.randomUUID()}`;
   const value = await api.post<unknown>(managedCloudScheduleRunsPath(id), undefined, {
     headers: { 'Idempotency-Key': idempotencyKey },
+    timeout: MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS,
   });
   const data = parseResponse(
     ManagedCloudScheduleRunResponseSchema,

@@ -24,6 +24,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isConfiguredManagedModelRoute } from '@/lib/server/model-catalogue';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { TEMPORARY_CHAT_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
+import { selectChatProject } from '@/lib/server/project-read-access';
 import {
   preconditionFailedResponse,
   readIfMatchVersion,
@@ -313,20 +314,14 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     throw createError.validation(TEMPORARY_CHAT_PROJECT_REFUSAL);
   }
   if (movesIntoProject) {
-    let ownedProject: { id: string } | undefined;
+    let project: { id: string } | undefined;
     try {
-      [ownedProject] = await db.query<{ id: string }>(
-        `select id
-           from user_projects
-          where id = $1 and user_id = $2 and organization_id is not distinct from $3::uuid and is_archived = false and deleted_at is null
-          limit 1`,
-        [targetProjectId, userId, organizationId],
-      );
+      project = await selectChatProject(db, { userId, organizationId }, targetProjectId);
     } catch (error) {
       logger.error({ error, userId }, 'Failed to validate conversation project');
       throw createError.internal('Failed to validate project');
     }
-    if (!ownedProject) {
+    if (!project) {
       throw createError.notFound('Project not found');
     }
   }

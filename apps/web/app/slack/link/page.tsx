@@ -41,6 +41,11 @@ function SlackLinkForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [connectedTeam, setConnectedTeam] = useState<string | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [confirmedMine, setConfirmedMine] = useState(false);
+
+  useEffect(() => {
+    setConfirmedMine(false);
+  }, [token]);
 
   const redirectPath = `/slack/link?token=${encodeURIComponent(token)}`;
   const signInHref = webSignInHref(redirectPath);
@@ -83,8 +88,11 @@ function SlackLinkForm() {
     preview?.workspaces[0] ??
     null;
 
+  const connectBlocked = connecting || !preview || !workspace?.planAllowed || !confirmedMine;
+  const showConnectHint = Boolean(preview && workspace?.planAllowed && !confirmedMine);
+
   async function connect() {
-    if (!preview || !workspace?.planAllowed) return;
+    if (!preview || !workspace?.planAllowed || !confirmedMine) return;
     setConnecting(true);
     setMessage(null);
     try {
@@ -95,7 +103,11 @@ function SlackLinkForm() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf.token },
-        body: JSON.stringify({ token, organizationId: workspace.id }),
+        body: JSON.stringify({
+          token,
+          organizationId: workspace.id,
+          acknowledgedSlackAccount: true,
+        }),
       });
       const body = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) throw new Error(apiErrorMessage(body, CONNECT_FAILED));
@@ -189,10 +201,12 @@ function SlackLinkForm() {
             }}
           >
             <span style={{ fontSize: 'var(--agi-text-xs)', color: 'var(--agi-ink-2)' }}>
-              Slack workspace
+              Slack account
             </span>
             <h2 id="slack-link-request-title" className="agi-ds-h3">
-              {preview.teamName}
+              {preview.slackUserName
+                ? `${preview.slackUserName} in ${preview.teamName}`
+                : `A Slack account in ${preview.teamName}`}
             </h2>
             <p style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}>
               Answers as {accountLabel ?? 'your account'}.
@@ -236,18 +250,52 @@ function SlackLinkForm() {
           </p>
         ) : null}
 
+        {preview ? (
+          <>
+            <p style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}>
+              Messages from this Slack account will run as you, using your plan and memory.
+            </p>
+            <label
+              htmlFor="slack-link-confirm"
+              className="agi-ds-field"
+              style={{ display: 'flex', gap: 'var(--agi-space-2)', alignItems: 'flex-start' }}
+            >
+              <input
+                id="slack-link-confirm"
+                type="checkbox"
+                checked={confirmedMine}
+                onChange={(event) => setConfirmedMine(event.target.checked)}
+              />
+              <span style={{ fontSize: 'var(--agi-text-sm)' }}>
+                This is my Slack account, and I asked AGI for this link in Slack.
+              </span>
+            </label>
+          </>
+        ) : null}
+
         {message ? (
           <p role="alert" style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-error)' }}>
             {message}
           </p>
         ) : null}
 
+        {preview && workspace?.planAllowed && !confirmedMine ? (
+          <p
+            id="slack-link-connect-hint"
+            style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}
+          >
+            Tick the box above to connect.
+          </p>
+        ) : null}
         <button
           type="button"
           className="agi-ds-btn"
           data-variant="primary"
-          disabled={connecting || !preview || !workspace?.planAllowed}
-          onClick={() => void connect()}
+          aria-disabled={connectBlocked}
+          aria-describedby={showConnectHint ? 'slack-link-connect-hint' : undefined}
+          onClick={() => {
+            if (!connectBlocked) void connect();
+          }}
         >
           {connecting ? 'Connecting…' : 'Connect Slack account'}
         </button>

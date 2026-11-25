@@ -119,7 +119,7 @@ describe('Settings Validation Schemas', () => {
       },
     );
 
-    it.each([15, 1440])('accepts the timeout boundary %s without a factor mirror', (timeout) => {
+    it.each([0, 15, 1440])('accepts the timeout boundary %s without a factor mirror', (timeout) => {
       expect(securitySettingsSchema.parse({ session_timeout: timeout })).toEqual({
         session_timeout: timeout,
       });

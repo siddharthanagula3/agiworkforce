@@ -1,5 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import { requireAutoMode } from '../test-utils/modelFixtures';
+import { MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import {
   createSchedule,
@@ -8,6 +9,7 @@ import {
   fetchSchedulePage,
   fetchSchedules,
   toggleSchedule,
+  resolveScheduleRunApproval,
   triggerScheduleNow,
   updateSchedule,
 } from '@/src/features/schedules/service';
@@ -263,6 +265,22 @@ describe('mobile schedule service', () => {
       headers: {
         'Idempotency-Key': 'agi.schedule.mobile.12345678-abcd-4abc-8abc-1234567890ab',
       },
+      timeout: MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS,
     });
+  });
+
+  it('waits as long as the server may run when resolving an approval', async () => {
+    apiMock.post.mockResolvedValueOnce({ run: { ...serverRun, status: 'success' } });
+
+    await resolveScheduleRunApproval('schedule/1', 'run/1', {
+      decision: 'approve',
+      toolCallIds: ['call-1'],
+    });
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/api/schedules/schedule%2F1/runs/run%2F1/approval',
+      { decision: 'approve', toolCallIds: ['call-1'] },
+      { timeout: MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS },
+    );
   });
 });

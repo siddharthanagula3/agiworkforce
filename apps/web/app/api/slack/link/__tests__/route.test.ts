@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => {
     getUserScopedDb: vi.fn(),
     requireCsrfToken: vi.fn(),
     withRateLimit: vi.fn(),
-    recordAuditEvent: vi.fn(),
+    emitIdentitySecurityEvent: vi.fn(),
     postSlackMessage: vi.fn(),
     readSlackUser: vi.fn(),
     isSlackAppConfigured: vi.fn(),
@@ -68,22 +68,16 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
   getNeonDb: vi.fn(() => mocks.serviceDb),
 }));
-vi.mock('@/lib/security-audit', () => ({
-  BLOCK_APPEAL_PATH: '/support',
-  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
-  auditEnvelopeFields: vi.fn(),
-  auditRetentionClassFor: vi.fn(),
-  consumePendingSecurityAnomalyCheck: vi.fn(),
-  getClientIp: vi.fn(),
-  logAuthFailure: vi.fn(),
-  logAuthorizationFailure: vi.fn(),
-  logCsrfFailure: vi.fn(),
-  logInvalidSignature: vi.fn(),
-  logRateLimitExceeded: vi.fn(),
-  logSecurityEvent: vi.fn(),
-  logSuspiciousActivity: vi.fn(),
-  sanitizeAuditDetail: vi.fn(),
-  recordAuditEvent: mocks.recordAuditEvent,
+vi.mock('@/lib/services/identity-events', () => ({
+  ACCOUNT_COMPROMISE_SUPPORT_PATH: '/support',
+  IDENTITY_SECURITY_EVENT_KEYS: [],
+  IDENTITY_SECURITY_EVENTS: {},
+  identitySecurityEventSpec: vi.fn(),
+  emitIdentitySecurityEvent: mocks.emitIdentitySecurityEvent,
+  respondToAccountCompromise: vi.fn(),
+  handleIdentitySecurityEvent: vi.fn(),
+  readOpenCompromiseResponse: vi.fn(),
+  resolveCompromiseResponse: vi.fn(),
 }));
 vi.mock('@/lib/slack/slack-api', () => ({
   SlackApiError: class SlackApiError extends Error {},
@@ -170,6 +164,7 @@ import { GET, POST } from '../route';
 const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '44444444-4444-4444-8444-444444444444';
 const TOKEN = 'a'.repeat(43);
+const ACK = { acknowledgedSlackAccount: true };
 const orgDb = { query: vi.fn() };
 const requestDb = { query: vi.fn(), withOrg: vi.fn(() => orgDb) };
 const installation = {
@@ -206,6 +201,8 @@ describe('/api/slack/link', () => {
     mocks.isSlackAppConfigured.mockReturnValue(true);
     mocks.slackAppOrigin.mockReturnValue('https://app.example.com');
     mocks.previewSlackLinkRequest.mockResolvedValue({
+      installationId: 'inst-1',
+      slackUserId: 'U1',
       teamName: 'Acme',
       expiresAt: '2026-09-28T01:00:00.000Z',
     });
@@ -223,6 +220,7 @@ describe('/api/slack/link', () => {
     mocks.readSlackUser.mockResolvedValue({ displayName: 'Ada' });
     mocks.linkSlackAccount.mockResolvedValue('link-1');
     mocks.postSlackMessage.mockResolvedValue(undefined);
+    mocks.emitIdentitySecurityEvent.mockResolvedValue({ signals: [] });
   });
 
   describe('GET', () => {
@@ -256,6 +254,7 @@ describe('/api/slack/link', () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
         teamName: 'Acme',
+        slackUserName: 'Ada',
         expiresAt: '2026-09-28T01:00:00.000Z',
         workspaces: [
           { id: null, name: 'Personal', planAllowed: true },
@@ -267,33 +266,63 @@ describe('/api/slack/link', () => {
       expect(mocks.previewSlackLinkRequest).toHaveBeenCalledWith(mocks.serviceDb, TOKEN);
       expect(mocks.listSlackLinkWorkspaces).toHaveBeenCalledWith(requestDb, 'user-1');
     });
+
+    it('reads the Slack person with the installation bot token', async () => {
+      await GET(previewRequest());
+      expect(mocks.findSlackInstallationById).toHaveBeenCalledWith(mocks.serviceDb, 'inst-1');
+      expect(mocks.readSlackUser).toHaveBeenCalledWith('xoxb-test', 'U1');
+    });
+
+    it('returns 404 when the installation is gone', async () => {
+      mocks.findSlackInstallationById.mockResolvedValue(null);
+      const response = await GET(previewRequest());
+      expect(response.status).toBe(404);
+    });
+
+    it('returns no name and still answers when Slack cannot be read', async () => {
+      mocks.readSlackUser.mockRejectedValue(new Error('missing_scope'));
+      const response = await GET(previewRequest());
+      expect(response.status).toBe(200);
+      expect((await response.json()).slackUserName).toBeNull();
+    });
+
+    it('cuts a hostile Slack name to one short line in the preview', async () => {
+      mocks.readSlackUser.mockResolvedValue({ displayName: `Eve\n${'y'.repeat(500)}` });
+      const body = await (await GET(previewRequest())).json();
+      expect(body.slackUserName).not.toContain('\n');
+      expect(Array.from(body.slackUserName as string).length).toBeLessThanOrEqual(64);
+    });
   });
 
   describe('POST', () => {
     it('returns 401 without a session', async () => {
       mocks.getUserScopedDb.mockRejectedValue(createError.unauthorized());
-      const response = await POST(confirmRequest({ token: TOKEN, organizationId: ORG }));
+      const response = await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG }));
       expect(response.status).toBe(401);
       expect(mocks.consumeSlackLinkRequest).not.toHaveBeenCalled();
     });
 
     it('returns the CSRF refusal and consumes nothing', async () => {
       mocks.requireCsrfToken.mockResolvedValue(new Response(null, { status: 403 }));
-      const response = await POST(confirmRequest({ token: TOKEN, organizationId: ORG }));
+      const response = await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG }));
       expect(response.status).toBe(403);
       expect(mocks.requireCsrfToken).toHaveBeenCalledWith(expect.anything(), 'user-1');
       expect(mocks.consumeSlackLinkRequest).not.toHaveBeenCalled();
     });
 
     it('rejects an invalid body', async () => {
-      const response = await POST(confirmRequest({ token: TOKEN, organizationId: ORG, x: 1 }));
+      const response = await POST(
+        confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG, x: 1 }),
+      );
       expect(response.status).toBe(400);
       expect(mocks.consumeSlackLinkRequest).not.toHaveBeenCalled();
     });
 
     it('refuses a workspace the caller is not a member of', async () => {
       mocks.resolveOrganizationMembershipId.mockResolvedValue(null);
-      const response = await POST(confirmRequest({ token: TOKEN, organizationId: OTHER_ORG }));
+      const response = await POST(
+        confirmRequest({ ...ACK, token: TOKEN, organizationId: OTHER_ORG }),
+      );
       expect(response.status).toBe(403);
       expect(mocks.resolveOrganizationMembershipId).toHaveBeenCalledWith(
         requestDb,
@@ -305,27 +334,49 @@ describe('/api/slack/link', () => {
 
     it('refuses a workspace whose plan does not include Slack', async () => {
       mocks.slackPlanAllowed.mockResolvedValue(false);
-      const response = await POST(confirmRequest({ token: TOKEN, organizationId: ORG }));
+      const response = await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG }));
       expect(response.status).toBe(403);
       expect(mocks.consumeSlackLinkRequest).not.toHaveBeenCalled();
     });
 
     it('returns 404 when the link was already used', async () => {
       mocks.consumeSlackLinkRequest.mockResolvedValue(null);
-      const response = await POST(confirmRequest({ token: TOKEN, organizationId: ORG }));
+      const response = await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG }));
       expect(response.status).toBe(404);
       expect(mocks.linkSlackAccount).not.toHaveBeenCalled();
     });
 
     it('returns 409 when the Slack account is linked elsewhere', async () => {
       mocks.linkSlackAccount.mockRejectedValue(new mocks.SlackLinkConflictError('taken'));
-      const response = await POST(confirmRequest({ token: TOKEN, organizationId: ORG }));
+      const response = await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG }));
       expect(response.status).toBe(409);
-      expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+      expect(mocks.emitIdentitySecurityEvent).not.toHaveBeenCalled();
+    });
+
+    it('rejects a confirm without the acknowledgement and keeps the link token', async () => {
+      const response = await POST(confirmRequest({ token: TOKEN, organizationId: ORG }));
+      expect(response.status).toBe(400);
+      expect(mocks.consumeSlackLinkRequest).not.toHaveBeenCalled();
+      expect(mocks.emitIdentitySecurityEvent).not.toHaveBeenCalled();
+    });
+
+    it('raises no notice when the token was already used', async () => {
+      mocks.consumeSlackLinkRequest.mockResolvedValue(null);
+      await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG }));
+      expect(mocks.emitIdentitySecurityEvent).not.toHaveBeenCalled();
+    });
+
+    it('keys the notice on the link id so a re-link of the same account raises one notice', async () => {
+      await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG }));
+      await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG }));
+      const refs = mocks.emitIdentitySecurityEvent.mock.calls.map(
+        (call) => (call[1] as { noticeRef: string }).noticeRef,
+      );
+      expect(new Set(refs)).toEqual(new Set(['link-1']));
     });
 
     it('links the Slack account to the caller in the chosen workspace', async () => {
-      const response = await POST(confirmRequest({ token: TOKEN, organizationId: ORG }));
+      const response = await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: ORG }));
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ linked: true, teamName: 'Acme' });
       expect(requestDb.withOrg).toHaveBeenCalledWith(ORG);
@@ -337,11 +388,15 @@ describe('/api/slack/link', () => {
         slackUserId: 'U1',
         slackUserName: 'Ada',
       });
-      expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect(mocks.emitIdentitySecurityEvent).toHaveBeenCalledTimes(1);
+      expect(mocks.emitIdentitySecurityEvent).toHaveBeenCalledWith(
+        mocks.serviceDb,
         expect.objectContaining({
           userId: 'user-1',
-          eventType: 'identity_linked',
+          event: 'slack_account_linked',
+          noticeRef: 'link-1',
           organizationId: ORG,
+          context: expect.stringContaining('Ada in Acme'),
           detail: expect.objectContaining({ resourceId: 'link-1', subjectRef: 'T1:U1' }),
         }),
       );
@@ -352,7 +407,7 @@ describe('/api/slack/link', () => {
     });
 
     it('links a personal account without a membership check', async () => {
-      const response = await POST(confirmRequest({ token: TOKEN, organizationId: null }));
+      const response = await POST(confirmRequest({ ...ACK, token: TOKEN, organizationId: null }));
       expect(response.status).toBe(200);
       expect(mocks.resolveOrganizationMembershipId).not.toHaveBeenCalled();
       expect(mocks.slackPlanAllowed).toHaveBeenCalledWith(orgDb, 'user-1', null);

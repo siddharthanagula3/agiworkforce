@@ -42,6 +42,7 @@ describe('searching the index for a large project file', () => {
     await loadProjectContext(projectDb(), {
       projectId: 'proj-1',
       userId: 'user-1',
+      organizationId: null,
       currentUserQuery: 'what is the refund window?',
     });
 
@@ -52,6 +53,7 @@ describe('searching the index for a large project file', () => {
     await loadProjectContext(projectDb(), {
       projectId: 'proj-1',
       userId: 'user-1',
+      organizationId: null,
       currentUserQuery: 'what is the refund window?',
       semanticRetrieval: false,
     });

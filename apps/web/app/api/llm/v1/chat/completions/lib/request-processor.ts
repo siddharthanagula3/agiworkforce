@@ -3855,6 +3855,7 @@ async function processAdmittedRequest(
               const projectContext = await loadProjectContext(scoped.db, {
                 projectId: ownedRows[0].project_id,
                 userId,
+                organizationId: scoped.organizationId ?? null,
                 currentConversationId: ownedRows[0].id,
                 currentUserQuery: latestUserPrompt,
               });

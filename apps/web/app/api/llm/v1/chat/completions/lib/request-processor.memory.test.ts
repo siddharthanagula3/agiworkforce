@@ -155,6 +155,7 @@ describe("resolveInteractiveTurnContext: the project's other chats", () => {
     const projectContext = await loadProjectContext(db, {
       projectId: PROJECT_ID,
       userId: 'user-1',
+      organizationId: null,
       currentConversationId: 'conversation-1',
       currentUserQuery: QUESTION,
     });

@@ -396,6 +396,12 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 status poll requests per minute (allow frequent polling)
     failClosed: false, // Not sensitive: just querying status
   },
+  'image-status': {
+    // Not 'image-generation': a phone polls this every 2 s and would exhaust that budget.
+    limit: 120,
+    window: '1 m',
+    failClosed: false,
+  },
   'audio-transcription': {
     limit: 20,
     window: '1 m', // 20 transcription requests per minute (audio processing is resource-intensive)

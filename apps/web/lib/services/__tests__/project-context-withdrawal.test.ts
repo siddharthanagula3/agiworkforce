@@ -61,6 +61,7 @@ async function siblingPreviews(db: StatementScanPostgres) {
   const context = await loadProjectContext(db as unknown as ProjectContextDb, {
     projectId: PROJECT,
     userId: USER,
+    organizationId: null,
     currentConversationId: CURRENT,
     currentUserQuery: 'launch',
   });

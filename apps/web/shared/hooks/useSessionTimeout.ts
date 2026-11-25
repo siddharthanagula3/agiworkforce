@@ -1,13 +1,16 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useUserSettings } from '@features/settings/hooks/use-settings-queries';
+import {
+  SESSION_TIMEOUT_OFF,
+  resolveSessionTimeout,
+} from '@agiworkforce/cloud-contracts/account-security';
 import { logger } from '@shared/lib/logger';
 
 const ACTIVITY_STORAGE_KEY = 'agi_last_activity';
 const WARNING_TIME_BEFORE_TIMEOUT_MS = 2 * 60 * 1000;
 const ACTIVITY_CHECK_INTERVAL_MS = 30 * 1000;
 const ACTIVITY_THROTTLE_MS = 5 * 1000;
-const DEFAULT_SESSION_TIMEOUT_MINUTES = 60;
 
 const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = [
   'mousedown',
@@ -77,20 +80,23 @@ function clearLastActivity(): void {
 }
 
 /**
- * Signs the user out after the inactivity window from their `session_timeout`
- * setting, warning first. Activity is shared across tabs through localStorage.
+ * Signs the user out after the inactivity window from their session timeout
+ * setting, warning first. Off unless the person chose a limit. Activity is
+ * shared across tabs through localStorage.
  */
 export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSessionTimeoutReturn {
   const { enabled = true, onTimeout, onWarning, onSessionExtended } = options;
 
   const { user, logout, isAuthenticated } = useAuthStore();
   const { data: settings } = useUserSettings();
+  const idleMinutes = settings ? resolveSessionTimeout(settings) : SESSION_TIMEOUT_OFF;
+  const idleLimitActive = enabled && isAuthenticated && idleMinutes > SESSION_TIMEOUT_OFF;
 
   const [state, setState] = useState<SessionTimeoutState>(() => ({
     isTimedOut: false,
     isWarningActive: false,
     secondsUntilTimeout: 0,
-    timeoutMinutes: settings?.session_timeout ?? DEFAULT_SESSION_TIMEOUT_MINUTES,
+    timeoutMinutes: idleMinutes,
     lastActivity: getStoredActivity() ?? Date.now(),
   }));
 
@@ -106,7 +112,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
     callbacksRef.current = { onTimeout, onWarning, onSessionExtended };
   });
 
-  const timeoutMs = (settings?.session_timeout ?? DEFAULT_SESSION_TIMEOUT_MINUTES) * 60 * 1000;
+  const timeoutMs = idleMinutes * 60 * 1000;
 
   const recordActivity = useCallback((now: number) => {
     lastActivityMemoryRef.current = now;
@@ -176,7 +182,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
   }, [logout]);
 
   const checkTimeout = useCallback(() => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user || idleMinutes <= SESSION_TIMEOUT_OFF) {
       return;
     }
 
@@ -205,7 +211,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
     }
 
     setState((prev) => {
-      const timeoutMinutes = settings?.session_timeout ?? DEFAULT_SESSION_TIMEOUT_MINUTES;
+      const timeoutMinutes = idleMinutes;
       const nextSeconds = shouldShowWarning ? secondsRemaining : 0;
       if (
         prev.lastActivity === lastActivity &&
@@ -223,10 +229,10 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
         secondsUntilTimeout: nextSeconds,
       };
     });
-  }, [isAuthenticated, user, timeoutMs, settings?.session_timeout, forceLogout]);
+  }, [isAuthenticated, user, timeoutMs, idleMinutes, forceLogout]);
 
   useEffect(() => {
-    if (!enabled || !isAuthenticated) {
+    if (!idleLimitActive) {
       return;
     }
 
@@ -263,10 +269,10 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
       });
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [enabled, isAuthenticated, updateActivity]);
+  }, [idleLimitActive, updateActivity]);
 
   useEffect(() => {
-    if (!enabled || !isAuthenticated) {
+    if (!idleLimitActive) {
       return;
     }
 
@@ -281,10 +287,10 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
     return () => {
       cancelled = true;
     };
-  }, [enabled, isAuthenticated, recordActivity]);
+  }, [idleLimitActive, recordActivity]);
 
   useEffect(() => {
-    if (!enabled || !isAuthenticated) {
+    if (!idleLimitActive) {
       return;
     }
 
@@ -300,7 +306,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
         checkIntervalRef.current = null;
       }
     };
-  }, [enabled, isAuthenticated, checkTimeout]);
+  }, [idleLimitActive, checkTimeout]);
 
   useEffect(() => {
     if (!state.isWarningActive) {
@@ -354,7 +360,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
           isTimedOut: false,
           isWarningActive: false,
           secondsUntilTimeout: 0,
-          timeoutMinutes: DEFAULT_SESSION_TIMEOUT_MINUTES,
+          timeoutMinutes: SESSION_TIMEOUT_OFF,
           lastActivity: Date.now(),
         });
       });
@@ -362,15 +368,25 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (settings?.session_timeout) {
-      queueMicrotask(() => {
-        setState((prev) => ({
+    queueMicrotask(() => {
+      setState((prev) => {
+        if (idleMinutes > SESSION_TIMEOUT_OFF) {
+          return prev.timeoutMinutes === idleMinutes
+            ? prev
+            : { ...prev, timeoutMinutes: idleMinutes };
+        }
+        return {
           ...prev,
-          timeoutMinutes: settings.session_timeout!,
-        }));
+          timeoutMinutes: idleMinutes,
+          isWarningActive: false,
+          secondsUntilTimeout: 0,
+        };
       });
+    });
+    if (idleMinutes <= SESSION_TIMEOUT_OFF) {
+      wasWarningActiveRef.current = false;
     }
-  }, [settings?.session_timeout]);
+  }, [idleMinutes]);
 
   return {
     ...state,

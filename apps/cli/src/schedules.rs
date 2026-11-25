@@ -407,7 +407,8 @@ impl SchedulesClient {
                     .json(&serde_json::json!({
                         "decision": decision.wire(),
                         "toolCallIds": tool_call_ids,
-                    })),
+                    }))
+                    .timeout(MANUAL_RUN_TIMEOUT),
             )
             .await?;
         Ok(body.run)
@@ -455,7 +456,8 @@ impl SchedulesClient {
     }
 }
 
-const MANUAL_RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(75);
+// mirrors MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS
+const MANUAL_RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
 pub fn schedule_patch(
     name: Option<&str>,

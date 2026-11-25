@@ -139,16 +139,21 @@ function makeTask(overrides: Partial<ScheduleTask> = {}): ScheduleTask {
   } as ScheduleTask;
 }
 
-function makeScope() {
+function makeScope(organizationId: string | null = null) {
   return {
     userId: OWNER,
-    organizationId: null,
+    organizationId,
     db: { query: vi.fn(async () => []), execute: vi.fn(async () => undefined) },
   } as unknown as Parameters<typeof executeScheduledAgent>[3];
 }
 
-function run(task: ScheduleTask) {
-  return executeScheduledAgent(task, new AbortController().signal, 'run-1', makeScope());
+function run(task: ScheduleTask, organizationId: string | null = null) {
+  return executeScheduledAgent(
+    task,
+    new AbortController().signal,
+    'run-1',
+    makeScope(organizationId),
+  );
 }
 
 const ROUTED_MODEL = requireProviderDefaultModel('openai');
@@ -268,9 +273,32 @@ describe('every other scheduled run is unchanged', () => {
     expect(mocks.loadProjectContext).toHaveBeenCalledWith(expect.anything(), {
       projectId: PROJECT,
       userId: OWNER,
+      organizationId: null,
     });
     expect(result.text).toBe('Here is the brief.');
     expect(mocks.reserveManagedUsageRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the loader the run workspace so the owner is admitted whatever workspace the project sits in', async () => {
+    const workspace = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    mocks.loadProjectContext.mockResolvedValue({
+      projectId: PROJECT,
+      name: 'Launch',
+      description: null,
+      instructions: 'Answer tersely.',
+      knowledgeFiles: [],
+      siblingChats: [],
+      sources: [],
+    });
+
+    const result = await run(makeTask(), workspace);
+
+    expect(mocks.loadProjectContext).toHaveBeenCalledWith(expect.anything(), {
+      projectId: PROJECT,
+      userId: OWNER,
+      organizationId: workspace,
+    });
+    expect(result.text).toBe('Here is the brief.');
   });
 });
 

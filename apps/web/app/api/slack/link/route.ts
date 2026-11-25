@@ -13,11 +13,12 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
-import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { emitIdentitySecurityEvent } from '@/lib/services/identity-events';
 import { postSlackMessage, readSlackUser } from '@/lib/slack/slack-api';
 import { isSlackAppConfigured, slackAppOrigin, slackSettingsUrl } from '@/lib/slack/slack-config';
+import { sanitizeSlackDisplayName } from '@/lib/slack/slack-display-name';
 import { findSlackInstallationById } from '@/lib/slack/slack-installations';
 import {
   SlackLinkConflictError,
@@ -34,7 +35,6 @@ import {
   slackRequiredPlans,
 } from '@/lib/slack/slack-settings';
 
-const ENDPOINT = '/api/slack/link';
 const EXPIRED_LINK =
   'This link has expired or was already used. Send AGI a message in Slack to get a new one.';
 
@@ -53,10 +53,24 @@ async function handlePreview(request: NextRequest): Promise<NextResponse> {
   const pending = await previewSlackLinkRequest(getNeonDb(), token);
   if (!pending) throw createError.notFound(EXPIRED_LINK);
 
+  const installation = await findSlackInstallationById(getNeonDb(), pending.installationId);
+  if (!installation) throw createError.notFound(EXPIRED_LINK);
+  const profile = await readSlackUser(installation.botToken, pending.slackUserId).catch(
+    (error: unknown) => {
+      logger.warn(
+        { error, teamId: installation.teamId },
+        'Slack profile was unreadable at link preview',
+      );
+      return null;
+    },
+  );
+  const slackUserName = profile ? sanitizeSlackDisplayName(profile.displayName) : '';
+
   const workspaces = await listSlackLinkWorkspaces(db, userId);
   return NextResponse.json(
     ManagedCloudSlackLinkPreviewSchema.parse({
       teamName: pending.teamName,
+      slackUserName: slackUserName || null,
       expiresAt: pending.expiresAt,
       workspaces,
       selectedWorkspaceId: workspaces.some((workspace) => workspace.id === organizationId)
@@ -110,6 +124,7 @@ async function handleConfirm(request: NextRequest): Promise<NextResponse> {
       return null;
     },
   );
+  const slackUserName = profile ? sanitizeSlackDisplayName(profile.displayName) || null : null;
   let linkId: string;
   try {
     linkId = await linkSlackAccount(db, {
@@ -117,19 +132,22 @@ async function handleConfirm(request: NextRequest): Promise<NextResponse> {
       organizationId,
       installationId: installation.id,
       slackUserId: pending.slackUserId,
-      slackUserName: profile?.displayName ?? null,
+      slackUserName,
     });
   } catch (error) {
     if (error instanceof SlackLinkConflictError) throw createError.conflict(error.message);
     throw error;
   }
 
-  await recordAuditEvent({
+  await emitIdentitySecurityEvent(serviceDb, {
     userId,
-    eventType: 'identity_linked',
+    event: 'slack_account_linked',
+    subjectRef: linkId,
+    noticeRef: linkId,
     request,
-    endpoint: ENDPOINT,
     organizationId,
+    surface: 'web',
+    context: `${slackUserName ?? 'A Slack account'} in ${installation.teamName} can now ask AGI questions as you. Unlink it in Slack settings.`,
     detail: {
       resourceType: 'slack_account',
       resourceId: linkId,

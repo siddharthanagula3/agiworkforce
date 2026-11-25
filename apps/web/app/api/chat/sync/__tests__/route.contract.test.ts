@@ -505,7 +505,7 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
     expect(String(call?.[0])).toContain(
       'set title = case when incoming.has_title then incoming.title else existing.title end',
     );
-    const pushed = JSON.parse(String((call?.[1] as unknown[])[1])) as Array<
+    const pushed = JSON.parse(String((call?.[1] as unknown[])[0])) as Array<
       Record<string, unknown>
     >;
     expect(pushed[0]).not.toHaveProperty('title');
@@ -595,12 +595,46 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
 
     expect(res.status).toBe(200);
     const [validationSql, validationParams] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(validationSql).toContain('user_id = $1');
-    expect(validationSql).toContain('organization_id is not distinct from $2::uuid');
-    expect(validationParams).toEqual(['user_contract_1', ORGANIZATION_ID, [PROJECT_ID]]);
+    expect(validationSql).toContain('p.user_id = $2');
+    expect(validationSql).toContain('p.organization_id is not distinct from $3::uuid');
+    expect(validationSql).toContain('public.organization_shared_projects');
+    expect(validationParams).toEqual([[PROJECT_ID], 'user_contract_1', ORGANIZATION_ID]);
     const [mutationSql, mutationParams] = mockQuery.mock.calls[1] as [string, unknown[]];
-    expect(mutationSql).toContain('project.organization_id is not distinct from $3::uuid');
-    expect(mutationParams).toEqual(['user_contract_1', expect.any(String), ORGANIZATION_ID]);
+    expect(mutationSql).toContain('p.organization_id is not distinct from $3::uuid');
+    expect(mutationSql).toContain('p.user_id = $2');
+    expect(mutationParams).toEqual([expect.any(String), 'user_contract_1', ORGANIZATION_ID]);
+  });
+
+  it('keeps an owned chat syncing after its project was deleted, in the check and the writes', async () => {
+    mockQuery
+      .mockResolvedValueOnce([{ id: PROJECT_ID }])
+      .mockResolvedValueOnce([
+        { kind: 'applied', id: CONV_ID, server_version: '45', current: null },
+      ]);
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [
+          {
+            id: CONV_ID,
+            title: 'Chat in deleted project',
+            projectId: PROJECT_ID,
+            baseVersion: '0',
+          },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const ownerFirst =
+      /\(p\.user_id = \$\d and p\.organization_id is not distinct from \$3::uuid\)\s+or \(p\.deleted_at is null/;
+    const [validationSql] = mockQuery.mock.calls[0] as [string];
+    const [mutationSql] = mockQuery.mock.calls[1] as [string];
+    for (const statement of [validationSql, mutationSql]) {
+      expect(statement).toMatch(ownerFirst);
+      expect(statement).not.toMatch(/p\.deleted_at is null\s+and\s+\(\s*\(p\.user_id/);
+    }
   });
 
   it('rejects a project outside the active workspace before mutating conversations', async () => {

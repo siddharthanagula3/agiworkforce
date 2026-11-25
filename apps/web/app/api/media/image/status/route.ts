@@ -46,7 +46,7 @@ async function handleImageStatus(request: NextRequest): Promise<NextResponse> {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'image-generation');
+  const rateLimitResponse = await withRateLimit(request, 'image-status');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);

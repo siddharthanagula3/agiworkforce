@@ -6,6 +6,7 @@ import { loadProjectContext, type ProjectContextDb } from '../project-context-se
 
 const PROJECT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OWNER = 'user-owner';
+const ORGANIZATION = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const CURRENT_CONVERSATION = 'conversation-current';
 
 const PROJECT_CONTEXT_MODULE = 'apps/web/lib/services/project-context-service.ts';
@@ -89,20 +90,26 @@ describe('no project-scoped read happens before the project is authorized', () =
     await loadProjectContext(db, {
       projectId: PROJECT,
       userId: OWNER,
+      organizationId: null,
       currentConversationId: CURRENT_CONVERSATION,
     });
 
     const first = queries[0];
     expect(first?.sql).toContain('from user_projects');
-    expect(first?.sql).toContain('where id = $1 and user_id = $2');
-    expect(first?.sql).toContain('is_archived = false');
-    expect(first?.sql).toContain('deleted_at is null');
-    expect(first?.params).toEqual([PROJECT, OWNER]);
+    expect(first?.sql).toContain('p.id = $1');
+    expect(first?.sql).toContain('p.user_id = $2');
+    expect(first?.sql).toContain('p.is_archived = false');
+    expect(first?.sql).toContain('p.deleted_at is null');
+    expect(first?.params).toEqual([PROJECT, OWNER, null]);
   });
 
   it('issues no further statement when the project is not this account’s', async () => {
     const { db, queries } = recordingDb({ ownsProject: false });
-    const context = await loadProjectContext(db, { projectId: PROJECT, userId: OWNER });
+    const context = await loadProjectContext(db, {
+      projectId: PROJECT,
+      userId: OWNER,
+      organizationId: null,
+    });
 
     expect(context).toBeNull();
     expect(queries).toHaveLength(1);
@@ -113,6 +120,7 @@ describe('no project-scoped read happens before the project is authorized', () =
     await loadProjectContext(db, {
       projectId: PROJECT,
       userId: OWNER,
+      organizationId: null,
       currentConversationId: CURRENT_CONVERSATION,
       currentUserQuery: 'what is left to do',
     });
@@ -127,11 +135,51 @@ describe('no project-scoped read happens before the project is authorized', () =
 
   it('keeps another account’s chats out of the project it authorized', async () => {
     const { db, queries } = recordingDb({ ownsProject: true });
-    await loadProjectContext(db, { projectId: PROJECT, userId: OWNER });
+    await loadProjectContext(db, { projectId: PROJECT, userId: OWNER, organizationId: null });
 
     const siblings = queries.find((entry) => entry.sql.includes('from web_conversations'));
     expect(siblings?.sql).toContain('c.project_id = $1');
     expect(siblings?.sql).toContain('c.user_id = $2');
     expect(siblings?.params).toEqual([PROJECT, OWNER]);
+  });
+
+  it('admits an owner whose project sits in another workspace than the chat', async () => {
+    const { db, queries } = recordingDb({ ownsProject: true });
+    const context = await loadProjectContext(db, {
+      projectId: PROJECT,
+      userId: OWNER,
+      organizationId: ORGANIZATION,
+    });
+    expect(context).not.toBeNull();
+    const sql = String(queries[0]?.sql).replace(/\s+/g, ' ');
+    expect(sql).toContain('p.user_id = $2 or');
+    expect(sql).not.toContain('p.organization_id is not distinct from');
+    expect(queries[0]?.params).toEqual([PROJECT, OWNER, ORGANIZATION]);
+  });
+
+  it('admits a member through a share bound to the active workspace only', async () => {
+    const { db, queries } = recordingDb({ ownsProject: true });
+    await loadProjectContext(db, {
+      projectId: PROJECT,
+      userId: 'user-member',
+      organizationId: ORGANIZATION,
+    });
+    const sql = String(queries[0]?.sql).replace(/\s+/g, ' ');
+    expect(sql).toContain('from public.organization_shared_projects s');
+    expect(sql).toContain('s.organization_id = $3::uuid');
+    expect(sql).toContain("m.user_id = $2 and m.status = 'active'");
+    expect(sql).toContain("coalesce(a.access, s.default_access) in ('read', 'write')");
+    expect(queries[0]?.params).toEqual([PROJECT, 'user-member', ORGANIZATION]);
+  });
+
+  it('returns nothing for a member outside any share or in another workspace', async () => {
+    const { db, queries } = recordingDb({ ownsProject: false });
+    const context = await loadProjectContext(db, {
+      projectId: PROJECT,
+      userId: 'user-member',
+      organizationId: null,
+    });
+    expect(context).toBeNull();
+    expect(queries).toHaveLength(1);
   });
 });

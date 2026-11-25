@@ -6,7 +6,9 @@ import { render, cleanup, act } from '@testing-library/react';
 const authState = vi.hoisted(() => ({
   value: { user: { id: 'u1' }, logout: vi.fn(async () => undefined), isAuthenticated: true },
 }));
-const settingsState = vi.hoisted(() => ({ value: { data: { session_timeout: 15 } } }));
+const settingsState = vi.hoisted(() => ({
+  value: { data: { session_timeout: 15 } as UserSettings },
+}));
 
 vi.mock('@shared/stores/authentication-store', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule1>()),
@@ -17,6 +19,7 @@ vi.mock('@features/settings/hooks/use-settings-queries', async (importOriginal) 
   useUserSettings: () => settingsState.value,
 }));
 
+import type { UserSettings } from '@features/settings/services/user-preferences';
 import { useSessionTimeout } from './useSessionTimeout';
 
 const ACTIVITY_STORAGE_KEY = 'agi_last_activity';
@@ -78,6 +81,50 @@ describe('useSessionTimeout idle enforcement', () => {
     await advance(2 * MINUTE_MS + 31_000);
     expect(onTimeout).toHaveBeenCalledTimes(1);
     expect(authState.value.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('never signs out when no limit was chosen', async () => {
+    settingsState.value = { data: {} } as typeof settingsState.value;
+    const { onWarning, onTimeout } = mountGuard();
+    await advance(3 * 60 * MINUTE_MS);
+    expect(onWarning).not.toHaveBeenCalled();
+    expect(onTimeout).not.toHaveBeenCalled();
+    expect(authState.value.logout).not.toHaveBeenCalled();
+  });
+
+  it('never signs out or tracks activity when the limit is Never', async () => {
+    settingsState.value = { data: { session_timeout_off: true } };
+    const { onWarning, onTimeout } = mountGuard();
+    await advance(3 * 60 * MINUTE_MS);
+    expect(onWarning).not.toHaveBeenCalled();
+    expect(onTimeout).not.toHaveBeenCalled();
+    expect(authState.value.logout).not.toHaveBeenCalled();
+    expect(localStorage.getItem(ACTIVITY_STORAGE_KEY)).toBeNull();
+  });
+
+  it('keeps the stored limit untouched when Never is chosen so old bundles do not read 0', async () => {
+    settingsState.value = { data: { session_timeout: 15, session_timeout_off: true } };
+    const { onTimeout } = mountGuard();
+    await advance(3 * 60 * MINUTE_MS);
+    expect(onTimeout).not.toHaveBeenCalled();
+    expect(authState.value.logout).not.toHaveBeenCalled();
+  });
+
+  it('applies the stored limit again once Never is switched off', async () => {
+    settingsState.value = { data: { session_timeout: 15, session_timeout_off: false } };
+    const { onTimeout } = mountGuard();
+    await advance(16 * MINUTE_MS);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a showing warning when the limit is switched to Never', async () => {
+    const { view, Guard, onTimeout } = mountGuard();
+    await advance(13 * MINUTE_MS + 31_000);
+    settingsState.value = { data: { session_timeout: 15, session_timeout_off: true } };
+    view.rerender(React.createElement(Guard));
+    await advance(5 * MINUTE_MS);
+    expect(onTimeout).not.toHaveBeenCalled();
+    expect(authState.value.logout).not.toHaveBeenCalled();
   });
 
   it('keeps the stored activity time across unrelated rerenders', async () => {

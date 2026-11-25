@@ -78,6 +78,7 @@ describe('a temporary conversation is invisible to every path that reads past ch
       loadProjectContext(db as never, {
         userId: 'user-1',
         projectId: 'project-1',
+        organizationId: null,
         currentConversationId: 'conversation-current',
         currentUserQuery: 'pricing page',
       }),

@@ -1304,6 +1304,12 @@ export async function deleteSchedule(
     if (running) {
       throw new ScheduleConflictError('Schedule cannot be deleted while a run is in progress');
     }
+    await tx.execute(
+      `update scheduled_task_shares
+          set revoked_at = now()
+        where task_id = $1 and user_id = $2 and revoked_at is null`,
+      [taskId, userId],
+    );
     const affected = await tx.execute(
       `delete from scheduled_tasks where id = $1 and user_id = $2`,
       [taskId, userId],

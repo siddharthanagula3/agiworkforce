@@ -1,6 +1,10 @@
 import {
   ACCOUNT_SECURITY_PATH,
+  SESSION_TIMEOUT_OFF,
   accountSecurityCredentialPath,
+  isSessionTimeoutMinutes,
+  resolveSessionTimeout,
+  sessionTimeoutSettingsPatch,
 } from '@agiworkforce/cloud-contracts/account-security';
 import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 import { api } from '@/services/api';
@@ -14,10 +18,9 @@ import {
 
 export const WEB_SECURITY_URL = 'https://agiworkforce.com/settings/security';
 
-export const SESSION_TIMEOUT_MINUTES = [15, 30, 60, 120, 480] as const;
-export type SessionTimeoutMinutes = (typeof SESSION_TIMEOUT_MINUTES)[number];
+export type SessionTimeoutMinutes = number;
 
-export const DEFAULT_SESSION_TIMEOUT: SessionTimeoutMinutes = 60;
+export const DEFAULT_SESSION_TIMEOUT: SessionTimeoutMinutes = SESSION_TIMEOUT_OFF;
 
 export interface AuditLogEntry {
   id: string;
@@ -85,26 +88,21 @@ export async function fetchAccountSecurityStatus(
   return parseAccountSecurityStatus(response);
 }
 
-function isSessionTimeout(value: unknown): value is SessionTimeoutMinutes {
-  return SESSION_TIMEOUT_MINUTES.includes(value as SessionTimeoutMinutes);
-}
-
 export async function fetchSessionTimeout(
   options?: PreferenceRequestOptions,
 ): Promise<SessionTimeoutMinutes> {
   const settings = await fetchAccountSettings({ ...options, strictSettings: true });
   const stored = settings['session_timeout'];
-  if (stored === undefined) return DEFAULT_SESSION_TIMEOUT;
-  if (!isSessionTimeout(stored))
+  if (stored !== undefined && !isSessionTimeoutMinutes(stored))
     throw new Error('Account security returned an invalid session timeout');
-  return stored;
+  return resolveSessionTimeout(settings);
 }
 
 export async function saveSessionTimeout(
   minutes: SessionTimeoutMinutes,
   options: PreferenceRequestOptions,
 ): Promise<void> {
-  await saveAccountSettings({ session_timeout: minutes }, options);
+  await saveAccountSettings(sessionTimeoutSettingsPatch(minutes), options);
 }
 
 export interface AccountSessionRow {

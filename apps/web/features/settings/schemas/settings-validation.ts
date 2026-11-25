@@ -6,6 +6,11 @@
  */
 
 import { z } from 'zod';
+import {
+  SESSION_TIMEOUT_MAX_MINUTES,
+  SESSION_TIMEOUT_MIN_MINUTES,
+  SESSION_TIMEOUT_OFF,
+} from '@agiworkforce/cloud-contracts/account-security';
 import { sanitizeUserInput } from '@shared/utils/html-sanitizer';
 import { API_KEY_SCOPE_VALUES } from '@/lib/api-key-scopes';
 
@@ -31,11 +36,14 @@ export const changePasswordSchema = z
 export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 
 export const securitySettingsSchema = z.object({
-  session_timeout: z
-    .number()
-    .int('Session timeout must be a whole number')
-    .min(15, 'Session timeout must be at least 15 minutes')
-    .max(1440, 'Session timeout cannot exceed 24 hours'),
+  session_timeout: z.union([
+    z.literal(SESSION_TIMEOUT_OFF),
+    z
+      .number()
+      .int('Session timeout must be a whole number')
+      .min(SESSION_TIMEOUT_MIN_MINUTES, 'Session timeout must be at least 15 minutes')
+      .max(SESSION_TIMEOUT_MAX_MINUTES, 'Session timeout cannot exceed 24 hours'),
+  ]),
 });
 
 export type SecuritySettingsFormData = z.infer<typeof securitySettingsSchema>;
