@@ -146,3 +146,14 @@ Code: `apps/web/lib/connectors/catalog.ts:248-248`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S31.26: Create a PDF from a mobile chat.
+
+- Done when: A user can choose PDF from Create file in mobile chat, describe the document, and open the resulting PDF.
+- Wave: 3
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| mobile | partial | Create file offers document, presentation and spreadsheet formats. PDF is missing from that menu. | ui |
+
+Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:1194-1194`, `packages/contracts/cloud-contracts/src/skills.ts:20-20`

@@ -65,3 +65,79 @@ nothing is left.
 - Done when: The workspace shows CI check status for the session's branch or pull request.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode
+
+## S66.42: Choose a customer-hosted execution environment.
+
+- Done when: A workspace owner can register a runner on their own infrastructure and an authorized user can select that environment when starting a cloud coding session.
+- Wave: 4
+- Build on: web, mobile, cli
+
+## S66.43: Install, update and diagnose a customer-hosted runner.
+
+- Done when: An operator can complete guided runner setup, pin or upgrade the runner version, inspect its configured health endpoint and run diagnostics.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S66.44: Control capacity and idle time on customer-hosted runners.
+
+- Done when: An administrator can enable customer hosting, set capacity and expected startup time, maintain warm standby capacity, launch on demand, hold or release idle capacity and stop unused runners.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S66.45: Drain customer-hosted runners and recover unfinished jobs.
+
+- Done when: An operator can schedule retirement, set startup, drain and termination deadlines, signal draining, finish or requeue leases and stop the orchestrator gracefully.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S66.46: Configure lifecycle hooks on customer-hosted runners.
+
+- Done when: An operator can install and identify checkout, command and post-session hooks, set their concurrency and time limits and see whether each hook completed.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S66.47: Isolate and authenticate customer-hosted sessions.
+
+- Done when: An administrator can confine repository settings, bind a runner to its workspace or account, restrict automatic approvals, supply credentials scoped to the session creator and diagnose session identity without sharing credentials across sessions.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S66.48: Connect customer-hosted runners through a managed network.
+
+- Done when: An operator can configure repository host and SSH rewriting, an authenticated outbound proxy, client certificates, private certificate trust and repository proxy routing.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S66.49: Observe customer-hosted runner and session health.
+
+- Done when: An operator can set permitted telemetry, choose log level and diagnostics destinations, and monitor runner, orchestrator and child-session metrics.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S66.50: Configure the workspace a customer-hosted runner gives a session.
+
+- Done when: An operator can set environment-level overrides, service endpoint, working directories, runner identity, executable and Git configuration, select the host settings copied into a session and choose its outcome and cleanup behavior.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S66.51: Control tools in a customer-hosted coding session.
+
+- Done when: An administrator can provide authenticated account connectors or image-local MCP servers to the session and disable the bundled remote or artifact tools.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S66.52: Save a reusable coding environment on mobile.
+
+- Done when: From the phone, a user can name an environment, enter or select its setup script, configure package managers, allowed domains and environment variables, then submit and select the saved environment.
+- Wave: 4
+- Build on: mobile
+- Needs a founder decision: Review this one-leader capability before implementation.

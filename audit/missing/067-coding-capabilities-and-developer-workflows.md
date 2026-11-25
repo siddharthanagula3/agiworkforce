@@ -17,3 +17,17 @@ nothing is left.
 - Done when: The agent produces a report, slide deck or design grounded in the repository's contents.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode
+
+## S67.40: Configure a defensive repository scan from the CLI.
+
+- Done when: A maintainer can select repository scope, exclusions, scan depth, independent validation, model and resource limits, save project settings and receive per-attempt findings.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S67.41: Review and act on saved repository scan results.
+
+- Done when: A maintainer can follow progress, inspect machine-readable results and a saved threat model, review a remediation diff and explicitly open a draft pull request.
+- Wave: 4
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.

@@ -94,3 +94,14 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
+
+## S84.27: Follow the browser language from display settings.
+
+- Done when: A user can select automatic display language in Settings. Changing the preferred browser language then changes the interface to the supported language on the next visit.
+- Wave: 3
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | partial | The language selector offers individual languages only. Add a persistent automatic preference alongside manual selection. | ui |
+
+Code: `apps/web/features/settings/components/LanguageSelector.tsx:32-32`

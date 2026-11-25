@@ -19,12 +19,15 @@ nothing is left.
 ## S58.03: Add remote server.
 
 - Done when: The user can add a remote MCP server by URL (with optional credentials) and it becomes available to the assistant.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Wave: 2
+- Already works on: desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| web | partial | The settings adapter exposes the custom server wizard only when the general connector release switch is on. Verify the entitlement and authorization flow before releasing it. | flag-off |
 | vscode | missing | Not built on this surface. |  |
+
+Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:486-492`, `apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx:699-719`, `apps/web/app/api/connectors/custom/route.ts:108-110`, `apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx:1281-1281`
 
 ## S58.05: Environment-variable configuration.
 

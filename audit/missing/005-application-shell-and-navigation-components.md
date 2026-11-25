@@ -42,3 +42,9 @@ nothing is left.
 - Wave: 5
 - Build on: web, mobile
 - Needs a founder decision: true
+
+## S5.40: Find downloads from the account menu.
+
+- Done when: A signed-in web user can open the app and extension download directory directly from their account menu.
+- Wave: 5
+- Build on: web

@@ -29,3 +29,17 @@ nothing is left.
 - Done when: An administrator controls which client versions or release channels members get and when updates roll out.
 - Wave: 5
 - Build on: web, desktop, cli
+
+## S87.41: Apply gateway policy for an organization or identity group.
+
+- Done when: The administrator can assign model access, upstream routing and managed settings by group or domain and define how overlapping policies and device defaults combine. The gateway enforces the resulting policy.
+- Wave: 5
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.
+
+## S87.42: Operate and monitor a workspace gateway telemetry relay.
+
+- Done when: Administrators can configure diagnostic logging, relay or direct export to approved collectors, attribute events to permitted users or groups and see delivery failures.
+- Wave: 5
+- Build on: cli
+- Needs a founder decision: Review this one-leader capability before implementation.

@@ -35,3 +35,10 @@ nothing is left.
 - Done when: The assistant reports questions it could not answer from the help corpus so the owner can write the missing articles.
 - Wave: 5
 - Build on: web
+
+## S88.32: Present and enforce the workspace’s contracted retention and compliance scope in the CLI.
+
+- Done when: An authorized administrator can distinguish the contracted health-data and retention scopes, compatible versions, permitted connections and tools, local-storage exceptions, offboarding behavior and verification status; users see and receive the corresponding restrictions.
+- Wave: 5
+- Build on: cli
+- Needs a founder decision: Founder and compliance partners must establish contracts, certification scope and retention commitments before any compliance claim.
