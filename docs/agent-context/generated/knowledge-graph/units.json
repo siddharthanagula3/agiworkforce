@@ -2695,12 +2695,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 253,
+      "files": 254,
       "roles": {
         "asset": 1,
         "config": 21,
         "doc": 185,
-        "generated": 45,
+        "generated": 46,
         "other": 1
       }
     },
