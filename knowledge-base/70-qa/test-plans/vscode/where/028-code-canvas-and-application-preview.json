@@ -1,0 +1,124 @@
+{
+ "S28.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More actions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Save into the workspace"
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact that contains code, and a folder open in VS Code to keep the result",
+  "note": "The artifact opens through a content provider (agi-artifact scheme) and the code sets no read-only flag, but the app has no code path that saves that document back to its source; the keep step is Save into the workspace. Whether typed edits persist was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "In the AGI Code sidebar, click the button labelled More actions (the \u2026 icon in the header).",
+   "Click Artifacts, then pick an artifact in the list (the placeholder text reads Open an artifact\u2026).",
+   "Click inside the code and type a line; check that the text changes and can be edited.",
+   "Hover the row's save icon labelled Save into the workspace and click it to keep the result; check that a saved file opens in the editor, as in Expected."
+  ],
+  "where": "More actions (\u2026) > Artifacts > Open an artifact\u2026 > pick an artifact with code"
+ },
+ "S28.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not found. Artifacts list as a flat list (artifactsTree.ts sets TreeItemCollapsibleState.None), and the cited lines in package.json and extension.ts are now unrelated commands. Searched the app folder for file tree, fileTree, multi-file and TreeItemCollapsibleState.Collapsed. Only VS Code's own Explorer applies once a folder is open.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not found. The app has no create or delete action for files in an artifact project. Searched the app folder for createFile, deleteFile and create/delete file wording. Only VS Code's own file actions on the saved workspace file apply.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not found. The app has no rename action for generated files. Searched the app folder for rename and renameFile; the only rename is Rename session group in sessionGroups.ts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More actions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact that contains code",
+  "note": "The app sets the editor language from the artifact (artifactEditorLanguage in artifactPresentation.ts); highlighting and indentation come from VS Code, not from app code.",
+  "reachable": "yes",
+  "steps": [
+   "In the AGI Code sidebar, click the button labelled More actions (the \u2026 icon in the header).",
+   "Click Artifacts, then pick an artifact that contains code (the placeholder text reads Open an artifact\u2026).",
+   "Look at the opened editor tab: the code should show colours for keywords and strings, as in Expected.",
+   "Click at the end of a line that opens a bracket and press Return; check that indentation and matching brackets follow the language."
+  ],
+  "where": "More actions (\u2026) > Artifacts > Open an artifact\u2026 > pick an artifact with code"
+ },
+ "S28.06": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not verified. The app sets the language of an opened artifact but registers no diagnostics provider for it; errors would come only from a VS Code language extension. Searched the app folder for diagnostics. Only chat context and an export diagnostics command were found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not found. The app has no search across generated files. The Open an artifact\u2026 list filters by typed text only, and across real files only VS Code search applies after Save into the workspace. Searched the app folder for search and generated-file wording.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.24": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not found. The cited package.json and artifactActions.ts lines do not contain a download source action. Searched the app folder for download source and download; only cloud-download icons turned up. The closest is Save into the workspace, which saves one artifact, not the app's source code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Save into the workspace"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact that contains code, and a folder open in VS Code (without one the app shows: open a folder first)",
+  "note": "Open Published Artifact opens a web share link in the browser and is not a coding workspace; the coding path is Save into the workspace.",
+  "reachable": "yes",
+  "steps": [
+   "In the AGI Code sidebar, click the button labelled More actions (the \u2026 icon in the header).",
+   "Click Artifacts, then pick an artifact that contains code (the placeholder text reads Open an artifact\u2026).",
+   "Hover the row's save icon, whose tooltip reads Save into the workspace, and click it.",
+   "In the save dialog, keep the suggested file name and click Save; check that the file opens in a normal editor tab in the open folder, ready to keep developing."
+  ],
+  "where": "More actions (\u2026) > Artifacts > Open an artifact\u2026 > hover the row's save icon and click Save into the workspace"
+ }
+}

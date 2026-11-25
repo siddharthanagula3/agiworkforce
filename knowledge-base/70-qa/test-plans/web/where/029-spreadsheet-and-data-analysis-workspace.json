@@ -1,0 +1,178 @@
+{
+ "S29.17": {
+  "labels": [],
+  "needs": "a Free account or a paid account, and a workbook request",
+  "note": "No insert-chart control was found in apps/web or packages/ui. Charts come only from the workbook file builder (apps/web/lib/services/managed-workbook-builder.ts, a sheet's optional chart field, bar, line or pie), so the route is asking chat for an .xlsx file with a chart. The visible route and its download control were not verified.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S29.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/presentation/PresentationWorkspace.tsx",
+    "text": "Edit chart data"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/presentation/ChartDataEditor.tsx",
+    "text": "Chart type"
+   }
+  ],
+  "needs": "a presentation with a chart (ask chat to make one)",
+  "note": "The selector is only in the deck chart editor; the spreadsheet artifact has no chart-type control in the files checked.",
+  "reachable": "yes",
+  "steps": [
+   "Ask chat for a slide deck that includes a chart, then open the presentation artifact.",
+   "Click the Edit chart data button under the slide.",
+   "Open the Chart type selector and choose Line or Pie (Bar, Line and Pie are the options).",
+   "Click Apply.",
+   "Compare the chart on the slide with the chosen type."
+  ],
+  "where": "Presentation artifact > Edit chart data > Chart type"
+ },
+ "S29.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/presentation/PresentationWorkspace.tsx",
+    "text": "Edit chart data"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/presentation/ChartDataEditor.tsx",
+    "text": "Apply"
+   }
+  ],
+  "needs": "a presentation with a chart",
+  "note": "The editor edits the chart's own rows and series values. No picker for a sheet cell range was found, so Expected's cell-range wording is only partly matched.",
+  "reachable": "yes",
+  "steps": [
+   "Open a presentation artifact that has a chart.",
+   "Click Edit chart data.",
+   "Look at the Chart data table: one row per data point, one column per series.",
+   "Change a value in a cell, add or remove a row, then click Apply.",
+   "Compare the plotted values with the table."
+  ],
+  "where": "Presentation artifact > Edit chart data"
+ },
+ "S29.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Code Execution"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Running Python\u2026"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Output"
+   }
+  ],
+  "needs": "a data file to upload, and an account that allows code execution (plan not verified)",
+  "note": "CodeExecutionBlock shows output and images. The Python source itself was not found in this component, so whether the code is visible was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a data file and ask chat to analyse it with Python and draw a chart.",
+   "Wait until a Code Execution block appears under the reply; it says Running Python\u2026 while it runs.",
+   "Click the Code Execution header to expand it.",
+   "Look for the Output label, any text output, and any chart image.",
+   "Compare with Expected: code, output and charts should all be visible."
+  ],
+  "where": "Chat > Code Execution block > click Code Execution to expand"
+ },
+ "S29.28": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+    "text": "Sort by"
+   }
+  ],
+  "needs": "none beyond a chat that returns a table",
+  "note": "Sorting is in the spreadsheet artifact. The text Sort by is the hover title of each heading button, not a visible label. Whether a query or analysis produces this table was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Ask chat for a result as a table or spreadsheet, then open the table artifact.",
+   "Click a column heading.",
+   "Look for the arrow and the change in row order.",
+   "Click the same heading again and check that the order reverses.",
+   "Compare with Expected: the result table is sortable."
+  ],
+  "where": "Chat > table artifact > click a column heading to sort"
+ },
+ "S29.34": {
+  "labels": [],
+  "needs": "a spreadsheet artifact",
+  "note": "The web download menu offers only Download as CSV for tables. The Export as Excel item in packages/ui/unified-chat/src/components/ArtifactRenderer.tsx shows only when a host passes onExportNative, and apps/web does not use ArtifactRenderer. An .xlsx file can be requested from chat through the file tool in apps/web/lib/services/managed-office-file-service.ts, but its download control was not found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S29.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as CSV"
+   }
+  ],
+  "needs": "a spreadsheet or table artifact",
+  "note": "The menu item appears only for artifact types spreadsheet, table and csv.",
+  "reachable": "yes",
+  "steps": [
+   "Open a spreadsheet or table artifact.",
+   "Click the download icon (its hidden name is Download artifact).",
+   "Click Download as CSV.",
+   "Open the saved .csv file.",
+   "Compare the rows and columns with the table on screen."
+  ],
+  "where": "Spreadsheet artifact > Download artifact > Download as CSV"
+ },
+ "S29.36": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx",
+    "text": "PNG"
+   }
+  ],
+  "needs": "a chart artifact",
+  "note": "The PNG button has the hidden name Download <chart name> as PNG. Nothing in the chart export code produces a file other than PNG.",
+  "reachable": "yes",
+  "steps": [
+   "Ask chat for a chart, then open the chart artifact.",
+   "Click the PNG button in the chart toolbar.",
+   "Open the saved .png file.",
+   "Compare the picture with the chart on screen."
+  ],
+  "where": "Chart artifact > PNG"
+ },
+ "S29.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as Word (.docx)"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   }
+  ],
+  "needs": "a document artifact",
+  "note": "The menu items appear only for document artifacts that are not already PDF or DOCX. Whether an analysis turns into a document artifact was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Ask chat to analyse the data and write a report, then open the document artifact.",
+   "Click the download icon (its hidden name is Download artifact).",
+   "Click Download as Word (.docx) or Download as PDF.",
+   "Open the saved file.",
+   "Compare its formatting with Expected: a formatted report."
+  ],
+  "where": "Document artifact > Download artifact > Download as Word (.docx)"
+ },
+ "S29.39": {
+  "labels": [],
+  "needs": "a slide deck from chat",
+  "note": "The presentation download menu offers Download as PDF only, in apps/web/features/chat/components/artifacts/ArtifactPreview.tsx. No pptx download label was found. A .pptx file can be requested from chat through apps/web/lib/services/managed-office-file-service.ts, but its download control was not found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

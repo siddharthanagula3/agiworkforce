@@ -1,0 +1,703 @@
+{
+ "S67.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change repository"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Cloud runs need the sandbox switch the plan describes (AGI_E2B_EXECUTION and E2B_API_KEY, apps/web/lib/e2b/gate.ts); this was not checked live.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar.",
+   "Click \"Change repository\" and choose a repository you can reach.",
+   "Type \"Explain the structure of this repository: main parts, entry points and how they fit\" and send it.",
+   "Check the reply names the main folders, the entry points and how they connect, as Expected says."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\""
+ },
+ "S67.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change repository"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Where is <a function or type name from the repo> implemented? Give the file and line.\" and send it.",
+   "Open the file and line the reply names and check the definition is really there."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\""
+ },
+ "S67.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change repository"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Where is <a symbol name> used across this repository? List every reference.\" and send it.",
+   "Check the reply lists references from more than one file, as Expected says."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\""
+ },
+ "S67.04": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change repository"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Trace how a request to <an endpoint or feature> flows from its entry point to its effect.\" and send it.",
+   "Check the reply walks through the files in order, from entry point to effect."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\""
+ },
+ "S67.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change repository"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type a free question about the repo, for example \"How do users sign in here?\", and send it.",
+   "Check the answer cites files from the repository."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\""
+ },
+ "S67.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type a small feature request and send it.",
+   "When the turn ends, open \"Changes\" and look for the new or edited files.",
+   "Check the files match the feature asked for, as Expected says."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\" > open \"Changes\""
+ },
+ "S67.07": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Describe a defect in one sentence, for example \"Clicking Save twice creates two records. Find the cause and fix it.\" and send it.",
+   "Open \"Changes\" and check the edited file contains the fix.",
+   "Compare the reply's stated cause with the diff."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\" > open \"Changes\""
+ },
+ "S67.08": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Refactor <a named module> to <goal> without changing behaviour.\" and send it.",
+   "Open \"Changes\" and read the edited files.",
+   "Ask the agent to run the tests, then check they still pass."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\" > open \"Changes\""
+ },
+ "S67.09": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Write tests for <an existing function> covering success and failure.\" and send it.",
+   "Open \"Changes\" and check a new test file or new test cases appear.",
+   "Run them as in S67.10 and check they execute."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\" > open \"Changes\""
+ },
+ "S67.10": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Terminal"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Run a command"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Run"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Run the project's test suite and report the result.\" and send it.",
+   "Or open \"Terminal\", type the test command in \"Run a command\" and click \"Run\".",
+   "Check the reply or the output reports the pass and fail counts from the suite."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\"; or open \"Terminal\" and type a command in \"Run a command\" then \"Run\""
+ },
+ "S67.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Terminal"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository with a failing test (Cloud) or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "After a test run fails, look at the failure output in \"Terminal\".",
+   "Type \"Explain why the last test run failed and fix the cause.\" in \"Describe a task or ask a question\" and send it.",
+   "Check the reply quotes the failing test and names the cause.",
+   "Re-run the tests to see whether the fix works."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\" (after a failing run)"
+ },
+ "S67.12": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change repository"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Run the project's type checker and list every error.\" and send it.",
+   "Check the reply reports the type checker output, errors included."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\""
+ },
+ "S67.13": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change repository"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Run the project's linter and report every finding.\" and send it.",
+   "Check the reply lists the linter findings with their files."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\""
+ },
+ "S67.14": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change repository"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Build the application with the project's build command and report the result.\" and send it.",
+   "Check the reply states whether the build passed, and shows the build output if it failed."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\""
+ },
+ "S67.20": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "/review"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Review the changes in this session for bugs"
+   }
+  ],
+  "needs": "a session with changes in a repository (Cloud), or a Local session with changes",
+  "note": "On a Local session the same review is the \"Review code\" button in the changes panel (apps/web/features/code/local-code.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and open a session that has changes.",
+   "Click the composer, type \"/\" and choose \"/review\" (\"Review the changes in this session for bugs\").",
+   "Send it and wait for the reply.",
+   "Check the reply lists issues with file and line references."
+  ],
+  "where": "Code (sidebar) > open a session with changes > type \"/review\" in \"Describe a task or ask a question\""
+ },
+ "S67.21": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
+    "text": "Review pull requests"
+   },
+   {
+    "file": "apps/web/lib/services/cloud-code-github-task.ts",
+    "text": "@agi-workforce"
+   }
+  ],
+  "needs": "a GitHub account with the app installed on a repository, and a pull request",
+  "note": "The review is posted on GitHub, not in the AGI screens; the GitHub card location was read from code, not seen live.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors, then the GitHub card.",
+   "Turn on \"Review pull requests\" for the account you want.",
+   "Open a pull request in that repository on GitHub, or comment \"@agi-workforce review\" on it.",
+   "Check a review comment appears on the pull request with findings."
+  ],
+  "where": "Settings > Connectors > GitHub > \"Review pull requests\" (turn on for the account); or comment \"@agi-workforce review\" on a pull request in a connected repository on GitHub"
+ },
+ "S67.22": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "/security-review"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Check the changes in this session for security problems"
+   }
+  ],
+  "needs": "a session with changes (Cloud), or a Local session with changes",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and open a session that has changes.",
+   "Click the composer, type \"/\" and choose \"/security-review\" (\"Check the changes in this session for security problems\").",
+   "Send it and wait for the reply.",
+   "Check the reply lists security problems with their file and line."
+  ],
+  "where": "Code (sidebar) > open a session with changes > type \"/security-review\" in \"Describe a task or ask a question\""
+ },
+ "S67.23": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "/review"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a session with changes (Cloud), or a Local session with changes",
+  "note": "Findings appear in the session transcript; the layout was read from code, not seen live.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"/review\" as in S67.20 and wait for the reply.",
+   "Read each finding in the reply, which names its file and line.",
+   "Ask \"Explain finding 2 in plain language.\" in \"Describe a task or ask a question\" and send it.",
+   "Check each finding is explained with its location."
+  ],
+  "where": "Code (sidebar) > open a session > type \"/review\" in \"Describe a task or ask a question\" > read the reply"
+ },
+ "S67.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Approval mode"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Plan"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Reads the code and proposes changes without making any"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud); the Plan row shows only on Cloud sessions",
+  "note": "The Plan row appears only when a Cloud turn mode is set (apps/web/features/code/components/CodeComposer.tsx:1458).",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and open or start a Cloud session.",
+   "Click the \"Approval mode\" button and choose \"Plan\" (\"Reads the code and proposes changes without making any\").",
+   "Type a change request and send it.",
+   "Check the reply proposes changes and the Changes panel does not change the files."
+  ],
+  "where": "Code (sidebar) > open a Cloud session > \"Approval mode\" > \"Plan\""
+ },
+ "S67.25": {
+  "labels": [],
+  "needs": "a session that has proposed patches",
+  "note": "No control that applies one chosen proposed patch was found. Searched apps/web/features/code for accept, reject, apply and keep. Only whole-file commit selection (\"Include in the commit:\"), per-section \"Revert\" and \"Apply to local\" for a worktree were found, and none is a patch picker.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.26": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Update the README for this feature from the code.\" and send it.",
+   "Open \"Changes\" and check the documentation file was edited.",
+   "Read the new text against the code it describes."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\" > open \"Changes\""
+ },
+ "S67.27": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Apply the schema migration for <change> across the repository.\" and send it.",
+   "Open \"Changes\" and check the migration and each caller were edited.",
+   "Run the build or tests as in S67.14 to check."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\" > open \"Changes\""
+ },
+ "S67.28": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Describe a task or ask a question"
+   }
+  ],
+  "needs": "a repository the GitHub app can reach (Cloud), or a Local folder on the desktop app",
+  "note": "Same sandbox switch as S67.01 applies to Cloud runs.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Code\" in the sidebar and choose a repository with \"Change repository\".",
+   "Type \"Upgrade <package name> to the latest version and adjust the code to it.\" and send it.",
+   "Open \"Changes\" and check the manifest and lock file changed.",
+   "Run the build and tests to check the upgrade."
+  ],
+  "where": "Code (sidebar) > Change repository > pick a repository > type in \"Describe a task or ask a question\" > open \"Changes\""
+ },
+ "S67.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Commit message"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Commit and push"
+   }
+  ],
+  "needs": "a Cloud session with a repository and changed files; a Local session has no commit button",
+  "note": "On a Local session the app only stages and reverts; the text \"Run git commit in your terminal to commit.\" is in apps/web/features/code/local-code.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Cloud session that has a repository and changed files.",
+   "Open \"Changes\".",
+   "Type a message in \"Commit message\" and tick the files under \"Include in the commit:\".",
+   "Click \"Commit and push\" and check \"Pushed to the repository.\" appears."
+  ],
+  "where": "Code (sidebar) > open a Cloud session with changes > \"Changes\" > type in \"Commit message\" > tick files under \"Include in the commit:\" > \"Commit and push\""
+ },
+ "S67.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change the branch"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Search or type a branch name"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Use branch"
+   }
+  ],
+  "needs": "a Cloud session with a repository",
+  "note": "The code checks out the typed branch; it was not confirmed that a missing name is created on the spot, and the agent can also be asked to create one in the composer.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Cloud session with a repository.",
+   "Click \"Change the branch\" and type a new branch name in \"Search or type a branch name\".",
+   "Click \"Use branch\".",
+   "Check the branch name shown in \"Changes\" is the new one."
+  ],
+  "where": "Code (sidebar) > open a Cloud session > \"Change the branch\" > type a new name in \"Search or type a branch name\" > \"Use branch\""
+ },
+ "S67.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Create pull request"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Code"
+   }
+  ],
+  "needs": "a GitHub account with the GitHub App installed, and a session whose branch has commits",
+  "note": "The pull request is opened as a draft (apps/web/lib/github-app.ts, buildPullRequestBody and draft option), which Expected does not mention.",
+  "reachable": "yes",
+  "steps": [
+   "Click Code in the left sidebar.",
+   "Open a session that has a repository and a branch with commits.",
+   "Click Changes at the top of the session.",
+   "Click Create pull request. If it is greyed out, read the small text under it for the reason.",
+   "Look for a link to the new pull request on GitHub and a Checks status next to it, and compare with Expected."
+  ],
+  "where": "Code > open a session with a repository and a working branch > Changes > Create pull request"
+ },
+ "S67.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Checks failing"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Code"
+   }
+  ],
+  "needs": "a GitHub account with the GitHub App installed, and a pull request with a failing check",
+  "note": "The investigation starts from a GitHub comment with @agi-workforce on the pull request (apps/web/lib/services/cloud-code-github-task.ts, the failing-checks prompt), not from a button in the app.",
+  "reachable": "yes",
+  "steps": [
+   "Click Code in the left sidebar.",
+   "Open a session that already has a pull request.",
+   "Click Changes.",
+   "Look at the checks row. A failing run shows the Checks failing chip and the failed check names beside it. Click the refresh icon to reload.",
+   "Compare with Expected: the app only shows the failing checks; the investigation itself needs the GitHub mention in S67.34."
+  ],
+  "where": "Code > open a session with a pull request > Changes > Checks failing"
+ },
+ "S67.34": {
+  "labels": [
+   {
+    "file": "apps/web/lib/services/cloud-code-github-task.ts",
+    "text": "@agi-workforce"
+   }
+  ],
+  "needs": "an outside account (GitHub) with the GitHub App installed on a repository",
+  "note": "No Slack mention or in-app control for coding tasks was found; Slack appears only as an inbound trigger source in apps/web/lib/triggers with no screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On GitHub, open an issue or pull request in a repository where the GitHub App is installed.",
+   "Write a comment that starts with @agi-workforce followed by a request, such as a bug to fix, and post it.",
+   "Wait for the reply comment from the app.",
+   "Check that the reply links to a Code session, and compare with Expected: the agent does the coding task from the mention."
+  ],
+  "where": "GitHub issue or pull request comment; the effect shows as a reply comment on GitHub"
+ },
+ "S67.36": {
+  "labels": [],
+  "needs": "none",
+  "note": "Found only fixed bounds (HARNESS_MAX_TURNS = 24 in apps/web/lib/e2b/harnesses/budget.ts, CLOUD_CODE_AGENT_MAX_STEPS in apps/web/lib/services/cloud-code-agent-loop.ts) and the one-shot goal commands /review and /security-review (apps/web/features/code/code-surface.ts); searched apps/web/features/code for maxTurns, max turns, deadline and time limit and found no field where a user sets a goal with its own turn or time bound.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

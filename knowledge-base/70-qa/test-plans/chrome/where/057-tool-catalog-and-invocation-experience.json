@@ -1,0 +1,490 @@
+{
+ "S57.01": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Worked for $ELAPSED$"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Sources for $QUERY$"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "$COUNT$ sources"
+   }
+  ],
+  "needs": "a signed-in account; whether a search runs depends on the model and account",
+  "note": "The search step wording is sent by the server; the extension has no fixed label for the search itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and send a question that needs current web information, such as today's news on a topic.",
+   "When the answer appears, click the \"Worked for \u2026\" line under it to open the steps.",
+   "Look for a \"Sources for \u2026\" step and check that it names the search query.",
+   "Click the \"\u2026 sources\" button and compare the list under \"Sources used for this answer\" with Expected."
+  ],
+  "where": "Chat > send a question that needs current web information > under the answer, click \"Worked for \u2026\" > look for \"Sources for \u2026\" and the \"\u2026 sources\" button"
+ },
+ "S57.02": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Worked for $ELAPSED$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The fetch step wording comes from the server, so the exact text is not fixed in the extension.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that gives a full web page address and asks the assistant to read it and summarise it.",
+   "When the answer appears, click the \"Worked for \u2026\" line under it.",
+   "Find the step about that page and click it to open the details.",
+   "Compare the step with Expected: the fetch should appear with the page it read."
+  ],
+  "where": "Chat > ask it to read a specific web page by its link > under the answer, click \"Worked for \u2026\" > look at the step for that page"
+ },
+ "S57.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension for source or document reader labels and found none. Only the server reads PDF and Office files by URL; no extension control was found. The \"Add a web page by link\" menu item is a different feature.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension for file search labels and found none. The file search runs on the server with no extension control found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "The sandbox file-read tool runs only when AGI_E2B_EXECUTION=1, which defaults to 0. No extension control for it was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.06": {
+  "labels": [],
+  "needs": "none",
+  "note": "The sandbox file-write tool runs only when AGI_E2B_EXECUTION=1, which defaults to 0. No extension control for it was found; file outputs show as artifacts (see S57.07).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.07": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Created $NAME$"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Open or download"
+   }
+  ],
+  "needs": "a signed-in account; file creation depends on the account and server",
+  "note": "Some artifacts can show \"Download unavailable in Chrome for this artifact.\" instead of the link.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request such as \"Make an Excel spreadsheet of these five items with prices.\"",
+   "When the answer appears, click the \"Worked for \u2026\" line under it.",
+   "Look for the step \"Created \u2026\" and click its \"Open or download \u2026\" link.",
+   "Check that the .xlsx file opens or downloads, and compare with Expected."
+  ],
+  "where": "Chat > ask for an Excel spreadsheet > under the answer, click \"Worked for \u2026\" > click \"Open or download \u2026\""
+ },
+ "S57.08": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Created $NAME$"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Open or download"
+   }
+  ],
+  "needs": "a signed-in account; file creation depends on the account and server",
+  "note": "Some artifacts can show \"Download unavailable in Chrome for this artifact.\" instead of the link.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request such as \"Write a one-page Word document about this plan.\"",
+   "When the answer appears, click the \"Worked for \u2026\" line under it.",
+   "Look for the step \"Created \u2026\" and click its \"Open or download \u2026\" link.",
+   "Check that the .docx file opens or downloads, and compare with Expected."
+  ],
+  "where": "Chat > ask for a Word document > under the answer, click \"Worked for \u2026\" > click \"Open or download \u2026\""
+ },
+ "S57.09": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Created $NAME$"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Open or download"
+   }
+  ],
+  "needs": "a signed-in account; file creation depends on the account and server",
+  "note": "Some artifacts can show \"Download unavailable in Chrome for this artifact.\" instead of the link.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request such as \"Make a five-slide presentation about this plan.\"",
+   "When the answer appears, click the \"Worked for \u2026\" line under it.",
+   "Look for the step \"Created \u2026\" and click its \"Open or download \u2026\" link.",
+   "Check that the .pptx file opens or downloads, and compare with Expected."
+  ],
+  "where": "Chat > ask for a slide presentation > under the answer, click \"Worked for \u2026\" > click \"Open or download \u2026\""
+ },
+ "S57.10": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Code execution"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Running code\u2026"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Output"
+   }
+  ],
+  "needs": "a model and account that can run code; check the model picker's \"Code execution\" filter",
+  "note": "Availability depends on the model route and the free-trial or managed path; not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message such as \"Run this Python code and show the output: print(2 + 2)\".",
+   "Wait for the \"Running code\u2026\" line to change.",
+   "Open the \"Code execution\" block under the answer.",
+   "Compare the \"Output\" text with the result the code should print, as Expected says."
+  ],
+  "where": "Chat > ask it to run a short piece of code and print a result > under the answer, look for the \"Code execution\" block and open it"
+ },
+ "S57.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "The sandbox edit tool runs only when AGI_E2B_EXECUTION=1, which defaults to 0. No extension control for targeted file edits was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.13": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "AGI wants to start a browser task"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Start task"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Opening $HOST$"
+   }
+  ],
+  "needs": "a signed-in account allowed to run browser tasks, and a website to open",
+  "note": "Browser tasks use Chrome's debugger and ask for site access first.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message such as \"Open example.com in the browser.\"",
+   "When the card \"AGI wants to start a browser task\" appears, click \"Start task\" (choose \"Allow for this task\" first if the site asks).",
+   "Watch the step \"Opening \u2026\" in the answer's steps.",
+   "Check that a real browser tab opens to the site, and compare with Expected."
+  ],
+  "where": "Chat > ask it to open a website in the browser > on the card \"AGI wants to start a browser task\", click \"Start task\""
+ },
+ "S57.14": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Clicking"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Typing"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Scrolling"
+   }
+  ],
+  "needs": "a signed-in account allowed to run browser tasks, and a website with a form or links",
+  "note": "Some actions can need your approval first, as the card explains.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task such as \"Search this site for pricing and tell me the price.\" and click \"Start task\" on the card.",
+   "Watch the steps shown in the answer, such as \"Clicking\", \"Typing\" and \"Scrolling\".",
+   "Check that the page itself is clicked, typed in and scrolled.",
+   "Compare with Expected: each action should appear as a step with its result."
+  ],
+  "where": "Chat > start a browser task (as in S57.13) > watch the action steps on the page"
+ },
+ "S57.21": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Memory"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "New memory"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Forget"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Saving and recalling during a turn is decided by the model; the Memory sheet is where the tester checks it.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"More\" in the side panel and click \"Memory\".",
+   "Type a fact into the box, click \"Add\", and check that it appears in the list.",
+   "In a chat, ask AGI to forget that fact and check that the notice asks you to choose \"Forget\" or \"Keep\".",
+   "Click \"Forget\" and reopen \"Memory\" to confirm the fact is gone."
+  ],
+  "where": "More > Memory"
+ },
+ "S57.22": {
+  "labels": [],
+  "needs": "production-state",
+  "note": "Calendar connectors have no MCP endpoint set, so the tool is off. No calendar control was found in apps/extension; the Connectors item only opens the web page.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.23": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a signed-in account with a messaging connector (for example Slack) connected",
+  "note": "If the menu shows a \"coming soon\" hint, connectors are not available for the account. The connector page is on the web app.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Add attachment\" (+) button and click \"Connectors\"; connect a messaging service on the web page that opens.",
+   "Back in the chat, ask AGI to read or send a message on that service.",
+   "When the approval card appears with \"Approve\" and \"Decline\", read it first.",
+   "Click \"Approve\" and compare: the message should be read or sent only after approval."
+  ],
+  "where": "Add attachment (+) > Connectors, then approve the request in the chat"
+ },
+ "S57.24": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Schedules"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Tasks"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Not verified whether the Schedules section sits under Shortcuts on the settings page or in a separate section.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, ask AGI to create a scheduled task, for example \"Every weekday at 9am, summarise my notes.\"",
+   "Click \"More\" and click \"Shortcuts\" to open the settings page.",
+   "Find the \"Schedules\" section and check the new schedule appears with a \"Next \u2026\" time.",
+   "Click \"More\" > \"Tasks\" to see runs, and compare with Expected."
+  ],
+  "where": "More > Shortcuts > Schedules"
+ },
+ "S57.26": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Send answers"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "I'll just type it"
+   }
+  ],
+  "needs": "none",
+  "note": "The model decides when to ask; the tester may need to ask for questions explicitly.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that needs choices first, such as \"Ask me questions before you plan a trip.\"",
+   "When the question card appears, pick an option for each question.",
+   "Click \"Send answers\" (or \"I'll just type it\" to answer in your own words).",
+   "Check that the answer continues using your choices, and compare with Expected."
+  ],
+  "where": "Chat > ask AGI to ask you questions before it answers > answer on the card and click \"Send answers\""
+ },
+ "S57.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "The server tells the model which other tools exist and loads them on demand; no extension screen shows this.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Not shown in the side panel; the effect is inside the model's turn"
+ },
+ "S57.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension for tool search and tool discovery labels. Only WebMCP page-tool discovery in src/content.ts was found, which is a different feature.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.30": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The capabilities panel is on the web app (apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx); its exact labels were not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Add attachment\" (+) button and click \"Connectors\"; a web tab opens.",
+   "Open a connector in the list on that page.",
+   "Look at its tool list: each tool should show a readable description and its parameters.",
+   "Compare with Expected."
+  ],
+  "where": "Add attachment (+) > Connectors, then open a connector on the AGI web page and read its tools"
+ },
+ "S57.31": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Request"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Worked for $ELAPSED$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The arguments are shown as JSON in the step details.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that makes AGI use a tool, such as a web search.",
+   "When the answer appears, click the \"Worked for \u2026\" line under it.",
+   "Click a tool step to open its details.",
+   "Look for the \"Request\" heading and check the arguments shown (for example the search query)."
+  ],
+  "where": "Chat > ask a question that uses a tool > under the answer, click \"Worked for \u2026\" > click a tool step"
+ },
+ "S57.32": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Working for $ELAPSED$"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Worked for $ELAPSED$"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Failed after $ELAPSED$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that makes AGI use a tool.",
+   "While it runs, look at the \"Working for \u2026\" line and the step's spinning icon with its elapsed time.",
+   "When it ends, check the line changes to \"Worked for \u2026\" and the step is marked done.",
+   "If a step fails, check the line says \"Failed after \u2026\" and compare with Expected."
+  ],
+  "where": "Chat > ask a question that uses a tool > watch the \"Working for \u2026\" line while it runs"
+ },
+ "S57.33": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Result"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Worked for $ELAPSED$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The one-line preview text is written by the server.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that makes AGI use a tool.",
+   "When the answer appears, click the \"Worked for \u2026\" line under it.",
+   "Read the short text on each finished tool step row.",
+   "Click that row and check the \"Result\" heading shows the result, as Expected says."
+  ],
+  "where": "Chat > ask a question that uses a tool > under the answer, click \"Worked for \u2026\" and read the step line"
+ },
+ "S57.34": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Request"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Result"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that makes AGI use a tool, then click the \"Worked for \u2026\" line under the answer.",
+   "Click a finished tool step row to expand it and check the \"Request\" and \"Result\" headings.",
+   "Click the same row again to collapse it.",
+   "Compare the expanded and collapsed states with Expected."
+  ],
+  "where": "Chat > ask a question that uses a tool > under the answer, click \"Worked for \u2026\" > click a tool step row"
+ },
+ "S57.36": {
+  "labels": [],
+  "needs": "a chat where the assistant ran a tool with a long result",
+  "note": "Code found: the result is kept in apps/web/app/api/llm/v1/chat/completions/lib/tool-result-store.ts and the reader is the model-facing tool read_tool_result (tool-result-store.ts:12). Its reference appears in the model's context notice, and the extension (apps/extension/src/features/side-panel/bubbles.ts:1065) has no control or wording for reading a stored result. Its only visible name is 'Read a stored tool result' in apps/web/lib/tool-copy.ts, which is web-only. The extension shows the output it receives, but the trimming happens server-side, so the user cannot see the stored reference. Searched apps/extension for read_tool_result, tool-result, reference, and the stored-result wording: none found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.37": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Request"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Result"
+   }
+  ],
+  "needs": "a chat where the assistant has run at least one tool",
+  "note": "The expandable step is built in apps/extension/src/features/side-panel/bubbles.ts (lines 1062-1065). I did not confirm that these steps are still shown after the chat is reopened or the side panel restarts, so 'later review' is unverified. The web-only 'Recent calls' log (apps/web/features/connectors/components/ConnectorCallLog.tsx) is a separate record in the web app, not the extension.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel, then start a chat that makes the assistant use a tool, for example ask it to open a web page.",
+   "Wait until the tool step has finished and shows as completed.",
+   "Tap the tool step's row to expand it.",
+   "Look under the 'Request' heading for the input the tool received and under the 'Result' heading for what it returned, and compare with Expected: which tool ran, its input, and its outcome."
+  ],
+  "where": "Side panel chat > the assistant's tool step (its summary row) > tap the row to expand it > read the 'Request' and 'Result' headings"
+ }
+}

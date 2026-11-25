@@ -1,0 +1,54 @@
+{
+ "S2.34": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "About"
+   },
+   {
+    "file": "apps/mobile/app/(app)/about.tsx",
+    "text": "Build Info"
+   }
+  ],
+  "needs": "none",
+  "note": "The About row is at apps/mobile/src/features/settings/index.tsx:902 (the Settings code line 623 moved); the About screen content is at apps/mobile/app/(app)/about.tsx:333 as stated. The side menu button's visible text was not found in the code (only its accessibility label 'Open menu' at apps/mobile/app/(app)/chat/[id].tsx:2323), so the tester must identify it by position.",
+  "reachable": "yes",
+  "steps": [
+   "From the first screen after signing in, open the side menu (the button at the top left, labelled 'Open menu' in the code; the drawer has a Settings row).",
+   "Tap Settings, then scroll down to the Support section.",
+   "Tap the About row (it shows the app version on the right).",
+   "Look for: the AGI Mobile name, the version, the line 'Private Local Mode and AGI Cloud, on your device.', a Build Info card (Build, Platform, Runtime), a Resources card (Privacy Policy, Terms of Service, Acceptable Use Policy, Open Source Licenses, EU AI Act Transparency) and 'AGI Automation LLC \u00b7 USA' at the bottom. Compare with Expected: product and company information is shown."
+  ],
+  "where": "Open the side menu, tap Settings, scroll to the Support section, tap About (shows v + version)"
+ },
+ "S2.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/about.tsx",
+    "text": "Email Support"
+   },
+   {
+    "file": "apps/mobile/app/(app)/about.tsx",
+    "text": "Contact Support"
+   },
+   {
+    "file": "apps/mobile/app/(app)/about.tsx",
+    "text": "Support"
+   }
+  ],
+  "needs": "Email Support needs a mail app on the device; Contact Support needs a signed-in AGI Cloud account in Cloud mode",
+  "note": "The Support card is at apps/mobile/app/(app)/about.tsx:266-329 and the Email Support row at line 324-328, which moved from the cited lines 283 and 135. The address comes from apps/mobile/src/features/support/contact.ts. The settings root also has a 'Help Center' row (apps/mobile/src/features/settings/index.tsx:887) and a 'Report App Issue' row, which were not part of this item.",
+  "reachable": "yes",
+  "steps": [
+   "From the side menu, tap Settings, scroll to Support, tap About.",
+   "Scroll to the Support card in the About screen.",
+   "Tap Email Support: the mail app should open addressed to contact@agiworkforce.com. If no mail app is set up, an alert should appear instead.",
+   "If signed in with an AGI Cloud account in Cloud mode, tap Contact Support and check that a support tickets screen opens. Also tap Help Center or Service Status and check that a web page opens. Compare with Expected: a visitor can reach the company."
+  ],
+  "where": "Settings > Support > About > Support section: Email Support (always), Contact Support (only when signed in and in Cloud mode), Help Center and Service Status (web pages)"
+ }
+}

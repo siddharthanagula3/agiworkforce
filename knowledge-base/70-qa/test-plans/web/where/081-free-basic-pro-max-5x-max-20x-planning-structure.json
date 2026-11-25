@@ -1,0 +1,581 @@
+{
+ "S81.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a paid account, to see a subscription's plan and price",
+  "note": "The version number is not visible in the code paths I read, so only the prices can be checked from the UI.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and open Settings > Billing (or the account menu's Upgrade > Compare plans)",
+   "Note the plan name and price shown for the current plan",
+   "Compare them with the prices in Compare plans",
+   "The catalog version number and the version recorded on a subscription are not shown in the UI; mark that part as not visible"
+  ],
+  "where": "Shows only as prices: compare Settings > Billing with the pricing table"
+ },
+ "S81.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Upgrade"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "Upgrade opens UpgradePlanDialog, which shows Compare plans. The server-side enforcement of the Free bundle is not visible in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu in the sidebar footer and click Upgrade",
+   "Find the Compare plans heading in the dialog",
+   "Read the Free column: capabilities and limits listed for Free",
+   "Compare the Free column with Expected: the plan's bundle is shown and matches the limits enforced"
+  ],
+  "where": "Account menu > Upgrade > Compare plans"
+ },
+ "S81.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Get Basic"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The Basic column is built from the billing catalog; I did not find the literal word Basic as a label in the pricing copy I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Find the Basic column in Compare plans and read its price and limits",
+   "Check the Get Basic button is shown with the Basic price",
+   "Compare with Expected: priced bundle shown on pricing and in-app"
+  ],
+  "where": "Account menu > Upgrade > Compare plans"
+ },
+ "S81.04": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The Pro bundle comes from the billing catalog; I did not find a literal Pro label in the copy I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Find the Pro column in Compare plans",
+   "Read its price, limits and feature rows",
+   "Compare with Expected: priced bundle shown in pricing and in-app"
+  ],
+  "where": "Account menu > Upgrade > Compare plans"
+ },
+ "S81.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "{{factor}}x more usage than {{baseline}}"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The Max 5x name is set in code by the plan tier, and I did not find its exact visible label in the copy I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Find the Max column in Compare plans",
+   "Read the price, usage multiplier line and limits",
+   "Compare with Expected: priced bundle shown in pricing and in-app"
+  ],
+  "where": "Account menu > Upgrade > Compare plans"
+ },
+ "S81.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Get {{plan}}"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The button text is a template filled with the plan name; the exact label is not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Find the Max 15x column in Compare plans",
+   "Read the price, limits and the Get Max 15x style button",
+   "Compare with Expected: priced bundle shown in pricing and in-app"
+  ],
+  "where": "Account menu > Upgrade > Compare plans"
+ },
+ "S81.07": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "{{factor}}x more usage than {{baseline}}"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The copy is a template filled at runtime, and I did not confirm the concrete allowance number is shown beside it.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Read the usage line under the Max plans: it reads like a multiple of a baseline plan",
+   "Find the baseline plan named in that line",
+   "Compare with Expected: pricing states what 1x means and its concrete allowance"
+  ],
+  "where": "Account menu > Upgrade > Compare plans"
+ },
+ "S81.08": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "A reset brings your 5-hour and weekly limits back to full."
+   }
+  ],
+  "needs": "a paid account, to see plan-scaled limits",
+  "note": "The multiplier copy in Compare plans names the baseline, but I did not confirm that the Usage screen names which allowance a multiplier scales.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage",
+   "Read the bars: the 5-hour and weekly limit bars and the reset line",
+   "Find the sentence about 5-hour and weekly limits",
+   "Compare with Expected: the copy names which allowance a multiplier scales"
+  ],
+  "where": "Settings > Usage"
+ },
+ "S81.09": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   },
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Cloud API access"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The gate is enforced on the server; the UI only shows the table.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Scroll the Compare plans table through its feature rows",
+   "Compare a Free column cell with a Pro column cell for a feature such as Cloud API access",
+   "Compare with Expected: plans differ in feature access and the rows are listed"
+  ],
+  "where": "Account menu > Upgrade > Compare plans"
+ },
+ "S81.11": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "of storage"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a Free account and a Pro or higher account to compare",
+  "note": "The Projects path to add a knowledge file is not confirmed from the files I read; the storage limit wording is in the pricing copy.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Read the storage wording in the plan columns (for example the phrase of storage)",
+   "Go to a project and try to add a knowledge file",
+   "Compare with Expected: each plan's storage limit is stated and enforced when files are added"
+  ],
+  "where": "Account menu > Upgrade > Compare plans (storage line), then Projects > a project's knowledge files"
+ },
+ "S81.12": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Up to {{tokens}} tokens"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The per-request enforcement is not visible in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Find the context row in Compare plans",
+   "Read the line Up to a number of tokens for each plan",
+   "Compare with Expected: each plan states its own context limit"
+  ],
+  "where": "Account menu > Upgrade > Compare plans (context row)"
+ },
+ "S81.13": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "12 chats at once"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The concurrency rows in the pricing page are built in code; I did not confirm a visible row for every plan.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Find the line about chats at once in the Max 15x copy",
+   "Compare the number of simultaneous chats per plan",
+   "Compare with Expected: each plan states its own simultaneous-response limit"
+  ],
+  "where": "Account menu > Upgrade > Compare plans (concurrency line)"
+ },
+ "S81.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Reasoning"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Free account and a paid account to compare",
+  "note": "The exact flyout and the manual model choice control were not confirmed from the lines I read; the server clamp is not visible.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat",
+   "In the composer footer, open the model or Reasoning control",
+   "Look at the effort marks offered for the chosen model",
+   "Click a gated effort mark and look for the Upgrade label, then compare with Expected"
+  ],
+  "where": "Composer footer > Reasoning (effort chips in the model menu)"
+ },
+ "S81.15": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Usage"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "On {{baseline}} and higher plans, the most capable models can use up to {{percent}}% of each week's credits."
+   }
+  ],
+  "needs": "a paid account, since the flagship bar shows only when the plan has one",
+  "note": "The bar label comes from a bucket helper and I did not confirm its visible words.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage",
+   "Find the separate weekly bar for the most capable models",
+   "Read its percent and reset time",
+   "Compare with Expected: a model-class cap is shown to the user"
+  ],
+  "where": "Settings > Usage (flagship weekly bar)"
+ },
+ "S81.16": {
+  "labels": [],
+  "needs": "a Team account, with a second member in the same workspace",
+  "note": "I did not find any visible word saying whether usage is pooled or dedicated. The owner decision is recorded as open in the plan file, so it may not be shown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S81.17": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Monthly"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Annual"
+   }
+  ],
+  "needs": "a Free account to see the toggle; checkout needs a plan that offers both cadences",
+  "note": "The toggle I found is for the Team cadence. I did not locate a separate individual monthly or annual toggle, and I did not confirm the checkout cadence.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Find the Monthly and Annual buttons for the Team billing cadence",
+   "Click Annual and read the saving and billed-yearly text",
+   "Click Monthly and compare the price change with Expected"
+  ],
+  "where": "Account menu > Upgrade > Compare plans, then the Monthly and Annual toggle (Team section)"
+ },
+ "S81.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Free trial"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Trial ends on"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   }
+  ],
+  "needs": "a trial account granted by the owner",
+  "note": "What happens when the trial ends (revert or bill) is handled on the server and not visible on this screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has a granted trial and open Settings > Billing",
+   "Read the plan status: Free trial",
+   "Read the date row labelled Trial ends on",
+   "Compare with Expected: the trial is shown as a trial and the end date is visible"
+  ],
+  "where": "Settings > Billing (plan row shows Free trial and Trial ends on)"
+ },
+ "S81.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Apply"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Free account and a valid promotion code",
+  "note": "The button text on the promotion field is not confirmed from the file that holds it; bonus credits and invite grants are not visible from this path.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Pick a plan so the checkout panel opens",
+   "Type a promotion code into the promotion field and click Apply",
+   "Read the applied discount line and compare with Expected"
+  ],
+  "where": "Account menu > Upgrade > pick a plan > promotion code field > Apply"
+ },
+ "S81.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/TopUpPanel.tsx",
+    "text": "Buy credits"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Usage"
+   }
+  ],
+  "needs": "a paid account, because the top-up flow may be limited by plan",
+  "note": "The Free plan top-up prompt shows Compare plans instead, so gating may apply; do not complete a real purchase without the owner.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage",
+   "Click Buy credits",
+   "Choose a credit pack or enter an amount, and read the quote before paying",
+   "Compare with Expected: purchased credits appear as a separate balance from the plan allowance"
+  ],
+  "where": "Settings > Usage > Buy credits"
+ },
+ "S81.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Keep going after a usage limit"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   }
+  ],
+  "needs": "a paid account with purchased credits",
+  "note": "The switch appears only under some conditions I did not confirm; accounting in separate plan windows is not visible.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Billing",
+   "Scroll to the section Keep going after a usage limit",
+   "Confirm the switch is off by default and read the sentence Spend your credits when a usage limit stops you",
+   "Turn the switch on and check the available credits line, then compare with Expected"
+  ],
+  "where": "Settings > Billing > Keep going after a usage limit (switch)"
+ },
+ "S81.22": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   }
+  ],
+  "needs": "an account on a retired plan or price, which a new QA account will not have",
+  "note": "The grandfather rule is applied on the server; there is no screen that names it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in with an account on a retired plan, if one exists",
+   "Open Settings > Billing and read the plan and price",
+   "Compare with the current price on Compare plans, and confirm the old price stays"
+  ],
+  "where": "Settings > Billing shows the plan and price a subscriber bought"
+ },
+ "S81.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/UpgradeConfirmDialog.tsx",
+    "text": "Renews"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Free account; do not finish the purchase without the owner",
+  "note": "The phrase immediately was not found in the confirm dialog text I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Upgrade and pick a paid plan",
+   "Click the Upgrade button to open the confirm dialog",
+   "Read the first charge or Renews line and the price before confirming",
+   "Stop before any final confirm button, and compare with Expected: the time it takes effect and the renewal date are shown"
+  ],
+  "where": "Account menu > Upgrade > pick a paid plan > Upgrade (confirm dialog)"
+ },
+ "S81.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/DowngradeReviewDialog.tsx",
+    "text": "Switch to a smaller plan"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The button that opens this dialog was not confirmed from BillingSection; I found only the dialog title and copy.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid account and open Settings > Billing",
+   "Start a plan change to a smaller plan",
+   "Read the dialog title Switch to a smaller plan or Switch to a plan name",
+   "Read the sentence that says the new plan starts at the end of the current billing period and nothing is charged today; compare with Expected"
+  ],
+  "where": "Settings > Billing > Switch to a smaller plan"
+ },
+ "S81.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Update payment method"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   }
+  ],
+  "needs": "a paid account with a failed renewal, which needs the owner's test setup",
+  "note": "The code states there is no grace period: paid features stop at the first failed renewal. Expected says a grace rule applies, so the wording differs.",
+  "reachable": "yes",
+  "steps": [
+   "Use a paid account whose renewal payment failed (needs the owner's test setup)",
+   "Open Settings > Billing and read the notice that says the last payment did not go through",
+   "Read the line about grace and the Update payment method button",
+   "Compare with Expected: the grace rule and the access that remains are stated"
+  ],
+  "where": "Settings > Billing (notice shown after a failed renewal)"
+ },
+ "S81.26": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Cloud API access"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "a Free account and a Pro account to compare",
+  "note": "The gate on API calls is enforced server-side and is not visible in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Upgrade",
+   "Find the row Cloud API access in Compare plans",
+   "Read which plans show it as included and which show it as not included",
+   "Compare with Expected: API use is a plan capability and API calls are gated by it"
+  ],
+  "where": "Account menu > Upgrade > Compare plans (Cloud API access row)"
+ },
+ "S81.27": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Billing"
+   }
+  ],
+  "needs": "a paid account, plus a second signed-in surface for the same account",
+  "note": "The entitlement is resolved server-side in apps/web/lib/services/entitlement-resolution.ts and the per-surface policy is in apps/web/lib/free-chat-surface-policy.ts; both are inner logic. The line numbers cited in the plan (BillingSection.tsx:671) are stale: the quoted text is not in the file now. The Billing label is shown on the Settings screen in both apps, so the check uses the Billing screen only as a visible comparison point; I did not confirm that the desktop and mobile apps expose the same Billing label.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in to the AGI web app with an account that has a paid plan.",
+   "Open Settings > Billing and note the plan name shown in the plan line.",
+   "Sign in to the same account on another surface (for example the desktop app or the mobile app).",
+   "Open the same Billing screen on that surface and compare the plan name and the features it allows with the web app. Expected: the same plan on both."
+  ],
+  "where": "No control of its own. Sign in to the same account on the web app and on another signed-in surface, then open Settings > Billing on each and compare the plan name."
+ },
+ "S81.28": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Upgrade"
+   },
+   {
+    "file": "apps/web/app/upgrade/UpgradeChooser.tsx",
+    "text": "What changes"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Upgrade plan"
+   }
+  ],
+  "needs": "a Free account (a paid account would see Adjust plan instead of Upgrade plan)",
+  "note": "Cited line numbers are stale: quoted text is not found at apps/web/app/pricing/page.tsx:1170, apps/web/features/billing/lib/plan-display.ts:36 or apps/web/app/api/media/image/generate/route.ts:223. The blocked-feature reason text (\"That capability is not included in your current plan.\") is defined in packages/contracts/types/src/billing-catalog.ts:920, but I did not confirm which screen shows it to a person. The public /pricing page exists (apps/web/app/pricing/page.tsx) and may also explain plans; I did not verify its visible labels. The Upgrade label is a translation key (common:navUpgrade) and the account-menu trigger that opens it was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and open the account menu.",
+   "Click Upgrade.",
+   "On the upgrade page, read the plan card marked Recommended and its \"What changes\" list. Each item should say what that plan adds over the current plan.",
+   "Click the Continue with button on a plan card and check that its page explains that plan's own features. Expected: each plan explains what it adds and what blocked features need it."
+  ],
+  "where": "Account menu > Upgrade (opens /upgrade, which shows each plan with a \"What changes\" list). Settings > Billing also has \"Compare plans\" and \"Upgrade plan\" (or \"Adjust plan\" for a paid plan) buttons that lead to the same plan pages."
+ }
+}

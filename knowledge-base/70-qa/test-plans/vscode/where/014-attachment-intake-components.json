@@ -1,0 +1,243 @@
+{
+ "S14.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach workspace files"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   }
+  ],
+  "needs": "a folder open in a trusted workspace, a text file in that folder",
+  "note": "The chooser is VS Code's file dialog opened in the workspace folder, and it accepts text files only (see S14.24), not any device file.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code, and trust the workspace.",
+   "Click the + button at the bottom of the message box.",
+   "Click Attach workspace files.",
+   "In the file dialog, select one text file and click Attach.",
+   "Look at the message box: the file name should appear as a chip, ready for the next message."
+  ],
+  "where": "+ button (Attach or use tools) > Attach workspace files"
+ },
+ "S14.02": {
+  "labels": [],
+  "needs": "a folder open in a trusted workspace, one or more files on the Mac",
+  "note": "The drop target is the composer card (the message box) only, not the whole chat panel.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Drag one or more text files from Finder onto the message box.",
+   "Watch the message box border highlight while the files are over it, then release.",
+   "Look at the message box: each dropped file should appear as a chip before sending."
+  ],
+  "where": "Drag files from Finder or the VS Code Explorer onto the message box (no visible label)"
+ },
+ "S14.03": {
+  "labels": [],
+  "needs": "an image on the clipboard",
+  "note": "Pasted files of any type go through the same intake path; images are sent as image input by the host.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Take a screenshot to the clipboard (Cmd+Ctrl+Shift+4), or copy an image.",
+   "Click in the message box and press Cmd+V.",
+   "Look at the message box: an image chip should appear and the text should not contain the image data."
+  ],
+  "where": "Click in the message box and press Cmd+V with an image on the clipboard (no visible label)"
+ },
+ "S14.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Web page"
+   },
+   {
+    "file": "apps/extension-vscode/src/data/composerContext.ts",
+    "text": "Attach a web page"
+   }
+  ],
+  "needs": "a Free or paid account is not needed beyond sign-in; an internet connection and a public web page link",
+  "note": "The page is fetched once when attached; the input box title is built as the product name followed by Attach a web page.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Click the + button at the bottom of the message box.",
+   "Click Web page.",
+   "In the input box, type a full https:// link to a public page and press Enter.",
+   "Look at the message box: a chip named after the site's host should appear, or an error that the page could not be read."
+  ],
+  "where": "+ button (Attach or use tools) > Web page, then type the link in the box titled Attach a web page"
+ },
+ "S14.11": {
+  "labels": [],
+  "needs": "a code repository",
+  "note": "No repository attachment was found: the + menu (Attach workspace files, Selection, Open editors, Problems, Git changes, Terminal output, Web page, Browse the web) has no repository item, and the file picker is files-only. Searched apps/extension-vscode for repositor, repo and folder near attach.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S14.12": {
+  "labels": [],
+  "needs": "a folder with files",
+  "note": "No folder attachment was found: the file picker sets canSelectFolders to false (ChatStateManager.ts), and the + menu has no folder item. Searched apps/extension-vscode for folder near attach.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S14.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Attach"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach workspace files"
+   }
+  ],
+  "needs": "a folder open in a trusted workspace, three or more text files in it",
+  "note": "Picks are capped per batch; a larger selection shows the warning Choose up to N files at a time. The extra files are skipped.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Click the + button, then click Attach workspace files.",
+   "In the file dialog, hold Cmd and click three or more text files, then click Attach.",
+   "Look at the message box: every selected file should appear as its own chip."
+  ],
+  "where": "+ button (Attach or use tools) > Attach workspace files, then select several files in the dialog and click Attach"
+ },
+ "S14.16": {
+  "labels": [],
+  "needs": "an image file or an image on the clipboard",
+  "note": "The thumbnail appears only for images added by paste or drag; a picker-added image is refused as binary, so it gets no thumbnail.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Copy an image or take a screenshot to the clipboard.",
+   "Click in the message box and press Cmd+V.",
+   "Look at the chip: it should show a small picture of the image instead of an icon."
+  ],
+  "where": "Paste (Cmd+V) or drag an image (PNG or JPG) into the message box (no visible label)"
+ },
+ "S14.17": {
+  "labels": [],
+  "needs": "a few sample files of different types",
+  "note": "The icon mapping is in webviewContent.ts; PDF and spreadsheets such as .xlsx use the same chip but the host refuses binary types, so the chip shows a failed note (see S14.24).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Drag a file with a code extension (for example .ts) onto the message box, then drag a .csv and a .pdf in turn.",
+   "Look at each chip's icon: code files show a code icon, csv a table icon, and other types a generic file icon."
+  ],
+  "where": "Drag a non-image file onto the message box (no visible label)"
+ },
+ "S14.18": {
+  "labels": [],
+  "needs": "a text file of known size",
+  "note": "Size appears only on chips added by drag or paste; chips added through Attach workspace files show the name without a size.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Drag a text file of known size onto the message box.",
+   "Look at the chip: the file name and a size such as KB or B should show.",
+   "Hover over the chip: the tooltip should show the name and size."
+  ],
+  "where": "Drag or paste a text file into the message box (no visible label)"
+ },
+ "S14.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Send"
+   }
+  ],
+  "needs": "a text file",
+  "note": "No explicit ready text exists in the code; readiness shows only as the chip losing its faded uploading style and Send becoming enabled.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code, with the message box empty.",
+   "Note that the Send button is disabled.",
+   "Drag one text file onto the message box.",
+   "Wait until the chip stops looking faded, then look at the Send button: it should be enabled."
+  ],
+  "where": "Attach any file, then look at the Send button"
+ },
+ "S14.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Truncated"
+   }
+  ],
+  "needs": "a text file longer than 40,000 characters",
+  "note": "Only the character cut-off is reported; a file that fails to decode shows the warning Some files could not be opened as text. rather than a partial-read notice.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code that has a text file longer than 40,000 characters.",
+   "Click the + button, then click Attach workspace files, choose that file and click Attach.",
+   "Look at the chip: a Truncated note should appear.",
+   "Hover over the chip: the tooltip should say only the first 40,000 characters are sent."
+  ],
+  "where": "+ button (Attach or use tools) > Attach workspace files, choose a text file longer than 40,000 characters"
+ },
+ "S14.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "unsupported binary attachment"
+   }
+  ],
+  "needs": "a binary file such as a .zip",
+  "note": "Through Attach workspace files the refusal instead appears as a VS Code warning Choose text files for workspace context., not as a chip.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Drag a .zip file onto the message box.",
+   "Look at the chip: the file name should be followed by the reason in brackets."
+  ],
+  "where": "Drag a binary file (for example a .zip) onto the message box"
+ },
+ "S14.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "\u00d7"
+   }
+  ],
+  "needs": "a text file",
+  "note": "The \u00d7 button's accessible name is Remove attachment followed by the file name.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Drag a text file onto the message box, or use + > Attach workspace files.",
+   "Click the \u00d7 on the chip; the chip should disappear and Send should disable if the box is empty.",
+   "Type a question that asks what the file contains and send it; the reply should not use the removed file's content."
+  ],
+  "where": "Attach a text file, then click the \u00d7 on its chip"
+ },
+ "S14.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "unsupported binary attachment"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "(too large)"
+   }
+  ],
+  "needs": "a binary file such as a .zip and a text file",
+  "note": "Per-file errors show on drag or paste chips; the file picker instead joins its skip reasons into one VS Code warning.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a folder in VS Code.",
+   "Drag a .zip file onto the message box.",
+   "Look at that file's chip: its name should be followed by the reason, not a generic message.",
+   "Drag a valid text file in the same drop and check that its chip shows no error."
+  ],
+  "where": "Drag a file the chat refuses (for example a .zip) onto the message box"
+ }
+}

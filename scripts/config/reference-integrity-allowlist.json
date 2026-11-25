@@ -50,6 +50,29 @@
       "reference": "apps/mobile/src/features/chat/utils/__tests__/attachmentValidation.storage.test.ts",
       "reason": "Phone package P17 of the large-file upload spec is deferred until the App Store review binary is built, so this file is planned and does not exist yet; the reference resolves when P17 is written.",
       "kinds": ["md-path"]
+    },
+    {
+      "pathPrefix": "knowledge-base/",
+      "reason": "Pages about Markdown rendering and link safety quote link syntax and unsafe link targets as text a tester types into the app. They are examples of input, not links to follow.",
+      "kinds": ["md-link"]
+    },
+    {
+      "pathPrefix": "knowledge-base/",
+      "reference": "@agiworkforce/providers-mistral",
+      "reason": "The knowledge base reports that a project document names this package and that no manifest declares it. The name is the finding.",
+      "kinds": ["package"]
+    },
+    {
+      "pathPrefix": "knowledge-base/",
+      "reference": "@agiworkforce/client",
+      "reason": "The shared-package area page quotes this short name from the capability ledger while listing the real packages beside it.",
+      "kinds": ["package"]
+    },
+    {
+      "pathPrefix": "knowledge-base/",
+      "reference": "test:unit",
+      "reason": "An example of a command a user's own repository instruction file may tell the coding agent to run. It is not a script of this repository.",
+      "kinds": ["script"]
     }
   ],
   "knownContradictions": [],

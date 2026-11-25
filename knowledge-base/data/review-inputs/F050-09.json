@@ -1,0 +1,346 @@
+{
+ "feature": {
+  "id": "F050-09",
+  "aliases": [
+   "Music templates",
+   "Remix starters",
+   "S50.24",
+   "S50.25"
+  ],
+  "summary": "Music templates and remix would offer ready starting points for a track and let a person create a variation of an existing track. Nothing exists on any app; it needs music generation and stored tracks first.",
+  "purpose": {
+   "what_it_does": "Would show template starting points (S50.24) and let the person vary an existing track (S50.25). Not built.",
+   "why_it_exists": "Brief Should lines S50.24 and S50.25. Templates lower the blank-page problem; remix reuses prior work.",
+   "who_uses_it": "Nobody yet. Intended: casual users who do not know how to describe music.",
+   "problems_solved": [
+    "Blank-page problem for non-musicians.",
+    "Iterating on a track without starting again."
+   ],
+   "use_cases": [
+    "Pick a 'lo-fi study' template and adjust tempo.",
+    "Remix yesterday's track to be slower.",
+    "Start from a birthday-song template."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: not present.",
+    "Desktop: not present.",
+    "Mobile: not present.",
+    "CLI: not present.",
+    "VS Code extension: not present.",
+    "Chrome extension: not present."
+   ],
+   "prerequisites": [
+    "Music generation (F050-07) and a stored track (F050-10); neither exists."
+   ],
+   "screens_and_controls": [
+    "None exist."
+   ],
+   "journey": [
+    "Not available. [proposed] 1. Open music. 2. Pick a template or an existing track. 3. Adjust. 4. Generate."
+   ],
+   "feedback_and_outputs": [
+    "None."
+   ],
+   "settings": [
+    "None found in the code."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Nothing. No template or remix code found."
+   ],
+   "incomplete": [
+    "A skill marketplace on desktop carries 'music' as a search keyword for creative skills (apps/desktop/src/stores/skillMarketplaceStore.ts:104). It is not a music template feature."
+   ],
+   "disconnected_or_disabled": [
+    "none found in the code"
+   ],
+   "not_available": [
+    "Templates and remix on all six apps and the API (brief: S50.24, S50.25 missing)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Music templates are offered as starting points.",
+     "source": "S50.24 brief"
+    },
+    {
+     "statement": "Remix starters let the user vary an existing track.",
+     "source": "S50.25 brief"
+    }
+   ],
+   "acceptance_criteria": [
+    "A template list is shown and picking one prefills the music request.",
+    "Remix starts from a chosen existing track and produces a new track, leaving the original unchanged.",
+    "The original track remains playable and downloadable after a remix.",
+    "Templates are read from shared data so every app shows the same list.",
+    "A remix of a deleted or missing track shows a clear message."
+   ],
+   "inferred": [
+    "Remix needs the source audio or its settings to be kept [inferred].",
+    "Templates are content, not code, so they should live in shared configuration [inferred from AGENTS.md section 4]."
+   ],
+   "proposed": [
+    "[proposed] Remix could reuse the prior prompt and settings rather than the audio, to keep cost down."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "config",
+    "name": "MODEL_TYPES",
+    "path": "packages/contracts/types/src/model-catalog.ts",
+    "role": "Reserved 'music' type (line 239)."
+   },
+   {
+    "kind": "config",
+    "name": "ArtifactType",
+    "path": "packages/contracts/types/src/conversation.ts",
+    "role": "Reserved 'music' artifact type (line 89); a remix source would be such an artifact."
+   },
+   {
+    "kind": "store",
+    "name": "skillMarketplaceStore",
+    "path": "apps/desktop/src/stores/skillMarketplaceStore.ts",
+    "role": "Keyword 'music' in creative category (line 104)."
+   },
+   {
+    "kind": "config",
+    "name": "audit missing list",
+    "path": "audit/missing/050-audio-overviews-speech-generation-and-music.md",
+    "role": "Open rows S50.24, S50.25."
+   },
+   {
+    "kind": "config",
+    "name": "area brief",
+    "path": "knowledge-base/data/area-briefs/050-audio-overviews-speech-generation-and-music.md",
+    "role": "Should lines."
+   },
+   {
+    "kind": "config",
+    "name": "desktop chat artifact types",
+    "path": "apps/desktop/src/types/chat.ts",
+    "role": "Copy of artifact type list (line 15)."
+   },
+   {
+    "kind": "service",
+    "name": "persistedCloudMessage",
+    "path": "apps/desktop/src/runtime/persistedCloudMessage.ts",
+    "role": "Persists artifact kinds including 'music' (line 136)."
+   },
+   {
+    "kind": "service",
+    "name": "TauriRuntime",
+    "path": "apps/desktop/src/runtime/TauriRuntime.ts",
+    "role": "Artifact kind list including 'music' (line 286)."
+   },
+   {
+    "kind": "config",
+    "name": "web connector catalog",
+    "path": "apps/web/lib/connectors/catalog.ts",
+    "role": "ElevenLabs api-key connector (line 206); not a template source."
+   },
+   {
+    "kind": "config",
+    "name": "desktop connector definitions",
+    "path": "apps/desktop/src/features/connectors/connectorDefinitions.ts",
+    "role": "ElevenLabs coming-soon entry mentioning music (lines 870-881)."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "No flow exists.",
+     "runs_on": "our servers",
+     "evidence": "No template or remix route found by search."
+    }
+   ],
+   "data": [
+    {
+     "what": "No templates or remix sources stored.",
+     "where_stored": "none found in the code",
+     "synced": "not applicable",
+     "retained_or_deleted": "not applicable"
+    }
+   ],
+   "models_and_providers": "No model or provider. Unknown."
+  },
+  "access_and_usage": {
+   "account": "none found in the code",
+   "permissions": "none found in the code",
+   "subscription": "none found in the code",
+   "limits_and_metering": "none found in the code",
+   "flags": "none found in the code",
+   "model_compatibility": "Unknown; needs a music model that accepts a source track.",
+   "provider_restrictions": "Unknown.",
+   "local_mode": "No local templates or remix exist in the code."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "All states",
+    "behaviour": "not handled in the code because the feature does not exist",
+    "evidence": "No code found."
+   },
+   {
+    "state": "Remix of a track the person no longer has",
+    "behaviour": "not handled in the code",
+    "evidence": "No remix code found."
+   }
+  ],
+  "verification": {
+   "existing_tests": [],
+   "scenarios": [
+    {
+     "name": "No template list",
+     "steps": [
+      "Open each app and look for music templates."
+     ],
+     "expected": "None today."
+    },
+    {
+     "name": "Template prefill",
+     "steps": [
+      "After build, pick a template."
+     ],
+     "expected": "The request is prefilled and editable."
+    },
+    {
+     "name": "Remix keeps original",
+     "steps": [
+      "After build, remix a track then play both."
+     ],
+     "expected": "Both play; original unchanged."
+    },
+    {
+     "name": "Remix missing source",
+     "steps": [
+      "Delete the source then try to remix."
+     ],
+     "expected": "A clear error, no charge."
+    }
+   ],
+   "diagnostics": [
+    "Check audit/missing/050-*.md for open rows.",
+    "Search for template data files after any build."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No templates",
+    "affects": "All six apps",
+    "evidence": "Brief S50.24 missing",
+    "work_needed": "Define template data in shared config and a picker per app."
+   },
+   {
+    "gap": "No remix",
+    "affects": "All six apps and API",
+    "evidence": "Brief S50.25 missing",
+    "work_needed": "Store tracks, add a vary action and a provider route that supports it."
+   }
+  ],
+  "depends_on": [
+   "F050-07",
+   "F050-10",
+   "SYS-files-artifacts-and-storage",
+   "SYS-model-catalog-and-routing",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-shared-ui-and-design",
+   "SYS-api-and-contracts",
+   "surface:web",
+   "surface:mobile"
+  ],
+  "relationships": [
+   {
+    "rel": "depends_on",
+    "to": "F050-07",
+    "evidence": "Templates start a music request; no music generation exists."
+   },
+   {
+    "rel": "depends_on",
+    "to": "F050-10",
+    "evidence": "Remix needs a stored, playable track."
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-files-artifacts-and-storage",
+    "evidence": "Tracks must be stored [inferred]."
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:packages/contracts/types/src/conversation.ts",
+    "evidence": "Reserves the 'music' artifact type (line 89)."
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-shared-ui-and-design",
+    "evidence": "A template picker is shared UI [inferred]."
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "A remix is a billable generation [inferred]."
+   },
+   {
+    "rel": "blocked_by",
+    "to": "F050-07",
+    "evidence": "No music generation code found."
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:packages/contracts/types/src/model-catalog.ts",
+    "evidence": "Reserves the 'music' model type (line 239)."
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-model-catalog-and-routing",
+    "evidence": "A music model with source-audio input must be chosen [inferred]."
+   }
+  ],
+  "unknowns": [
+   "Template content and count.",
+   "Whether remix uses audio or settings.",
+   "Which provider supports variation."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Working in the code: Nothing. No template or remix code found.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "A Remix action exists, for images only. Web: apps/web/features/library/lib/library-chat-handoff.ts:70-77 (stageLibraryItemForImageRemix throws 'Only an image can be remixed.'), wired at apps/web/features/library/components/LibraryView.tsx:230. Shared UI: packages/ui/unified-chat/src/components/library/LibraryView.tsx:1833 shows Remix only when isImageItem(item). Mobile: apps/mobile/src/features/library/index.tsx:545-560 and 629-630 (image assets, Cloud mode only).",
+   "evidence": "library-chat-handoff.ts:75-77; LibraryView.tsx:1833; mobile library/index.tsx:629",
+   "correction": "No music template or music remix code exists. A Remix action does exist for saved images on web and mobile (Cloud mode only on mobile), and it is the nearest pattern to reuse. Say 'no music remix', not 'no remix code'."
+  },
+  {
+   "section": "6",
+   "claim": "Execution table lists the flow 'Runs on: our servers' with 'No template or remix route found by search.'",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "No music route exists, so a 'runs on' value is invented. The existing image Remix runs on the device: it reads the library file and stages the composer (library-chat-handoff.ts:75-90), and no server call is made at that step.",
+   "evidence": "apps/web/features/library/lib/library-chat-handoff.ts:75-90",
+   "correction": "Runs on: nothing (no flow exists). Do not name a location."
+  },
+  {
+   "section": "7",
+   "claim": "Local mode: No local templates or remix exist in the code. Subscription, account and limits: none found.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The page omits that the image Remix is hidden outside Cloud mode on mobile: it shows only when appMode === 'cloud' && asset.kind === 'image'. The 'none found' rows are right for music.",
+   "evidence": "apps/mobile/src/features/library/index.tsx:629-630",
+   "correction": "Local mode: no music templates or remix. The existing image Remix on mobile is Cloud mode only, and a music remix would likely need the same gating."
+  },
+  {
+   "section": "7",
+   "claim": "Model compatibility: needs a music model that accepts a source track. Provider restrictions: Unknown.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The 'music' model type is reserved, and the desktop router accepts a 'music' category: llm_router.rs:633 and 930 map 'music' with image-gen, video-gen, tts and stt. This is a routing category only, and no music provider is wired. The page's Unknown is fair, but it should cite the reserved routing category.",
+   "evidence": "apps/desktop/src-tauri/src/core/llm/llm_router.rs:633,930; apps/desktop/src/constants/llm.ts:44",
+   "correction": "A 'music' model category is reserved in the model catalog and the desktop router, but no music model or provider is configured for it."
+  }
+ ],
+ "missing_facts": [
+  "Image Remix exists in the Library on web (apps/web/features/library/lib/library-chat-handoff.ts:75-90; LibraryView.tsx:230), the shared UI (packages/ui/unified-chat/src/components/library/LibraryView.tsx:294,1833, image items only) and mobile (apps/mobile/src/features/library/index.tsx:545,629-630, Cloud mode and image only). It is the existing pattern a music remix would extend, and the page says no remix code exists.",
+  "Music is already in the shared contracts: the model type at packages/contracts/types/src/model-catalog.ts:239 and the artifact type at conversation.ts:89. The desktop router already routes a 'music' category (apps/desktop/src-tauri/src/core/llm/llm_router.rs:930) and the web classifier detects music intent (apps/web/lib/services/conversation-classification-service.ts:153). The page does not mention the router or classifier hooks.",
+  "The ElevenLabs connector is coming soon on desktop (connectorDefinitions.ts:870-881, comingSoon: true) but live as an api-key connector on web (apps/web/lib/connectors/catalog.ts:206). The page does not say the two apps differ."
+ ]
+}

@@ -2,14 +2,14 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-11-17
+Last updated: 2026-11-24
 
 `AGENTS.md` is the operating contract and applies to humans too. This file
 covers the mechanics of getting a change in.
 
 ## Setup
 
-Node 24, the pnpm pinned by `packageManager` in `package.json`, Rust 1.94.0
+Node 24, the pnpm pinned by `packageManager` in `package.json`, Rust 1.99.1
 (pinned in `rust-toolchain.toml` and kept in lockstep with CI). Then:
 
 ```bash

@@ -1,0 +1,379 @@
+{
+ "S20.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi in Terminal and press Return.",
+   "Type \"Write two short paragraphs about the sea\" and press Return.",
+   "Wait for the reply to finish.",
+   "Check that the two paragraphs are separated by a blank line and look like separate blocks."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, send a request for two short paragraphs. The reply appears under the \u2726 marker."
+ },
+ "S20.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "The code prints the hash marks as part of the heading text (format!(\"    {prefix} {heading_text}\") in markdown_renderer.rs), so the # characters stay visible next to the styled heading. This differs from Expected, which says no literal hash marks.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with a heading # Title, then ## Section, then one sentence\" and press Return.",
+   "Check the heading lines in the reply."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a reply that uses headings."
+ },
+ "S20.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "The style depends on the terminal showing bold, italic and crossed-out text.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with one sentence that uses **bold**, *italic* and ~~strikethrough~~ text\" and press Return.",
+   "Check that the three words show bold, italic and crossed-out styles and that the asterisks and tildes are gone."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a sentence with bold, italic and strikethrough text."
+ },
+ "S20.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with a numbered list of three items, starting at 3\" and press Return.",
+   "Check that the numbers shown are 3, 4 and 5 and that the items are indented."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a numbered list that starts at 3."
+ },
+ "S20.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/markdown_renderer.rs",
+    "text": "\u2022"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with a bulleted list of three fruits\" and press Return.",
+   "Check that each item starts with a bullet marker and is indented."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a bulleted list."
+ },
+ "S20.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/markdown_renderer.rs",
+    "text": "\u2022"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with a bulleted list where one item has two indented sub-items\" and press Return.",
+   "Check that the sub-items sit under their parent with more indent than the parent."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a list with a nested sub-list."
+ },
+ "S20.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/markdown_renderer.rs",
+    "text": "\u2611"
+   },
+   {
+    "file": "apps/cli/src/tui/markdown_renderer.rs",
+    "text": "\u2610"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with a task list: one item checked as done, one not checked, and an indented subtask\" and press Return.",
+   "Check that the items show a checked box and an empty box, and that the subtask is indented."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a task list with checked and unchecked items."
+ },
+ "S20.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with one line quoted using a > marker\" and press Return.",
+   "Check that the quoted line is indented, has a vertical bar at its start, and looks different from normal text."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a quotation."
+ },
+ "S20.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/markdown_renderer.rs",
+    "text": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with one sentence, then a line with three dashes, then one more sentence\" and press Return.",
+   "Check that a line of horizontal dashes appears between the two sentences."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a reply with a horizontal rule between two parts."
+ },
+ "S20.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with one sentence that names the word `print` in inline code\" and press Return.",
+   "Check that the word appears in a different colour and without the backticks."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a sentence with inline code."
+ },
+ "S20.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/markdown_renderer.rs",
+    "text": "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with a short Python function in a fenced code block\" and press Return.",
+   "Check for the box top and bottom lines around the code, a gutter bar on each code line, and that indentation inside the code is kept."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a fenced code block."
+ },
+ "S20.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "The renderer shows the link address in brackets after the text. No clickable hyperlink code was found in the renderer, so whether the link can be followed depends on the terminal.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with the sentence Read the docs [here](https://example.com)\" and press Return.",
+   "Check that the words here appear underlined in the accent colour, followed by the address in brackets in a muted colour."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a link written as Markdown."
+ },
+ "S20.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "The Markdown parser is set up with tables, strikethrough and task lists only (markdown_renderer.rs), with no autolink option, so a bare address is drawn as plain text. Expected says it becomes clickable, which the code does not do.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with the sentence Visit https://example.com today\" and press Return.",
+   "Check whether the address is styled as a link or stays plain text, and whether clicking it does anything."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a reply that contains a bare web address."
+ },
+ "S20.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/markdown_renderer.rs",
+    "text": "\u252c"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with a markdown table of three fruits with name and colour columns\" and press Return.",
+   "Check for a box grid, a line under the header row, and cells aligned in columns."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a pipe table."
+ },
+ "S20.16": {
+  "labels": [],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "The code caps each column (MAX_COL 40, table budget 96 columns) and wraps long cells onto extra lines (render_table and wrap_cols in markdown_renderer.rs). No horizontal scrolling was found, which differs from Expected.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with a markdown table of six columns with long text in each cell\" and press Return.",
+   "Look at whether the table fits the chat width, wraps its cells onto more lines, or runs off the edge and needs sideways scrolling."
+  ],
+  "where": "Terminal: in a table answer. The table is drawn in the chat, and the columns are capped rather than scrolled."
+ },
+ "S20.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "The model has to output the backslashes for this check to test anything.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with the text: price is \\$5, file name is a\\_b, and the word \\*star\\* is not italic\" and press Return.",
+   "Check that the characters show without backslashes and the word is not styled."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a reply that contains escaped characters."
+ },
+ "S20.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Write a short article with a heading, a bulleted list and bold words\" and press Return.",
+   "Watch the reply while it streams in, without waiting for it to finish.",
+   "Check that headings, bullets and bold text already show as formatted text before the reply ends."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, send a request for a long formatted reply and watch while it types out."
+ },
+ "S20.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/markdown_renderer.rs",
+    "text": "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "Timing is up to the model. The code adds a closing fence to an open block while streaming (streaming_markdown_tail in tui_app.rs).",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Write a short Rust function in a fenced code block\" and press Return.",
+   "Watch the reply while it streams, before the closing fence arrives.",
+   "Check that the code appears inside the code block box and is not shown as prose."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a code block and watch while it streams in."
+ },
+ "S20.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "Raw HTML events are dropped by the renderer (the match falls through to an empty arm in markdown_renderer.rs), and text is cleaned by sanitize_terminal_text, so the raw tags may be missing from the chat rather than shown literally.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with the text <b>bold</b> and <script>alert(1)</script> exactly as written\" and press Return.",
+   "Check that no tags are drawn as live markup, no alert runs, and the reply shows no injected script effect."
+  ],
+  "where": "Terminal: in the chat, raw HTML in a reply is not drawn as HTML."
+ },
+ "S20.26": {
+  "labels": [],
+  "needs": "a device with a mouse or trackpad",
+  "note": "No mouse capture was found in the TUI code, so selection is left to the terminal app. Whether it crosses blocks depends on the terminal. Expected cannot be confirmed from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with one paragraph, a three-item bulleted list and a short fenced code block\" and press Return.",
+   "Drag the mouse or trackpad from the first paragraph down through the list and into the code block.",
+   "Check that the whole range highlights continuously."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, get a reply with a paragraph, a list and a code block, then drag across all of them."
+ },
+ "S20.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Exported the conversation to"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/export"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "Export writes Markdown source (conversations::export_as_markdown), not rendered formatting, and no print command was found. Expected asks for printed or exported output that keeps rendered formatting, which the code does not provide.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return, send one request, and wait for the reply.",
+   "Type /export and press Return to see the export in the chat, or type /export markdown ~/Desktop/test-export.md to write a file.",
+   "For the file, open it in a text editor.",
+   "Check that headings, lists, tables and code blocks appear with their Markdown symbols and the text Exported the conversation to appears in the chat."
+  ],
+  "where": "Terminal: type agi and press Return, then type /export in the chat. There is no print command in the CLI."
+ },
+ "S20.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/markdown_renderer.rs",
+    "text": "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+   }
+  ],
+  "needs": "a signed-in account or API key that lets the assistant reply",
+  "note": "Unknown code languages fall back to plain text (highlight_code in markdown_renderer.rs). No card or diagram renderer exists in apps/cli (searched markdown_renderer.rs and src/tui for card, diagram and mermaid), so only the code-language fallback applies.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Return.",
+   "Type \"Reply with a three-line example in a fenced block labelled zzunknown\" and press Return.",
+   "Check that the block still appears with its lines as plain code inside the code box, with none missing."
+  ],
+  "where": "Terminal: type agi and press Return. In the chat, ask for a fenced code block in a language the highlighter does not know."
+ }
+}

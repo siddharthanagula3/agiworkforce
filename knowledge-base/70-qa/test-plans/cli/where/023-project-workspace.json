@@ -1,0 +1,268 @@
+{
+ "S23.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Create a project in the account."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Created '{}' in your account ({})."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The printed line shows the real name and id; the label is the code's format string.",
+  "reachable": "yes",
+  "steps": [
+   "In a terminal, type: agi projects create \"QA Test Project\" (add --description \"Test text\" if you want a description).",
+   "Look for the line: Created 'QA Test Project' in your account (<id>).",
+   "Type: agi projects list.",
+   "Look for a row with the id and the name QA Test Project in the list."
+  ],
+  "where": "agi projects create <name>, then agi projects list"
+ },
+ "S23.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Optional description."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Rename a project or change its description or instructions."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type: agi projects create \"QA Described\" --description \"First description\".",
+   "Type: agi projects show \"QA Described\" and look for the line \"First description\" under the project name.",
+   "Type: agi projects edit \"QA Described\" --description \"Changed description\".",
+   "Type: agi projects show \"QA Described\" and check that the description now reads \"Changed description\"."
+  ],
+  "where": "agi projects create <name> --description <text>, then agi projects edit <project> --description <text>, then agi projects show <project>"
+ },
+ "S23.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show one project: description, instructions, knowledge files and conversation count."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Knowledge files"
+   }
+  ],
+  "needs": "a signed-in account and a project",
+  "note": "The screen has no separate chats or files heading; it shows a Conversations count, Instructions and Knowledge files lines.",
+  "reachable": "yes",
+  "steps": [
+   "Type: agi projects show \"QA Described\" (use a project id or name from agi projects list).",
+   "Look for the id and name on the first line, then the description line indented under it.",
+   "Look for \"Conversations:\" with a number, then \"Instructions:\" (or \"Instructions: none\").",
+   "Look for \"Knowledge files: none\" or a \"Knowledge files (<n>):\" list, and compare with Expected."
+  ],
+  "where": "agi projects show <project>"
+ },
+ "S23.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Link this directory to an account project by id or name."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show only the account conversations filed under this project (id or name)."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Resume one with `agi resume --cloud <id>`."
+   }
+  ],
+  "needs": "a signed-in account and a folder to link",
+  "note": "New chats are filed under a project only when started from a folder linked to it; no CLI flag starts a chat directly in a project.",
+  "reachable": "yes",
+  "steps": [
+   "Go to a folder in Terminal and type: agi projects link \"QA Described\".",
+   "Start agi in the same folder, send one message, and exit.",
+   "Type: agi history --project \"QA Described\" and look for the heading \"Conversations in QA Described:\" with your chat listed.",
+   "Type: agi resume --cloud <id> using the id shown in that list, and check the chat opens."
+  ],
+  "where": "agi projects link <project>, then agi in that folder, then agi history --project <project>, then agi resume --cloud <id>"
+ },
+ "S23.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Rename a project or change its description or instructions."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "their conversations are filed under it."
+   }
+  ],
+  "needs": "a signed-in account and a folder to link",
+  "note": "The code applies project instructions only to chats started from the folder linked to the project, not to every chat in the project as Expected says.",
+  "reachable": "yes",
+  "steps": [
+   "In a folder, type: agi projects link \"QA Described\".",
+   "Type: agi projects edit \"QA Described\" --instructions \"Always answer in one short sentence.\"",
+   "Type: agi projects show \"QA Described\" and check the Instructions text is shown.",
+   "Start agi in that same folder, ask a question, and compare the answer with the instruction."
+  ],
+  "where": "agi projects link <project>, then agi projects edit <project> --instructions <text>, then agi in that folder"
+ },
+ "S23.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Keep it with the account project this directory is linked to"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Remembered in your account, on every client."
+   }
+  ],
+  "needs": "a signed-in account and a folder linked to a project",
+  "note": "Project memory and account-wide memory are both added here, but no per-project switch to stop a project drawing on account-wide memory was found; account memory is turned on or off for the whole account with agi memory on or off.",
+  "reachable": "yes",
+  "steps": [
+   "In a folder linked to a project (agi projects link), type: agi memory add \"Prefer short answers\" --project.",
+   "Look for the line that says the memory was remembered in this project's memory.",
+   "Type: agi memory list and look for the new memory with the tag \", this project\".",
+   "Type: agi memory add \"Use metric units\" (no --project), then agi memory list, and check it has no project tag."
+  ],
+  "where": "agi memory add <text> --project (in a linked folder), then agi memory list"
+ },
+ "S23.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Only the artifacts of this project id."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print an artifact's content, or write it to a file."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the account's artifacts, newest first."
+   }
+  ],
+  "needs": "a signed-in account and an artifact made in a project chat",
+  "note": "The --project option takes a project id, not a name.",
+  "reachable": "yes",
+  "steps": [
+   "Type: agi projects list and copy the id of the project.",
+   "Type: agi artifacts list --project <project id> and look for artifacts from that project's chats.",
+   "Type: agi artifacts show <artifact id> and check the content prints.",
+   "Type: agi artifacts open <artifact id> and check it opens the published page or the chat it came from."
+  ],
+  "where": "agi artifacts list --project <project id>, then agi artifacts show <id> or agi artifacts open <id>"
+ },
+ "S23.13": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The cited apps/cli/src/lib.rs:2876 lists conversations filed under a project ('Conversations in'), not coding sessions; no separate CLI listing of project coding sessions was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S23.17": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The CLI project record has no default tools or Skills field (apps/cli/src/cloud/projects.rs); the cited skills.rs code covers user and folder disabled skills, not account project defaults. The web projects tests mention chatDefaults, but the web app is not this CLI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S23.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Link this directory to an account project by id or name."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Recent project folders"
+   }
+  ],
+  "needs": "a signed-in account and a folder on this Mac",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Go to a folder on this Mac in Terminal.",
+   "Type: agi projects link \"QA Described\" and check the line that says the folder is linked to the account project 'QA Described'.",
+   "Type: agi projects recent and look for this folder in the list of recent project folders.",
+   "Start agi in this folder and check that the project's instructions and knowledge are used (compare with Expected)."
+  ],
+  "where": "agi projects link <project>, then agi projects recent"
+ },
+ "S23.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Archive a project so it leaves the active list without being deleted."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Bring an archived project back instead."
+   }
+  ],
+  "needs": "a signed-in account and a project",
+  "note": "The CLI list keeps archived projects and marks them [archived] rather than removing them from the list.",
+  "reachable": "yes",
+  "steps": [
+   "Type: agi projects archive \"QA Described\" and look for the line Archived 'QA Described' (<id>) in your account.",
+   "Type: agi projects list and look for the tag [archived] on that project.",
+   "Type: agi projects show \"QA Described\" and check its description and conversation count are still there.",
+   "Type: agi projects archive \"QA Described\" --undo, look for the Unarchived line, and check the tag is gone from agi projects list."
+  ],
+  "where": "agi projects archive <project>, then agi projects archive <project> --undo"
+ },
+ "S23.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Delete a project from the account by id or name."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Delete project '"
+   }
+  ],
+  "needs": "a signed-in account and a throwaway project",
+  "note": "The prompt warns that knowledge files are deleted and conversations stay unfiled; no owner-only check was seen in the CLI code, so the server decides.",
+  "reachable": "yes",
+  "steps": [
+   "Type: agi projects delete \"QA Test Project\" (use a throwaway project).",
+   "At the prompt that starts Delete project 'QA Test Project'?, type n and check the line Left the project in place.",
+   "Type the command again and answer y.",
+   "Look for Deleted project 'QA Test Project' (<id>) from your account., then type agi projects list and check the project is gone."
+  ],
+  "where": "agi projects delete <project>"
+ },
+ "S23.36": {
+  "labels": [
+   {
+    "file": "apps/cli/src/background.rs",
+    "text": "/thread <instruction> starts a parallel thread with a copy of this conversation."
+   },
+   {
+    "file": "apps/cli/src/background.rs",
+    "text": "/gather brings the finished ones back here."
+   }
+  ],
+  "needs": "a signed-in account and a conversation that is being saved",
+  "note": "In a conversation that is not being saved, /thread says it has no threads; that is the 'where offered' limit.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi, sign in, and open a conversation that is being saved.",
+   "Type: /thread Summarise the last answer in three bullets. Check the message says a thread started on a copy of this conversation.",
+   "Type: /threads and check the thread shows a state such as running or finished.",
+   "When a thread has finished, type: /gather and check its result is brought back into this conversation."
+  ],
+  "where": "/thread <instruction>, then /threads, then /gather (typed in agi chat)"
+ }
+}

@@ -1,0 +1,716 @@
+{
+ "S67.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder",
+  "note": "Free-form request; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal in a project folder and run: agi",
+   "At the box \"Message AGI...  / for commands\" type: Explain the structure of this repository: main parts, entry points and how they fit together",
+   "Press Enter and wait for the answer",
+   "Check that the answer names the main folders, the entry points and how they connect, in plain words"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder",
+  "note": "The search tools are defined in apps/cli/src/features/exec/tools/mod.rs; the plan's line numbers moved.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder",
+   "At the box \"Message AGI...  / for commands\" type: Where is the main chat loop implemented? Give file and line.",
+   "Press Enter and wait",
+   "Check that the answer gives a file path and line number and the code there matches"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder",
+  "note": "Free-form request; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder",
+   "At the box \"Message AGI...  / for commands\" type: Where is the function named run_review used across the repository?",
+   "Press Enter and wait",
+   "Check that the answer lists each use with file and line, and that they match a search of the folder"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder",
+  "note": "The search tools are defined in apps/cli/src/features/exec/tools/mod.rs; the plan's line numbers moved.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder",
+   "At the box \"Message AGI...  / for commands\" type: Trace how the /review command flows from the input box to the review prompt, step by step, with file and line",
+   "Press Enter and wait",
+   "Check that the steps follow the code in order, from the command handler to the prompt it sends"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder",
+  "note": "Free-form request; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder",
+   "At the box \"Message AGI...  / for commands\" type a free question about the project, for example: How are project instructions files like AGENTS.md loaded?",
+   "Press Enter and wait",
+   "Check that the answer is based on the files and matches what the files say"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Files changed this turn"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a copy of a git project to change",
+  "note": "The approval title for file edits was not found in production code; only the choice labels are cited.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a copy of a git project (not your real work)",
+   "At the box \"Message AGI...  / for commands\" type a small feature request, for example: Add a function that returns the project name, in a new file",
+   "Press Enter; when an approval box appears, read it and press Enter on \"Yes\" or choose \"No\"",
+   "After the turn, look for the line \"Files changed this turn\" and check that the new or edited file exists in the folder"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Files changed this turn"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a copy of a git project that has a known defect",
+  "note": "The approval title for file edits was not found in production code; only the choice labels are cited.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a copy of a git project (not your real work)",
+   "At the box \"Message AGI...  / for commands\" type a defect to fix, for example: The total is off by one in the sum function; find the cause and fix it",
+   "Press Enter; on each approval box press \"Yes\" or choose \"No\"",
+   "Check the answer names the cause and the line changed, and the \"Files changed this turn\" line lists the file"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a copy of a git project to change",
+  "note": "Free-form request; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a copy of a git project (not your real work)",
+   "At the box \"Message AGI...  / for commands\" type: Move the helper functions in this file into a new module, without changing behaviour",
+   "Press Enter; on each approval box press \"Yes\" or choose \"No\"",
+   "Check the new module exists, the old file calls it, and the tests still pass when you run them yourself"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a copy of a git project with an existing test file",
+  "note": "Free-form request; no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a copy of a git project (not your real work)",
+   "At the box \"Message AGI...  / for commands\" type: Write new unit tests for the sum function in the existing test file",
+   "Press Enter; on each approval box press \"Yes\" or choose \"No\"",
+   "Check that the new test cases appear in the file and that they match the function's behaviour"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder with a test suite",
+  "note": "The agent chooses the test command; there is no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder that has a test suite",
+   "At the box \"Message AGI...  / for commands\" type: Run the project's test suite and tell me the result",
+   "Press Enter; if an approval box appears for the command, press \"Yes\"",
+   "Check that the answer reports the command it ran and the pass or fail counts, and that they match the terminal output"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a copy of a project with a failing test",
+  "note": "The agent chooses the test command; there is no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder whose tests fail (a copy made for testing)",
+   "At the box \"Message AGI...  / for commands\" type: Run the tests, then explain why the first failing test fails",
+   "Press Enter; press \"Yes\" on any command approval box",
+   "Check that the answer quotes the failure message and names the file and line it points to"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder with a type checker",
+  "note": "The agent chooses the checker command; there is no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder that uses a type checker",
+   "At the box \"Message AGI...  / for commands\" type: Run the type checker and report the errors",
+   "Press Enter; press \"Yes\" on any command approval box",
+   "Check that the answer lists the errors with file and line, and that they match the checker output in the terminal"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder with a linter",
+  "note": "The agent chooses the lint command; there is no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder that has a linter",
+   "At the box \"Message AGI...  / for commands\" type: Run the linter and report the findings",
+   "Press Enter; press \"Yes\" on any command approval box",
+   "Check that the answer lists the findings and that they match the linter output in the terminal"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder with a build step",
+  "note": "The agent chooses the build command; there is no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder that has a build step",
+   "At the box \"Message AGI...  / for commands\" type: Build the application and report whether it succeeded",
+   "Press Enter; press \"Yes\" on any command approval box",
+   "Check that the answer says success or failure and that it matches the build output in the terminal"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "List subagent tasks and background commands"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder with a development server",
+  "note": "Background start is set by the agent's command option run_in_background (apps/cli/src/features/exec/tools/bash/mod.rs).",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a project folder that has a development server",
+   "At the box \"Message AGI...  / for commands\" type: Start the development server and keep it running while you work on something else",
+   "Press Enter and wait for the answer; then type: /tasks and press Enter",
+   "Check that the server is listed as a background command with an id, and that the app it serves responds in a browser"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\"; then /tasks"
+ },
+ "S67.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Chrome integration"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "browser paired \u00b7 /chrome"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "A paired AGI Desktop with the AGI Chrome extension",
+  "note": "Browser tools include browser_navigate, browser_read_page and browser_screenshot (apps/cli/src/platform/runtime/tool_catalog.rs).",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Desktop, install the AGI Chrome extension and pair it, as the Chrome status message asks",
+   "Run: agi, then type: /chrome and press Enter",
+   "Read the \"Chrome integration\" block; it should say the browser is paired",
+   "Type at the box \"Message AGI...  / for commands\": Open the page in the paired browser, read its main heading, and take a screenshot",
+   "Check that the answer shows the heading and a screenshot is taken, and that the page matches the browser"
+  ],
+  "where": "agi, then /chrome"
+ },
+ "S67.20": {
+  "labels": [
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Review current code changes"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a git project with uncommitted changes",
+  "note": "/review accepts an optional effort word and scope, for example /review low src/auth.",
+  "reachable": "yes",
+  "steps": [
+   "In a git project, change one file without committing",
+   "Run: agi, then type: /review and press Enter",
+   "Wait for the answer; read the overall verdict and each issue",
+   "Check that each issue names a file and line, and that the lines match the uncommitted change"
+  ],
+  "where": "agi, then /review"
+ },
+ "S67.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Review a hosted pull request by number, URL or branch, read with the GitHub CLI."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Post the review to the pull request as a comment."
+   }
+  ],
+  "needs": "GitHub CLI signed in with access to a test pull request; --post writes a real comment, so use a test pull request only",
+  "note": "The in-chat /review command does not take a pull request; this is the terminal command.",
+  "reachable": "yes",
+  "steps": [
+   "In a project folder with the GitHub CLI signed in, run: agi review --pr <number of a test pull request>",
+   "Wait for the review; read the findings it prints",
+   "Check that the findings match the pull request's diff on GitHub",
+   "Only for a test pull request, add --post to post the review as a comment and check the comment appears on the pull request"
+  ],
+  "where": "agi review --pr <number> (in a terminal)"
+ },
+ "S67.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Security review scope"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Changed files only"
+   },
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Run a security-focused code review"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project folder",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi, then type: /security-review and press Enter",
+   "In the \"Security review scope\" box choose \"Changed files only\" or \"Whole repository\" and press Enter",
+   "Wait for the answer",
+   "Check that it lists security findings with file and line, and that they match the code"
+  ],
+  "where": "agi, then /security-review"
+ },
+ "S67.23": {
+  "labels": [
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Run a security-focused code review"
+   },
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Review current code changes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a project with a known issue",
+  "note": "The findings are written in the chat, so the explanation depends on the model's answer.",
+  "reachable": "yes",
+  "steps": [
+   "Run /review or /security-review in a project with a known issue",
+   "Wait for the answer",
+   "Read each finding; it should give the file, the line and a plain-language explanation",
+   "Check that each explanation matches the code at that location"
+  ],
+  "where": "agi, then /security-review (or /review)"
+ },
+ "S67.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/diff_review.rs",
+    "text": "Diff Review"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a throwaway copy of a git project (the discard key is destructive)",
+  "note": "/diff-review is not listed in the / palette or help, but the typed command is handled (apps/cli/src/tui/tui_app.rs). Its own text names it a per-file review, not a patch proposal.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a throwaway copy of a git project",
+   "At the box \"Message AGI...  / for commands\" ask for a change to a file",
+   "When an approval box appears, read the file name and the lines shown before choosing \"Yes\" or \"No\"",
+   "After the change, type: /diff-review and press Enter",
+   "In the \"Diff Review\" box, read the file and its diff before pressing y or n"
+  ],
+  "where": "agi, then /diff-review (review the agent's changed files before they are kept)"
+ },
+ "S67.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/diff_review.rs",
+    "text": "Diff Review"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/diff_review.rs",
+    "text": "y approve   n reject   s skip   \u2191\u2193 navigate   Enter done"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a throwaway copy of a git project (d twice discards an unstaged hunk and cannot be undone)",
+  "note": "Differs from Expected: y approves a whole file and Enter stages approved files with git add, so the user picks files or hunks of the working tree, not the agent's proposed patches. /diff-review is not in the / palette.",
+  "reachable": "yes",
+  "steps": [
+   "In a throwaway copy of a git project, make changes to two files",
+   "Run: agi, then type: /diff-review and press Enter",
+   "In the \"Diff Review\" box press y on the file to keep, n to reject, s to skip; move with the arrow keys",
+   "Press Enter to finish, then run git status in the folder",
+   "Check that only the files you pressed y on are staged"
+  ],
+  "where": "agi, then /diff-review"
+ },
+ "S67.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Create AGENTS.md for this project"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a copy of a project folder to change",
+  "note": "/init only creates AGENTS.md; other documentation is a typed request.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a copy of a project folder",
+   "At the box \"Message AGI...  / for commands\" type: Update the README with a short section that explains the main commands, from the code",
+   "Press Enter; press \"Yes\" on any file approval box",
+   "Check that the README changed and that each new statement matches the code"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\"; /init makes AGENTS.md"
+ },
+ "S67.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a copy of a project with migrations (do not run against a real database)",
+  "note": "The agent chooses the migration commands; there is no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a copy of a project that has a schema or migration step",
+   "At the box \"Message AGI...  / for commands\" type: Add a migration that adds a new column, following the existing migration pattern",
+   "Press Enter; press \"Yes\" on each approval box",
+   "Check that a new migration file exists and the existing migrations were not changed"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Yes"
+   }
+  ],
+  "needs": "An AGI CLI signed in; a copy of a project with a dependency to upgrade",
+  "note": "The agent chooses the package commands; there is no dedicated control.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi in a copy of a project with an out-of-date dependency",
+   "At the box \"Message AGI...  / for commands\" type: Upgrade the dependency named X to its latest version and adjust the code that breaks",
+   "Press Enter; press \"Yes\" on each approval box",
+   "Check that the manifest version changed, the lock file was updated by the package manager, and the code still builds when you run it yourself"
+  ],
+  "where": "agi, then type in the box \"Message AGI...  / for commands\""
+ },
+ "S67.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/approval_details.rs",
+    "text": "Commit:"
+   },
+   {
+    "file": "apps/cli/src/platform/runtime/git_tools.rs",
+    "text": "git_commit"
+   }
+  ],
+  "needs": "a git repository with a staged change, and a signed-in account that can run the agent",
+  "note": "The commit is made only by the agent's git_commit tool; no slash command or CLI subcommand creates a commit directly. Hook prompts are shown as the code describes but were not exercised.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a git repository and stage a small change, for example with git add outside agi.",
+   "Type a request such as: commit the staged changes with the message \"docs: fix typo\".",
+   "When the approval line appears, read it. It should begin with \"Commit:\" and show the message subject.",
+   "Approve it, then run git log -1 in another terminal and compare the commit message with what was approved and with Expected."
+  ],
+  "where": "agi, then ask the agent in the chat to commit the staged changes (there is no /commit command; the agent runs its git_commit tool)"
+ },
+ "S67.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/platform/runtime/git.rs",
+    "text": "branch create"
+   },
+   {
+    "file": "apps/cli/src/platform/runtime/git_tools.rs",
+    "text": "git_branch_create"
+   }
+  ],
+  "needs": "a git repository, and a signed-in account that can run the agent",
+  "note": "/fork and /branch in the chat are conversation branches, not git branches. The agent's branch tool creates the branch without switching to it, so a switch needs a separate request.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a git repository.",
+   "Type a request such as: create a branch named feature/test-branch from HEAD.",
+   "When the approval line appears, check it mentions \"branch create\".",
+   "Approve it, then run git branch in another terminal and compare with Expected. Note that git_branch_create does not switch to the new branch."
+  ],
+  "where": "agi, then ask the agent in the chat to create a branch (there is no branch slash command; the agent runs its git_branch_create tool)"
+ },
+ "S67.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/autofix-pr"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/pr-comments"
+   }
+  ],
+  "needs": "GitHub CLI signed in, a pull request with review comments, and its branch checked out",
+  "note": "The fix-mode refusal text is in apps/cli/src/pr_feedback.rs; the fix itself was not verified by reading the code.",
+  "reachable": "yes",
+  "steps": [
+   "On a checkout of a pull request branch with review comments, start agi in that folder.",
+   "Type /pr-comments 123 (use your pull request number) and read the feedback the agent shows.",
+   "Type /autofix-pr 123 and add an instruction such as: address the review comments.",
+   "Check that the agent edits files, and compare the result with Expected. If the checkout is on another branch, the message asks you to run gh pr checkout first."
+  ],
+  "where": "agi, then type /pr-comments <number> to read review comments, or /autofix-pr <number> to have the agent change the code"
+ },
+ "S67.36": {
+  "labels": [
+   {
+    "file": "apps/cli/src/subagent.rs",
+    "text": "Usage: /workflow <goal>."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Maximum agentic tool-use iterations"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Plan a goal into steps and run them as subagents"
+   }
+  ],
+  "needs": "a signed-in account and a project folder",
+  "note": "No single goal-and-bound command was found; the bound is set by --max-turns, --effort, or /budget and the loop by /workflow. The stop-at-bound message was not located in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi with agi --max-turns 5 in a project folder.",
+   "Type /workflow followed by a goal, such as: add a short README section about setup.",
+   "Watch the stages and subagent steps the agent shows.",
+   "Check that the run ends when the goal is done or stops at the turn limit, and compare with Expected. For a spend bound, type /budget 50 first and see the confirmation text."
+  ],
+  "where": "agi --max-turns 5, then type /workflow <goal> in the chat; the turn bound also comes from agi --effort low|medium|high|max and /budget <credits>"
+ },
+ "S67.37": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Usage: /memory add [global|project|local] <text>"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Appended to {} memory"
+   }
+  ],
+  "needs": "a project folder (a project root is required for the project tier)",
+  "note": "Only the save path was read; the reuse in later sessions depends on the memory loading code, which was not traced end to end.",
+  "reachable": "yes",
+  "steps": [
+   "In a project folder, type /memory add project Use tabs for indentation.",
+   "Read the confirmation text, which starts with \"Appended to\" and shows the file path.",
+   "Quit agi, start it again in the same folder, and ask: what indentation style should you use?",
+   "Check that the answer uses the saved fact, and compare with Expected."
+  ],
+  "where": "Type /memory add project <text> in the chat, then start agi again in the same folder and ask about it"
+ },
+ "S67.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/compaction.rs",
+    "text": "AGENTS.md"
+   },
+   {
+    "file": "apps/cli/src/compaction.rs",
+    "text": "CLAUDE.md"
+   }
+  ],
+  "needs": "a test folder you create yourself, outside the project folder, and a signed-in account",
+  "note": "Instruction files are loaded by compaction::load_instructions and the app_server surfaces code; no screen lists the loaded files was found.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In an empty test folder outside the project, create a file named AGENTS.md that says: always end every reply with the word DONE.",
+   "Start agi in that folder and ask a simple question.",
+   "Check that the reply ends with DONE, and compare with Expected."
+  ],
+  "where": "no control; the effect shows in the agent's replies in a folder that contains AGENTS.md or CLAUDE.md"
+ },
+ "S67.39": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/skills-toggle"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Enable or disable individual skills"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/plugin"
+   }
+  ],
+  "needs": "a test folder you create, and a signed-in account",
+  "note": "The skills list hides disabled skills by the code in apps/cli/src/skills.rs; the on-screen result was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Create a skill file ending in .md in .agiworkforce/skills/ in a test folder, then start agi there.",
+   "Type /skills and find the skill name in the list headed Skills (N).",
+   "Type /skills-toggle, move to the skill with the arrow keys, press Space to turn it off, then Enter to save.",
+   "Type /skills again and check that it is gone from the list, then type /plugin and compare with Expected."
+  ],
+  "where": "agi, then type /skills to list skills, /skills-toggle to turn them on or off, and /plugin to see plugins"
+ }
+}

@@ -1,0 +1,219 @@
+{
+ "S49.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceInputButton.tsx",
+    "text": "Start voice input"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/DictationStrip.tsx",
+    "text": "Stop recording and edit the transcript"
+   }
+  ],
+  "needs": "a microphone; a browser that supports voice input (Chrome or Edge per the button hint)",
+  "note": "The keyboard shortcut Toggle dictation (Ctrl+Cmd+Shift+S) also starts it, per packages/ui/unified-chat/src/lib/shortcutRegistry.ts; the button label is a translation key with this text as default, and I did not check the translation files.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat so the message box is visible.",
+   "Click the microphone button labelled Start voice input.",
+   "Speak one sentence; the strip shows a moving waveform and the Voice dictation group is visible.",
+   "Click the square button labelled Stop recording and edit the transcript.",
+   "Look: the spoken words appear as text in the message box, ready to edit."
+  ],
+  "where": "Chat message box (composer) > Start voice input (microphone button beside the send button)"
+ },
+ "S49.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/DictationStrip.tsx",
+    "text": "Stop recording and edit the transcript"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceInputButton.tsx",
+    "text": "Start voice input"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "Pressing Enter while recording sends the dictated text immediately (DictationStrip.tsx handleKeyDown), so the edit-first path is the Stop button.",
+  "reachable": "yes",
+  "steps": [
+   "Click Start voice input and speak a sentence.",
+   "Click Stop recording and edit the transcript (not Enter, which sends at once).",
+   "Wait for the transcript to appear in the message box.",
+   "Click into the text, change a word, and check the edit is kept.",
+   "Look: the message is not sent until you press the send button; the edited text is what gets sent."
+  ],
+  "where": "Chat message box (composer) > Start voice input > Stop recording and edit the transcript"
+ },
+ "S49.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/VoiceSection.tsx",
+    "text": "Dictation language"
+   }
+  ],
+  "needs": "a microphone; a second language you can speak",
+  "note": "The Settings navigation label for the Voice section was not confirmed; the dropdown options come from SUPPORTED_LANGUAGES as native names.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to the Voice section.",
+   "Turn on the Dictation switch, which enables the language dropdown.",
+   "Open the Dictation language dropdown and choose a different language.",
+   "Go back to the chat, click Start voice input, speak in that language, then stop.",
+   "Look: the transcript is written in the chosen language, as Expected."
+  ],
+  "where": "Settings > Voice > Dictation language (dropdown; the Settings path to the Voice section was not traced)"
+ },
+ "S49.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/DictationStrip.tsx",
+    "text": "Transcribing"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Dictate a sentence with Start voice input.",
+   "Click Stop recording and edit the transcript.",
+   "Watch the strip show Transcribing with a spinner.",
+   "Wait until the spinner stops.",
+   "Look: the complete final transcript is in the message box, after any text that was already there."
+  ],
+  "where": "Chat message box (composer) > Start voice input > Stop recording and edit the transcript"
+ },
+ "S49.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/DictationStrip.tsx",
+    "text": "Try again"
+   }
+  ],
+  "needs": "a microphone; a way to switch off the internet (for example Wi-Fi off)",
+  "note": "When a usage limit is reached the button reads Upgrade instead of Try again; the error close button is labelled Dismiss voice input error.",
+  "reachable": "yes",
+  "steps": [
+   "Click Start voice input and speak a sentence.",
+   "Turn off the internet connection before stopping, so transcription fails.",
+   "Click Stop recording and edit the transcript; wait for the red error text in the strip.",
+   "Turn the connection back on and click Try again.",
+   "Look: the transcript appears without recording again."
+  ],
+  "where": "Chat message box (composer) > Start voice input > Stop recording and edit the transcript > Try again (shown after an error)"
+ },
+ "S49.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/DictationStrip.tsx",
+    "text": "Discard recording"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "Pressing Escape while the strip is open also discards the recording (DictationStrip.tsx handleKeyDown).",
+  "reachable": "yes",
+  "steps": [
+   "Click Start voice input and speak a sentence.",
+   "Click the X button labelled Discard recording.",
+   "Look: the strip closes and the message box is unchanged, with no text added and nothing sent."
+  ],
+  "where": "Chat message box (composer) > Start voice input > Discard recording (round X button at the left of the strip)"
+ },
+ "S49.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/DictationStrip.tsx",
+    "text": "Transcribing"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The batch request is transcribeViaServer in apps/web/features/chat/stores/voice-input-store.ts, posting to apps/web/app/api/voice/transcribe/route.ts; I did not read the route body.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click Start voice input and speak a longer sentence.",
+   "Click Stop recording and edit the transcript.",
+   "Watch the Transcribing spinner; no text appears while speaking.",
+   "Look: the whole transcript appears in one piece when transcription finishes."
+  ],
+  "where": "Effect seen after Chat message box > Start voice input > Stop recording and edit the transcript: the text arrives all at once"
+ },
+ "S49.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a microphone; a plan that allows voice mode (not checked)",
+  "note": "Dictation itself is batch, not streaming; the streaming code is in the voice mode path (apps/web/features/chat/lib/live-voice-session.ts), and I did not confirm that the text is shown on screen while speaking.",
+  "reachable": "yes",
+  "steps": [
+   "Leave the message box empty and click the button labelled Start voice mode.",
+   "Speak a sentence slowly while the voice screen is open.",
+   "Look: whether words appear as text while you are still speaking, as Expected."
+  ],
+  "where": "Chat message box (composer) with empty text > Start voice mode (voice entry button on the right)"
+ },
+ "S49.17": {
+  "labels": [],
+  "needs": "a microphone; a fresh start of voice capture",
+  "note": "Searched apps/web/features/chat/components/Voice, apps/web/features/chat/components/Composer and VoiceSection.tsx for consent, recorded and notice; no pre-capture consent screen found. The only related text is the microphone purpose Dictation and voice conversations in packages/contracts/local-runtime/src/desktop-privacy.ts, which is a system permission review line, not a shown notice.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S49.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Export\u2026"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+    "text": "Export Chat History"
+   }
+  ],
+  "needs": "a conversation with dictated text",
+  "note": "The export covers the whole chat history, not a separate recording transcript; the title menu trigger control itself was not labelled in the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that contains dictated text.",
+   "Open the conversation's title menu (the menu that holds Export\u2026).",
+   "Click Export\u2026.",
+   "Choose a format in the Export Chat History dialog and click its export button.",
+   "Look: a file downloads and contains the dictated text."
+  ],
+  "where": "Open a conversation > conversation title menu > Export\u2026"
+ },
+ "S49.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Delete"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Retention window"
+   }
+  ],
+  "needs": "a conversation; a workspace admin account to see retention settings",
+  "note": "The Settings path to WorkspacePolicySection was not traced, and whether Delete asks for confirmation was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that contains dictated text.",
+   "Open the conversation's title menu and click Delete.",
+   "Read and confirm any prompt that appears.",
+   "Look: the conversation disappears from the sidebar and cannot be reopened.",
+   "For the retention setting, go to the workspace policy section with the Retention window and Enforce retention fields and check they are shown."
+  ],
+  "where": "Open a conversation > conversation title menu > Delete (retention window is in the workspace policy settings and needs a workspace admin)"
+ },
+ "S49.30": {
+  "labels": [],
+  "needs": "a microphone; a chat message box",
+  "note": "Dictated text is added through appendComposerMessage in apps/web/features/chat/components/Composer/ChatComposerNew.tsx; I searched ChatComposerNew.tsx and use-dictation.ts for undo and found no dictation-specific undo handling, so Cmd+Z behaviour is unverified.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

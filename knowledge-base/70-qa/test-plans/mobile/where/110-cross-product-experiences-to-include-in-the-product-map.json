@@ -1,0 +1,187 @@
+{
+ "S110.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Share generated file"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   }
+  ],
+  "needs": "a chat that produced a presentation or a file, or a request for a presentation",
+  "note": "Presentation (pptx) support is in apps/mobile/src/features/chat/utils/generatedFileArtifacts.ts and GeneratedFileCard.tsx; the visible name of the output-format option in the + sheet was not located, so the exact creation step is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has a generated file or artifact card.",
+   "Tap the artifact card to open the artifact screen.",
+   "Look for the file card showing the file name, kind and checksum.",
+   "Tap Share generated file (or Download artifact) to keep a copy.",
+   "Compare with Expected: a presentation opens or can be shared and kept."
+  ],
+  "where": "Chat > open a chat artifact card > Share generated file (the presentation is requested from the + (Add to chat) sheet, where the output format option is; its visible label was not found)"
+ },
+ "S110.03": {
+  "labels": [],
+  "needs": "a spreadsheet file and a web account with E2B execution enabled",
+  "note": "Chart artifacts open on the phone in the artifact screen (testID artifact-fullscreen-chart at apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:1886, not visible text). The chart-in-report step is web-side: apps/web/lib/e2b/gate.ts gates on AGI_E2B_EXECUTION=1 and E2B_API_KEY. No mobile control that builds the report with a chart was found, and the spreadsheet upload control was not located.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/VoicePickerSheet.tsx",
+    "text": "Start voice"
+   },
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   }
+  ],
+  "needs": "a microphone, a signed-in cloud account, and AGI Work available on the account",
+  "note": "The voice tool agi_work (packages/contracts/cloud-contracts/src/live-voice-tools.ts) only starts the task when the chat can request AGI Work (canUseAgiWork); the plan that grants it was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap the Start voice mode button in the composer.",
+   "Tap Start voice (or pick a voice first) and allow the microphone.",
+   "Say a task, for example a request that needs several steps and tools.",
+   "Watch for the Work mode message the phone sends into the chat, then open the side menu and tap AGI Work.",
+   "Compare with Expected: the request appears as a task in AGI Work without retyping it."
+  ],
+  "where": "Chat screen > Start voice mode (microphone button in the composer) > Start voice > speak the request > Work switch (Work) > AGI Work list in the side menu"
+ },
+ "S110.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "Untitled chat"
+   }
+  ],
+  "needs": "a web account and the same account signed in on the phone, with network access",
+  "note": "The cloud header label comes from a constant (PRIVACY_MODE_DISPLAY.managed.label) in apps/mobile/src/features/chat/ChatsListScreen.tsx, and the side-menu open control and New chat key were not located. The label above appears only for untitled chats.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with the same account on the web app and start a chat there.",
+   "On the phone, open the side menu and check the chat list in cloud mode.",
+   "Open the web conversation and confirm the full earlier history is shown.",
+   "Send a follow-up message on the phone.",
+   "Open the web app again and check the reply appears in the same conversation (compare with Expected)."
+  ],
+  "where": "Side menu > chat list (cloud mode) > the conversation title"
+ },
+ "S110.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx",
+    "text": "Start on Desktop"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx",
+    "text": "Recent Dispatch tasks"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Remote control"
+   }
+  ],
+  "needs": "a paired and connected desktop computer, a signed-in account, and Remote Control on the plan",
+  "note": "The send control's visible label was not found and the desktop's approval rules are applied on the computer; the settings page says Remote Control comes with paid plans (apps/mobile/app/(app)/settings/remote-control.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Make sure a computer is paired and connected (Settings > Remote control > Connections).",
+   "Open the side menu and tap AGI Code, then open the paired computer.",
+   "In the Start on Desktop box, type a request in the field that says What should Desktop work on?.",
+   "Tap the send control and wait.",
+   "Look under Recent Dispatch tasks for the task and expand its result to check it matches Expected."
+  ],
+  "where": "Side menu > AGI Code (or Settings > Remote control > Connections) > the paired computer > Start on Desktop"
+ },
+ "S110.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Project"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Choose"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+    "text": "No project"
+   }
+  ],
+  "needs": "an existing project with sources or instructions",
+  "note": "The Projects side-menu label is a translation key (navProjects) whose text was not found, and the grounding of answers in project sources was not traced to a visible control.",
+  "reachable": "yes",
+  "steps": [
+   "Create or open a project under Projects in the side menu and add a source or instruction.",
+   "Open a new chat and tap the + (Add to chat) button in the composer.",
+   "Tap Project and choose the project; the row shows its name in place of Choose.",
+   "Ask a question that the project's sources should answer.",
+   "Compare the answer with the project's sources and instructions (Expected)."
+  ],
+  "where": "Chat > + (Add to chat) > Project (shows Choose or the project name)"
+ },
+ "S110.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "Choose a standard model"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "View upgrade options"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+    "text": "Choose a plan"
+   }
+  ],
+  "needs": "a Free account or an account at its usage limit",
+  "note": "Which option appears depends on the server's quota error code (classifyManagedQuotaErrorCode in apps/mobile/app/(app)/chat/[id].tsx); the reset-time wording was not checked, and purchase options vary by platform.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message on an account that has reached its usage limit.",
+   "Read the sheet: it names the blocked feature and the reset time if one applies.",
+   "If offered, tap Choose a standard model to continue with a standard model in one step.",
+   "Otherwise tap View upgrade options (or Choose a plan) and check the plan options shown.",
+   "Compare with Expected: an eligible alternative is offered and can be taken in one step."
+  ],
+  "where": "Chat > send a message when usage is used up > paywall sheet > Choose a standard model or View upgrade options"
+ },
+ "S110.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Republish artifact link"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Save as a new version"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Publish to a public link?"
+   }
+  ],
+  "needs": "a signed-in cloud account and an artifact that can be published",
+  "note": "Edit source is shown only when the artifact can be edited; Restore version is an accessibility label built from a template in ArtifactFullScreen.tsx, and the version history sheet is apps/mobile/src/features/chat/components/ArtifactVersionHistorySheet.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat artifact and tap More artifact actions, then Publish artifact to a public link and confirm Publish.",
+   "Tap Edit source, change the text, and tap Save as a new version.",
+   "Tap More artifact actions again and tap Republish artifact link; confirm the same link updates.",
+   "Tap Show changes and use the version counter (Previous version / Next version) to compare versions.",
+   "Tap Restore version to go back to an earlier version, then check the link and version history (Expected)."
+  ],
+  "where": "Open a chat artifact > More artifact actions > Republish artifact link (or Publish artifact to a public link) > Edit source > Save as a new version > Version N of M > Restore version N"
+ }
+}

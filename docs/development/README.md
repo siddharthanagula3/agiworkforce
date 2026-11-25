@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-24
 
 How to work in this repository: setup, commands, testing, debugging, migrations,
 CI, and the agent and parallel-agent workflows.
@@ -33,6 +33,11 @@ the process, not the rules.
 - [`audit/prior-audits/product-gaps-register.md`](../../audit/prior-audits/product-gaps-register.md), the product completeness
   register: every route, control and state gap across the six surfaces, with
   what it connects to and whether it is complete.
+- `scripts/dev/heavy-job.sh` and `scripts/dev/light-job.sh`, the wrappers for
+  local heavy jobs (builds, full suites, `tsc`, cargo, dev servers, browsers,
+  emulators, `git push`) and for scoped tests or lint. On machines with 24 GB or
+  less `.claude/hooks/heavy-job-gate.py` denies an unwrapped heavy command. Root
+  `pnpm dev:desktop` runs the Tauri build, not the Electron public Desktop.
 - [`ci-and-deploys.md`](./ci-and-deploys.md), the CI gates, the production and
   staging deploy contract, which deploy workflows are enabled, and the local
   pre-push gate.

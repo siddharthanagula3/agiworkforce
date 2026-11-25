@@ -1,0 +1,497 @@
+{
+ "S13.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Send (Enter)"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the activity bar to open the sidebar.",
+   "Click in the box that says \"Describe a task\u2026\".",
+   "Type a short plain sentence, for example: Explain this file in one line.",
+   "Click the send button at the bottom right of the composer (tooltip \"Send (Enter)\") or press Enter.",
+   "Look: the message appears in the chat as your message, the box clears, and a reply starts."
+  ],
+  "where": "AGI Code sidebar (activity bar) > composer box with placeholder \"Describe a task\u2026\" > Send (Enter) button"
+ },
+ "S13.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Send key"
+   }
+  ],
+  "needs": "none",
+  "note": "Line breaks are kept by the native text box; the code does not rewrite them on send, but I did not trace the send payload to confirm the kept breaks reach the reply.",
+  "reachable": "yes",
+  "steps": [
+   "Click in the box that says \"Describe a task\u2026\".",
+   "Type a first line, press Shift+Enter, type a second line, press Shift+Enter, type a third line.",
+   "Look: the cursor moves to a new line each time and nothing is sent.",
+   "Press Enter to send, then look at the sent message in the chat and check the line breaks are still there."
+  ],
+  "where": "AGI Code sidebar > composer box \"Describe a task\u2026\""
+ },
+ "S13.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "The growth is a layout rule in autoResize (height capped at 140px); the cap is in code, not a visible setting.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click in the box that says \"Describe a task\u2026\".",
+   "Type or paste many lines (press Shift+Enter between them) without sending.",
+   "Look: the box gets taller with each line until it reaches about 140 px, then stops growing and a scroll bar appears inside it."
+  ],
+  "where": "Composer box \"Describe a task\u2026\" grows as text is added"
+ },
+ "S13.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Send (Enter)"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "The button is disabled when the box is empty, when the runtime is blocked, or while a new thread is being set up; no visible reason text is shown next to it, only the tooltip changes, so the disabled reason may not be visible.",
+  "reachable": "yes",
+  "steps": [
+   "With the composer empty, look at the send button: it is greyed out and cannot be clicked.",
+   "Type a message in the box \"Describe a task\u2026\".",
+   "Look: the send button becomes active.",
+   "Click the send button and look for the message in the chat."
+  ],
+  "where": "AGI Code sidebar > composer > send button at the bottom right (tooltip \"Send (Enter)\")"
+ },
+ "S13.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop response"
+   }
+  ],
+  "needs": "a reply that takes a few seconds to generate",
+  "note": "Escape also stops a reply, but only when the setting Escape stops response is turned on (it is off by default).",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt that gives a long answer, for example: List 30 facts about the Moon.",
+   "While the reply is still streaming, look at the bottom of the composer for the stop button (tooltip \"Stop response\").",
+   "Click \"Stop response\".",
+   "Look: the reply stops, the text already written stays in the chat, and the send controls return."
+  ],
+  "where": "AGI Code sidebar > composer, while a reply is generating > Stop response button"
+ },
+ "S13.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Send key"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "The Send key setting can change which key sends; with it set to Cmd/Ctrl+Enter, Shift+Enter behaves differently.",
+  "reachable": "yes",
+  "steps": [
+   "Click in the box that says \"Describe a task\u2026\" and type some text.",
+   "Press Shift+Enter.",
+   "Look: a new line is added and the message is not sent.",
+   "Optional: open Settings > Send key and check the option text matches the behaviour seen."
+  ],
+  "where": "AGI Code sidebar > composer box \"Describe a task\u2026\" > Shift+Enter (default). Setting: Settings > Session behavior > Send key"
+ },
+ "S13.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a Mac with the keyboard (device)",
+  "note": "The composer is a plain text box and the code adds no undo handler of its own; undo comes from the browser text box. I did not find a line of code that blocks it.",
+  "reachable": "yes",
+  "steps": [
+   "Click in the box that says \"Describe a task\u2026\" and type a word.",
+   "Type a second word, then press Cmd+Z.",
+   "Look: the last typed text is taken back.",
+   "Press Shift+Cmd+Z and look: the text comes back."
+  ],
+  "where": "AGI Code sidebar > composer box \"Describe a task\u2026\" > Cmd+Z and Shift+Cmd+Z"
+ },
+ "S13.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Pending attachments"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a file or an image on the clipboard",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Copy a text snippet and an image or a file from Finder.",
+   "Click in the box \"Describe a task\u2026\" and press Cmd+V with the text.",
+   "Look: the text appears in the box.",
+   "Press Cmd+V with the image or file, and look for a chip in the strip above the box (Pending attachments)."
+  ],
+  "where": "AGI Code sidebar > composer box \"Describe a task\u2026\" > paste (Cmd+V)"
+ },
+ "S13.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a web page or document with formatted text",
+  "note": "The paste handler only takes over file pastes; formatted text relies on the native plain-text box, not on a code path that strips markup.",
+  "reachable": "yes",
+  "steps": [
+   "Copy a formatted line from a web page (bold or coloured text, links).",
+   "Click in the box \"Describe a task\u2026\" and press Cmd+V.",
+   "Look: only plain text appears, with no bold, colours or links."
+  ],
+  "where": "AGI Code sidebar > composer box \"Describe a task\u2026\" > paste (Cmd+V) formatted text"
+ },
+ "S13.15": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Context after the last turn"
+   }
+  ],
+  "needs": "a finished reply",
+  "note": "The counter is filled from a context message after a turn; I did not confirm when it first appears before any turn.",
+  "reachable": "yes",
+  "steps": [
+   "Send a short message and wait for the reply to finish.",
+   "Look at the bottom row of the composer, next to the model button, for a small token count.",
+   "Hover over the count and read the tooltip."
+  ],
+  "where": "AGI Code sidebar > composer bottom row, small counter beside the Auto model button, shown after a turn finishes"
+ },
+ "S13.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/chat-participant/chatParticipant.ts",
+    "text": "Explain the selected code"
+   }
+  ],
+  "needs": "a skill available to the account for the sidebar rows; the VS Code Chat view for the follow-up buttons",
+  "note": "The follow-up buttons exist only in VS Code's native Chat view, not in the AGI Code sidebar; the sidebar offers Skills, Projects and Connected apps rows instead of follow-up questions.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat so the start screen is showing.",
+   "Look for the group heading \"Skills\" under the start screen.",
+   "Click one skill row: the composer fills with a prompt for that skill.",
+   "Optional: in the VS Code Chat view, ask a question to the AGI Code participant and look for follow-up buttons under the answer."
+  ],
+  "where": "AGI Code sidebar > empty chat (start screen) > Skills rows. Also VS Code Chat view > @agi answer > follow-up buttons"
+ },
+ "S13.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Filter actions\u2026"
+   }
+  ],
+  "needs": "a saved prompt command in your account or CLI (not confirmed which exist)",
+  "note": "The code puts the command name in the composer for prompt-type commands (source prompt); whether the user's own saved templates appear depends on the runtime list, which I did not check.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Commands\" button next to the + button in the composer.",
+   "Look for a command listed from your prompt commands and click it.",
+   "Look: the composer shows the command name with a space after it, ready for your own text.",
+   "Type your text after it and press Enter."
+  ],
+  "where": "AGI Code sidebar > composer > Commands button (/) > pick a prompt command"
+ },
+ "S13.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "If no command matches, the list shows \"No matching command\"; the list loads once commands arrive.",
+  "reachable": "yes",
+  "steps": [
+   "Click in the box \"Describe a task\u2026\" and type a single slash /.",
+   "Look: a list of commands opens above the box.",
+   "Type a letter after the slash, for example /co, and look: the list narrows to matching commands.",
+   "Use the arrow keys and Enter, or click a row, to choose one."
+  ],
+  "where": "AGI Code sidebar > composer box \"Describe a task\u2026\" > type /"
+ },
+ "S13.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a skill listed under Skills on the start screen",
+  "note": "The composer fills with a sentence asking to use the skill; no skill chip is shown in the composer, and a check that the next message runs with it depends on the reply.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat so the start screen shows.",
+   "Under the heading \"Skills\", click one skill row.",
+   "Look: the composer is filled with a sentence naming that skill, with the cursor at the end.",
+   "Type what you want done and send it, then check the reply uses that skill."
+  ],
+  "where": "AGI Code sidebar > empty chat (start screen) > Skills > click a skill"
+ },
+ "S13.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a VS Code build with the Chat view",
+  "note": "The sidebar composer has no agent picker; the mention exists only in VS Code's native Chat, and the code skips it if the Chat API is missing.",
+  "reachable": "yes",
+  "steps": [
+   "Open the VS Code Chat view.",
+   "Type @ in its input box and look for the AGI Code entry.",
+   "Select AGI Code and send a question.",
+   "Look: the reply comes from AGI Code."
+  ],
+  "where": "VS Code Chat view (the native chat, not the AGI Code sidebar) > type @ > AGI Code"
+ },
+ "S13.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Workspace files and symbols"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mention file from this project\u2026"
+   }
+  ],
+  "needs": "a workspace folder open in VS Code",
+  "note": "The code inserts an @path token; I did not trace that the file contents are added to the message.",
+  "reachable": "yes",
+  "steps": [
+   "Click in the box \"Describe a task\u2026\" and type @.",
+   "Type part of a file name, for example @app.",
+   "Look: a list titled Workspace files and symbols opens above the box.",
+   "Choose a file with the arrow keys and Enter, or click it, then look for the @ file token in the box and send."
+  ],
+  "where": "AGI Code sidebar > composer box \"Describe a task\u2026\" > type @ then part of a file name"
+ },
+ "S13.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Add context"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Selection"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Stop using this project"
+   }
+  ],
+  "needs": "an open editor or a selection in VS Code for some items",
+  "note": "Project chips show a Stop using this project button; the skill chip named in Expected is not in the composer code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button at the bottom left of the composer.",
+   "Under \"Add context\", click one item, for example Open editors.",
+   "Look: a chip appears in the strip above the box with a name and an \u00d7 button.",
+   "Click the \u00d7 on the chip and look: it disappears."
+  ],
+  "where": "AGI Code sidebar > + (Attach or use tools) > Add context > Selection, Open editors, Problems, Git changes, Terminal output or Web page"
+ },
+ "S13.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Browse the web"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Browse the web for current sources"
+   }
+  ],
+  "needs": "a signed-in account; Browse the web is greyed out when web search is denied",
+  "note": "Connector resources and page sources as chips were not found in this strip; only the web browsing chip is in the composer markup.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button, then click Browse the web under Tools.",
+   "Look: a chip reading \"Browse the web for current sources\" appears above the composer.",
+   "Click the \u00d7 on that chip (Remove web browsing) and look: the chip goes away."
+  ],
+  "where": "AGI Code sidebar > + (Attach or use tools) > Tools > Browse the web"
+ },
+ "S13.33": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Tools"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Plan mode"
+   }
+  ],
+  "needs": "none",
+  "note": "Research, code and office-file tools named in Expected were not found in this menu; only Browse the web and Plan mode appear under Tools, and Plan mode shows as the mode button rather than a chip.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and look at the Tools heading.",
+   "Click Plan mode.",
+   "Look at the mode button at the bottom of the composer (next to the model): it changes to the plan mode label.",
+   "Click Browse the web under Tools and look for its chip above the composer."
+  ],
+  "where": "AGI Code sidebar > + (Attach or use tools) > Tools > Plan mode or Browse the web"
+ },
+ "S13.35": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Add context"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach workspace files"
+   }
+  ],
+  "needs": "none",
+  "note": "The menu lists text files under Attach workspace files; no media entry appears in the menu, and images come in by paste or drop.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button.",
+   "Look at the menu titled Add context: Attach workspace files, Selection, Open editors, Problems, Git changes, Terminal output, Web page.",
+   "Look under Tools: Browse the web, Set up web search, Plan mode.",
+   "Click Attach workspace files and check that a file picker opens."
+  ],
+  "where": "AGI Code sidebar > + button (tooltip \"Attach or use tools\") at the bottom left of the composer"
+ },
+ "S13.38": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Queue"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Queued"
+   }
+  ],
+  "needs": "a reply that takes a few seconds to generate",
+  "note": "The label reads Steer instead when the Active-turn send setting is set to Steer.",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt that gives a long reply.",
+   "While it is still streaming, type a second message in the box \"Describe a task\u2026\".",
+   "Look: the send button's label reads Queue.",
+   "Click it and look: your message appears in the chat with a Queued tag and sends after the reply finishes."
+  ],
+  "where": "AGI Code sidebar > composer, while a reply is generating > type in the box > send button labelled Queue"
+ },
+ "S13.39": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Cancel this queued message"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Edit this queued message"
+   }
+  ],
+  "needs": "a reply that is still streaming",
+  "note": "Edit is refused while the box has text; the message tells you to send or clear the box first.",
+  "reachable": "yes",
+  "steps": [
+   "Queue a message while a reply is streaming (see S13.38).",
+   "Look under the queued message for two small icon buttons, Edit and Cancel.",
+   "Click Cancel: the queued message is removed and not sent.",
+   "Queue another message, clear the box \"Describe a task\u2026\", click Edit and look: the text goes back into the box."
+  ],
+  "where": "AGI Code sidebar > chat > the queued message shows Edit and Cancel buttons under it"
+ },
+ "S13.40": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Active-turn send"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Steer current turn"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Session behavior"
+   }
+  ],
+  "needs": "a reply that is still running",
+  "note": "The package.json description says conflicts fall back to the next-turn queue; I did not verify that fallback.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the gear icon in the AGI Code sidebar.",
+   "Find Session behavior and set Active-turn send to Steer current turn.",
+   "Start a long reply, then type guidance in the box \"Describe a task\u2026\" and send it while it runs.",
+   "Look: the send button reads Steer, and the message shows a Steered tag while the reply keeps going."
+  ],
+  "where": "AGI Code sidebar > gear (Code: Open Settings) > Session behavior > Active-turn send > Steer current turn"
+ }
+}

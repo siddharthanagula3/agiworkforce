@@ -1,0 +1,872 @@
+{
+ "S8.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/EditableMessage.tsx",
+    "text": "Save & Retry"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Edit message"
+   }
+  ],
+  "needs": "a chat with a sent message",
+  "note": "The primary style comes from packages/ui/ui/src/primitives/Button.tsx (default variant).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has a message you sent.",
+   "Hover your sent message and click the pencil button labelled Edit message.",
+   "Change the text and look for the Save & Retry button.",
+   "Compare: it should look like the main filled action, with a readable label."
+  ],
+  "where": "Chat > hover your sent message > Edit message (pencil) > Save & Retry"
+ },
+ "S8.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Capture screen"
+   }
+  ],
+  "needs": "none",
+  "note": "Outline button found in ComposerFeedbackDialog, but I did not trace how a person opens that dialog, and no other outline button was confirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+    "text": "Revoke every link"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Share\u2026"
+   }
+  ],
+  "needs": "a chat with shared links, so the button appears",
+  "note": "Revoke every link shows only when the share inventory is incomplete (inventoryIncomplete); the title-menu trigger itself was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and open its title menu, then choose Share\u2026.",
+   "Look for the Revoke every link button in the dialog footer.",
+   "Compare: it should be styled as a red destructive button with readable text.",
+   "Do not click it unless you are ready to revoke links."
+  ],
+  "where": "Share\u2026 (chat title menu) > Revoke every link"
+ },
+ "S8.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Retry this message"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Edit message"
+   }
+  ],
+  "needs": "a chat with a sent message",
+  "note": "The icon buttons appear for your own messages only when a retry or edit handler exists.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and hover over a message you sent.",
+   "Look for the small icon buttons that appear: Retry this message and Edit message.",
+   "Hover each one to see its tooltip (Retry, Edit).",
+   "Compare: each icon button should have a name for screen readers and a tooltip."
+  ],
+  "where": "Chat > hover your sent message > icon button Retry this message"
+ },
+ "S8.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Add attachments and tools"
+   }
+  ],
+  "needs": "none",
+  "note": "The pressed state (aria-pressed) appears only when some attachment or tool is active; the button label changes to a count when there are active items.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and look at the message box at the bottom.",
+   "Click the + button.",
+   "Look at whether the + button shows a pressed state and the menu opens.",
+   "Compare: the button should report pressed or expanded state, and its count badge shows active items."
+  ],
+  "where": "Composer > + button (Add attachments and tools)"
+ },
+ "S8.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/DictationStrip.tsx",
+    "text": "Voice dictation"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/DictationStrip.tsx",
+    "text": "Discard recording"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The microphone button label was not traced; the group label is read from the strip's code.",
+  "reachable": "yes",
+  "steps": [
+   "Start voice dictation from the message box.",
+   "Look at the strip that appears next to the composer.",
+   "Hover or tab through its two round buttons.",
+   "Compare: the strip should be one labelled group with a cancel (discard) button."
+  ],
+  "where": "Composer > dictation (microphone) button > the Voice dictation strip"
+ },
+ "S8.08": {
+  "labels": [],
+  "needs": "a reply that contains a link",
+  "note": "Link text depends on the reply; no fixed label exists in code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that asks for a web page or source.",
+   "Find a link inside the assistant's reply.",
+   "Click the link.",
+   "Compare: it should look like a link and open its destination."
+  ],
+  "where": "Chat > any assistant reply that contains a web link > click the link"
+ },
+ "S8.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Project name"
+   }
+  ],
+  "needs": "none",
+  "note": "Single-line input found in CreateProjectDialog, but I did not trace how a person opens that dialog.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Details"
+   }
+  ],
+  "needs": "none",
+  "note": "The new-line key was not confirmed in code; the feedback dialog also has a multi-line Details box, but its open path was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and click into the message box.",
+   "Type a line, then add a new line.",
+   "Compare: the box should accept several lines and grow taller as you type."
+  ],
+  "where": "Chat > the message box at the bottom of the screen"
+ },
+ "S8.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Search models"
+   }
+  ],
+  "needs": "none",
+  "note": "The model picker button that opens this catalogue was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker in the message box area.",
+   "Click the Search models field.",
+   "Type part of a model name.",
+   "Compare: the list should narrow to matching models."
+  ],
+  "where": "Composer > model picker > Search models"
+ },
+ "S8.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorApiKeyForm.tsx",
+    "text": "API key"
+   }
+  ],
+  "needs": "none",
+  "note": "Masked password field found in ConnectorApiKeyForm, but the screen path that shows this form was not traced.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.13": {
+  "labels": [],
+  "needs": "an email sign-in that asks for a code",
+  "note": "AuthCodeStep.tsx has a numeric one-time-code field (autocomplete one-time-code), but the sign-in path that shows it was not traced.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+    "text": "Include metadata (title, date, message count)"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+    "text": "Export Chat History"
+   }
+  ],
+  "needs": "none",
+  "note": "The Export menu item text was not traced; the checkbox only shows when the chosen format supports metadata.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and open its title menu.",
+   "Choose Export.",
+   "Look for the checkbox Include metadata (title, date, message count) and click it.",
+   "Compare: the box should toggle and its checked state should change."
+  ],
+  "where": "Chat title menu > Export (opens Export Chat History) > Include metadata checkbox"
+ },
+ "S8.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What do you want to do first?"
+   }
+  ],
+  "needs": "a new account that sees onboarding",
+  "note": "The question is screen-reader only (sr-only), so a sighted person may not see the words.",
+  "reachable": "yes",
+  "steps": [
+   "Start the onboarding wizard on first sign-in, or reopen it.",
+   "Look at the group of choices for what you want to do first.",
+   "Click one choice and check that only that choice is selected.",
+   "Compare: only one option is selected at a time."
+  ],
+  "where": "Onboarding wizard, step 1 (first-run setup)"
+ },
+ "S8.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Effort"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Toggle extended thinking"
+   }
+  ],
+  "needs": "a model that supports extended thinking",
+  "note": "The switch shows only for models with thinking support; the toggle label is an aria-label, not visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Click the reasoning or Effort control in the message box.",
+   "Look at the Effort row in the popover.",
+   "Click the switch and watch it turn on or off.",
+   "Compare: the switch should change state immediately."
+  ],
+  "where": "Composer > Effort (reasoning button) > Toggle extended thinking switch"
+ },
+ "S8.17": {
+  "labels": [],
+  "needs": "none",
+  "note": "Both segments are icon-only; the label text comes from aria-label, so no visible words to quote.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Code screen.",
+   "Look at the small two-part control at the top of the side rail.",
+   "Click the chat icon and check that the chat screen opens.",
+   "Compare: the active part should look selected."
+  ],
+  "where": "Code screen > top of the left rail > two-part icon control (chat icon and code icon)"
+ },
+ "S8.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Message Type"
+   }
+  ],
+  "needs": "some conversations to search",
+  "note": "How global search opens was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open global search from the app.",
+   "Look for the Message Type field with its value (all, user, assistant, system).",
+   "Pick one value and check the list narrows.",
+   "Compare: exactly one value should be selected."
+  ],
+  "where": "Global search dialog > Message Type"
+ },
+ "S8.19": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+    "text": "Search results"
+   }
+  ],
+  "needs": "none",
+  "note": "Searchable combobox found in CommandPalette.tsx; the keyboard shortcut or menu that opens it was not traced.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/components/CodeChangesPanel.tsx",
+    "text": "Changes settings"
+   }
+  ],
+  "needs": "a Code session with changes",
+  "note": "The panel uses a checkbox menu, not chips; no clear several-value chip list was confirmed, and the Changes panel path was not traced.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Press Enter or type a comma to add an entry."
+   }
+  ],
+  "needs": "a workspace admin account",
+  "note": "The Workspace policy screen path was not traced; the field label is an aria label in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the workspace policy section as a workspace admin.",
+   "Click into the IP allow list field and type an address, then press Enter.",
+   "Look for the new chip and its remove control.",
+   "Compare: the entry should appear as a removable chip."
+  ],
+  "where": "Workspace settings > Workspace policy > IP allow list field (Add an IP address or CIDR block)"
+ },
+ "S8.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Repeat Every"
+   }
+  ],
+  "needs": "a Free or paid account with Schedules",
+  "note": "The button that opens the new schedule form was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Schedules page and start a new schedule.",
+   "Find Repeat Every and click its up and down arrows, or type a number.",
+   "Compare: the value should go up and down by one and stay at least 1.",
+   "Check the helper text below it."
+  ],
+  "where": "Schedules > new schedule form > Repeat Every field"
+ },
+ "S8.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Effort"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Reasoning effort"
+   }
+  ],
+  "needs": "a model that supports several effort levels",
+  "note": "The slider appears only when the model offers more than one effort level.",
+  "reachable": "yes",
+  "steps": [
+   "Click the reasoning control in the message box.",
+   "Find the Effort row and drag the slider.",
+   "Try the arrow keys after clicking the slider.",
+   "Compare: the value changes between effort levels."
+  ],
+  "where": "Composer > Effort (reasoning button) > slider under the Effort label"
+ },
+ "S8.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+    "text": "Select date"
+   }
+  ],
+  "needs": "none",
+  "note": "How global search opens was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open global search.",
+   "Click the Select date button for the start date.",
+   "Pick a day in the calendar and check the button shows that date.",
+   "Compare: the calendar should close and the chosen date should show."
+  ],
+  "where": "Global search dialog > Start date > Select date"
+ },
+ "S8.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Local Time"
+   }
+  ],
+  "needs": "a schedule form that shows Local Time",
+  "note": "The button that opens the new schedule form was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the new schedule form and choose a daily, weekly or monthly repeat.",
+   "Find the Local Time field.",
+   "Click it and set a time.",
+   "Compare: the chosen time should show in the field."
+  ],
+  "where": "Schedules > new schedule form > Local Time field"
+ },
+ "S8.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Time Zone"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Search by city or region\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "The button that opens the new schedule form was not traced; the list uses a datalist.",
+  "reachable": "yes",
+  "steps": [
+   "Open the new schedule form.",
+   "Click the Time Zone field and type a city or region.",
+   "Pick a suggested zone from the list.",
+   "Compare: the field should show the picked zone and default to the device zone."
+  ],
+  "where": "Schedules > new schedule form > Time Zone field"
+ },
+ "S8.28": {
+  "labels": [
+   {
+    "file": "apps/desktop/src/features/settings/ThemeSettings.tsx",
+    "text": "Create Theme"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/desktop/src/features/settings/ThemeEditorDialog.tsx",
+    "text": "Background"
+   }
+  ],
+  "needs": "none",
+  "note": "The Settings panel with this tab is the desktop Local-mode SettingsPanel; the Cloud mode uses the shared SettingsModal, which I did not trace. A second colour input exists on the project page (aria-label 'Custom colour', no visible text) at apps/web/app/chat/projects/[id]/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Scroll to the Themes heading and click Create Theme.",
+   "In Create Custom Theme, click the small colour square next to Background.",
+   "Look for a colour chooser that opens and changes the swatch and the hex text beside it."
+  ],
+  "where": "Settings > Appearance > Themes > Create Theme (the colour squares next to Background, Foreground and the other colour names in the Create Custom Theme dialog)"
+ },
+ "S8.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "The add-button visible text was not checked; its aria-label comes from packages/ui/i18n/locales/en/chat.json key composer.addAttachmentsAndTools.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and click the add button at the bottom-left of the composer.",
+   "Click Add photos & files.",
+   "Choose a file in the system file chooser and confirm.",
+   "Look for the chosen file to appear as a preview above the message box."
+  ],
+  "where": "Chat composer > the add button (aria-label 'Add attachments and tools') > Add photos & files; or the composer Files menu > Upload from device"
+ },
+ "S8.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/DragDropOverlay.tsx",
+    "text": "Drop files here"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/DragDropOverlay.tsx",
+    "text": "Release to attach to your message"
+   }
+  ],
+  "needs": "a file to upload, a mouse or trackpad drag",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in the desktop app.",
+   "Drag a file from Finder over the chat window and hold it there.",
+   "Look for the overlay with the heading Drop files here and the line Release to attach to your message.",
+   "Release the file and check it appears as an attachment in the composer."
+  ],
+  "where": "Chat > drag a file from Finder over the chat window (the composer area)"
+ },
+ "S8.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Report"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Library"
+   }
+  ],
+  "needs": "a chat with a research or web-sources answer",
+  "note": "The tablist has the accessible name Research views; the Globe button label comes from ResearchPanel.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that produced research sources.",
+   "Click the button with the title Research sources to open the panel.",
+   "Click the Report tab, then the Library tab.",
+   "Look for the selected tab to change and for the panel content to switch with it."
+  ],
+  "where": "Chat > after an answer with web research, click the Globe button titled Research sources > tabs Sources, Report, Library"
+ },
+ "S8.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+    "text": "All steps completed!"
+   }
+  ],
+  "needs": "a chat where the model returns a steps card (not directly controllable by the tester)",
+  "note": "Whether a steps card appears depends on the model output; the tester cannot force one from a button.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that returns a steps card.",
+   "Click a step row or its arrow.",
+   "Look for the details to open below the step and the arrow state to change.",
+   "Click again and check the details close."
+  ],
+  "where": "Chat > a reply shown as a steps card > click a step row to expand its details"
+ },
+ "S8.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Thinking process"
+   }
+  ],
+  "needs": "a model that returns thinking steps",
+  "note": "The button is shown only when the reply has thinking steps.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat whose reply includes thinking steps.",
+   "Click Thinking process under the reply.",
+   "Look for the list of thinking steps to open and the arrow to turn down.",
+   "Click again and check the list closes."
+  ],
+  "where": "Chat > a reply with thinking steps > the button Thinking process (N steps) under the reply"
+ },
+ "S8.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Conversation options"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Rename"
+   }
+  ],
+  "needs": "a saved chat",
+  "note": "Add chat instructions appears only when the onEditInstructions handler is passed.",
+  "reachable": "yes",
+  "steps": [
+   "Open any saved chat.",
+   "Click the chat title at the top with its small down arrow.",
+   "Look for a menu with Rename and Add chat instructions or Edit chat instructions.",
+   "Press the down arrow key, then Escape, and check the menu closes and focus returns to the title."
+  ],
+  "where": "Chat > click the conversation title at the top (aria-label Conversation options) > menu items Rename, Add chat instructions"
+ },
+ "S8.35": {
+  "labels": [],
+  "needs": "",
+  "note": "Not in range; ignore.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Move to project"
+   }
+  ],
+  "needs": "at least one project",
+  "note": "The item is hidden when there are no projects.",
+  "reachable": "yes",
+  "steps": [
+   "Open a saved chat and click its title to open the menu.",
+   "Hover or click Move to project.",
+   "Look for a submenu listing your projects.",
+   "Click a project name and check the chat moves into it (the item changes to Change project)."
+  ],
+  "where": "Chat > click the conversation title > Move to project (opens a submenu of projects)"
+ },
+ "S8.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Edit"
+   }
+  ],
+  "needs": "a sent message in a chat",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and find one of your sent messages.",
+   "Move the mouse onto the pencil icon under it, or focus it with the keyboard.",
+   "Look for a small label Edit to appear.",
+   "Move the mouse away and check the label goes away."
+  ],
+  "where": "Chat > hover over the pencil icon (aria-label Edit message) under one of your sent messages"
+ },
+ "S8.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Upload from device"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Search library files"
+   }
+  ],
+  "needs": "none",
+  "note": "The visible text of the trigger button was not found; only its aria-label Files was located.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and click the composer Files button.",
+   "Look for a floating panel above the composer with a search field and Upload from device.",
+   "Press Escape, and check the panel closes.",
+   "Open it again, click outside it, and check it closes."
+  ],
+  "where": "Chat > composer Files menu (trigger aria-label Files) > panel with Search library files and Upload from device"
+ },
+ "S8.39": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CitationChip.tsx",
+    "text": "Source {{indices}}: {{sites}}"
+   }
+  ],
+  "needs": "an answer with web citations",
+  "note": "The chip's aria-label is a template; the visible chip text was not found in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a web-search answer that shows source chips.",
+   "Hover over a source chip.",
+   "Look for a card listing the source rows with the site name and a snippet.",
+   "Move the mouse away and check the card closes."
+  ],
+  "where": "Chat > an answer with web citations > hover a small source chip under the answer"
+ },
+ "S8.40": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   }
+  ],
+  "needs": "a chat with research sources",
+  "note": "The badge count is code-driven; I did not locate other badges in the StepsCard header.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with research sources and keep the sources panel closed.",
+   "Look at the Globe button in the top bar.",
+   "Check for a small count bubble on its corner.",
+   "Open the panel and check the bubble disappears."
+  ],
+  "where": "Chat > Research sources button (Globe icon) > count badge when sources exist and the panel is closed"
+ },
+ "S8.41": {
+  "labels": [],
+  "needs": "a chat with a calculation answer",
+  "note": "CalculationCard renders the unit as a Badge with dynamic text (apps/web/features/chat/components/cards/CalculationCard.tsx line 169-177), with no fixed visible label. I could not confirm this is a distinct tag rather than a status badge.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S8.42": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
+    "text": "You said:"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Assistant said:"
+   }
+  ],
+  "needs": "a screen reader for the accessible-label step",
+  "note": "apps/web/features/chat/components/messages/MessageBubble.tsx says the web chat shows no avatars, so the distinction is by layout and the hidden heading, not a picture.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat with one message from you and one reply.",
+   "Look for the two messages to look different (your message in a bubble, the reply as plain text).",
+   "Turn on VoiceOver and move through the two messages; check each is announced with You said: or Assistant said:."
+  ],
+  "where": "Chat transcript: your messages sit in a bubble, assistant replies are plain text; screen readers hear You said: and Assistant said:"
+ },
+ "S8.43": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+    "text": "All steps completed!"
+   },
+   {
+    "file": "apps/web/features/chat/components/ChatLoadingSkeleton.tsx",
+    "text": "Loading chat"
+   }
+  ],
+  "needs": "a steps card in a chat",
+  "note": "The steps card depends on model output; the loading spinner shows only briefly.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that returns a steps card.",
+   "Tick off steps and watch the progress bar and the text N% complete.",
+   "Check the text changes to All steps completed! when all are done.",
+   "Open a chat and watch for the loading spinner labelled Loading chat."
+  ],
+  "where": "Chat > a steps card > progress bar and percent text under its title; the loading spinner appears when a chat opens"
+ },
+ "S8.44": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ChatLoadingSkeleton.tsx",
+    "text": "Loading chat"
+   }
+  ],
+  "needs": "a saved chat and a slow connection",
+  "note": "Placeholder text is not visible; the skeleton component is apps/web/features/chat/components/messages/MessageBubbleSkeleton.tsx. Visibility is brief.",
+  "reachable": "yes",
+  "steps": [
+   "Throttle the network in the browser developer tools if available, or use a slow connection.",
+   "Open a saved chat.",
+   "Look for grey animated placeholder message bubbles before the real messages appear.",
+   "Check the placeholders are replaced by the real messages."
+  ],
+  "where": "Chat > open a conversation on a slow connection; grey placeholder message bubbles show before the messages load"
+ },
+ "S8.45": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Could not save the model for this conversation. The previous model remains active."
+   }
+  ],
+  "needs": "a way to make the save fail (network off)",
+  "note": "The toast shows only when the model save fails; the desktop copy is Could not save this conversation\u2019s model. Try again. in apps/web/features/chat/pages/WebChatPage.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and turn off the network connection.",
+   "Open the model picker in the composer and choose a different model.",
+   "Look for the error toast with the message about the model not being saved.",
+   "Wait a few seconds and check the toast goes away on its own."
+  ],
+  "where": "Chat > composer model picker > choose another model while the save fails (toast at the bottom)"
+ },
+ "S8.46": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Couldn't load this conversation. Check your connection and try again."
+   }
+  ],
+  "needs": "a way to make a turn fail (network off)",
+  "note": "The exact alert text depends on the failure; the alert role is set on TranscriptNotice in apps/web/features/chat/pages/WebChatPage.tsx near line 6888 and the banner at line 7556.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and send a message while the network is off.",
+   "Look for a red alert block in the conversation with an explanation.",
+   "Check that the alert offers a recovery action where one applies (for example a retry link)."
+  ],
+  "where": "Chat > a turn that fails shows an inline alert in the transcript with a recovery action"
+ },
+ "S8.47": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Get notified when the response is ready."
+   },
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Enable"
+   }
+  ],
+  "needs": "a long reply and notification permission not yet granted",
+  "note": "The dismiss button text was not located.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in a browser that has not granted notifications.",
+   "Send a message that takes a while to answer.",
+   "Look for the strip Get notified when the response is ready. with an Enable button.",
+   "Click Enable or the dismiss control and check the strip reacts."
+  ],
+  "where": "Chat > send a long message > the strip at the top of the chat: Get notified when the response is ready. with Enable"
+ },
+ "S8.48": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/page.tsx",
+    "text": "Show more"
+   }
+  ],
+  "needs": "an account with more projects than one page",
+  "note": "Sidebar label for the Projects entry was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the sidebar.",
+   "Scroll to the bottom of the list.",
+   "Click Show more.",
+   "Look for the Loading projects text while loading, then more projects appear."
+  ],
+  "where": "Projects > the Projects list at the bottom > Show more"
+ },
+ "S8.49": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "No artifacts yet"
+   }
+  ],
+  "needs": "an account or chat with no artifacts",
+  "note": "The control that opens the Artifacts panel was not located.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with no artifacts.",
+   "Open the Artifacts panel.",
+   "Look for the empty message No artifacts yet with the line Renderable code and generated files will appear here."
+  ],
+  "where": "Chat > Artifacts panel with no artifacts yet"
+ },
+ "S8.50": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/page.tsx",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a way to make the list fail (network off)",
+  "note": "Chat-level error text is Couldn't load this conversation. Check your connection and try again. (apps/web/features/chat/pages/WebChatPage.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects while the network is off or the list cannot load.",
+   "Look for the error message and the Retry button.",
+   "Turn the network back on, click Retry, and check the list loads."
+  ],
+  "where": "Projects > the Projects list fails to load > Retry"
+ }
+}

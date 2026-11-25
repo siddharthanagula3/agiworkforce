@@ -1,0 +1,252 @@
+{
+ "S33.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "Published artifacts"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "Unpublish"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "No published artifacts"
+   }
+  ],
+  "needs": "a signed-in account with at least one published artifact",
+  "note": "The exact web settings nav label for this section was not found as text; the Desktop cloud settings modal labels the same section Shared links (apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx). The row shows no explicit state label beyond the audience and the Published date.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Settings and choose Shared links.",
+   "Scroll below the shared conversation links to the Published artifacts heading.",
+   "Look at each row: title, audience (Anyone with the link, Everyone in this workspace or Only people you invite), kind, size, Published date.",
+   "Check the row buttons Open, History and Unpublish, and the empty text No published artifacts when there are none."
+  ],
+  "where": "Settings > Shared links > Published artifacts"
+ },
+ "S33.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Published \u00b7 link copied to clipboard"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The prompt-to-artifact step itself was not traced in the listed files; only the Publish step was confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a new chat and type a prompt asking the assistant to build a small web page.",
+   "Wait for the artifact panel to show the generated page.",
+   "Click Publish in the artifact panel.",
+   "Look for the toast Published \u00b7 link copied to clipboard, and confirm the page is now hosted at a link."
+  ],
+  "where": "Chat > ask the assistant for a web page or app > artifact panel > Publish"
+ },
+ "S33.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Published. Copy the link from the bar below."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The code calls the result a public link or shareUrl; no separate preview deployment control was found, so this is the same Publish action as S33.04.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact that the assistant created in a chat.",
+   "Click Publish in the artifact panel.",
+   "Wait for the toast and copy the link from the bar below if the clipboard was not used.",
+   "Open the link in a new private window and compare with Expected."
+  ],
+  "where": "Chat > artifact panel > Publish"
+ },
+ "S33.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Anyone with the link"
+   }
+  ],
+  "needs": "a signed-in account and a private browser window",
+  "note": "The public page is served from the shared-artifact route; the exact on-screen text of the page itself was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Publish an artifact from the artifact panel.",
+   "Copy the link from the toast or from the bar below.",
+   "Open the link in a new private window with no sign-in.",
+   "Compare the page you see with Expected; also check that Settings > Shared links > Published artifacts lists it with Open."
+  ],
+  "where": "Chat > artifact panel > Publish, then Settings > Shared links > Published artifacts > Open"
+ },
+ "S33.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "Everyone in this workspace"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Anyone with the link"
+   }
+  ],
+  "needs": "a workspace with a second member account",
+  "note": "The workspace option only appears in the audience menu when the member count is known, and the exact text there is built with the count in brackets.",
+  "reachable": "yes",
+  "steps": [
+   "Open a published artifact in the artifact panel and open its audience menu (the select next to Publish).",
+   "Choose Everyone in this workspace.",
+   "Open the link in a private window with no sign-in and check that it does not open.",
+   "Sign in as a second member of the same workspace and open the link to compare with Expected."
+  ],
+  "where": "Chat > artifact panel > Publish > audience menu > Everyone in this workspace"
+ },
+ "S33.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "History"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "Put live"
+   }
+  ],
+  "needs": "a published artifact with at least two published versions",
+  "note": "The chat artifact menu also has Restore version N, but that restores an earlier local version in the editor, not the live site.",
+  "reachable": "yes",
+  "steps": [
+   "Publish an artifact, edit it in chat and publish again so it has two versions.",
+   "Open Settings > Shared links, find the artifact under Published artifacts and click History.",
+   "Pick an earlier version and click Put live.",
+   "Open the public link and look for the earlier content, and for the text Version N of ... is live again."
+  ],
+  "where": "Settings > Shared links > Published artifacts > History > Put live"
+ },
+ "S33.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "Unpublish"
+   },
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "Unpublish artifact"
+   }
+  ],
+  "needs": "a published artifact",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Shared links and find the artifact under Published artifacts.",
+   "Click Unpublish on its row.",
+   "In the dialog Unpublish this artifact?, read the warning and click Unpublish artifact to confirm, or Cancel to stop.",
+   "Open the public link and check that it no longer works, and that the row disappears or shows the notice Unpublished."
+  ],
+  "where": "Settings > Shared links > Published artifacts > Unpublish"
+ },
+ "S33.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Duplicate"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Duplicated. Edits here no longer touch the original."
+   }
+  ],
+  "needs": "none",
+  "note": "The button that opens this menu was not identified by its visible text; the menu item and toast were confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact in the artifact panel.",
+   "Open the artifact's menu and click Duplicate.",
+   "Look for the toast Duplicated. Edits here no longer touch the original.",
+   "Edit the copy and check that the original artifact is unchanged."
+  ],
+  "where": "Chat > artifact panel > menu > Duplicate"
+ },
+ "S33.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download source"
+   }
+  ],
+  "needs": "none",
+  "note": "The source item label is built from the artifact language, so the extension in the menu text varies.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact in the artifact panel.",
+   "Click Download.",
+   "Choose Download source (.html) or the extension that matches the artifact language.",
+   "Open the saved file and compare its content with the artifact source."
+  ],
+  "where": "Chat > artifact panel > Download > Download source"
+ },
+ "S33.28": {
+  "labels": [
+   {
+    "file": "apps/web/app/copyright/report/ReportContentLink.tsx",
+    "text": "Report infringement or impersonation"
+   }
+  ],
+  "needs": "a published link opened in a browser",
+  "note": "The visible report link covers infringement or impersonation only; no general abuse option was found on the page itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open a published artifact link in a browser window.",
+   "Scroll to the bottom of the page.",
+   "Click Report infringement or impersonation.",
+   "Check that the copyright report form opens for this page."
+  ],
+  "where": "Open a published link (Settings > Shared links > Published artifacts > Open) > scroll to the bottom > Report infringement or impersonation"
+ },
+ "S33.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "The moderation check and its refusal message were found in the server routes (apps/web/app/api/artifacts/publish/route.ts), but no exact error text was confirmed, so the tester may not be able to trigger it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Publish an artifact from the artifact panel.",
+   "If the server refuses the publication, look for an error message instead of the success toast Published.",
+   "Compare with Expected: a site that is refused or taken down should not stay public."
+  ],
+  "where": "Effect is seen when publishing from the artifact panel (Chat > artifact panel > Publish); the moderation check runs on the server."
+ },
+ "S33.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+    "text": "Unpublish artifact"
+   }
+  ],
+  "needs": "a published artifact with saved visitor data, if you want to see that data removed",
+  "note": "No separate delete-app control was found; the only removal is Unpublish, which the dialog says deletes visitor data. Deleting a chat also unpublishes its artifacts in apps/web/app/api/chat/conversations/[id]/route.ts, but the chat delete button label was not searched.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Shared links and find the artifact under Published artifacts.",
+   "Click Unpublish and read the dialog text about the data the site saved for its visitors.",
+   "Click Unpublish artifact to confirm.",
+   "Check that the row is gone and the public link no longer works."
+  ],
+  "where": "Settings > Shared links > Published artifacts > Unpublish > Unpublish artifact"
+ }
+}

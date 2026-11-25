@@ -1,0 +1,321 @@
+{
+ "S76.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "The CLI model list and /models show no text-input field, and provider.rs:184 holds no text flag; the registry crate was not checked.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No screen shows text input; it applies inside model routing"
+ },
+ "S76.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "The CLI model list and /models show no text-output field, and provider.rs:184 holds no text flag; the registry crate was not checked.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No screen shows text output; it applies inside model routing"
+ },
+ "S76.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "does not accept images; switch to a vision model with /model first"
+   },
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "Vision:"
+   }
+  ],
+  "needs": "an image file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a terminal and type /models <id> for a model whose Vision: row says no.",
+   "Type /attach and the path of an image file.",
+   "Read the refusal line: does not accept images; switch to a vision model with /model first.",
+   "Type /model, pick a vision model, then /attach the same image again and check it is attached."
+  ],
+  "where": "agi (chat), then /models <model id> (row Vision:), then /attach <image file>"
+ },
+ "S76.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "can read up to"
+   }
+  ],
+  "needs": "several image files",
+  "note": "The per-model image limit is not shown in the CLI, so the tester must check the catalog for N.",
+  "reachable": "yes",
+  "steps": [
+   "Pick a model and attach more images than that model allows, using /attach <image file> for each.",
+   "Type a question and press Enter to send.",
+   "Read the refusal: can read up to N images in one message. Remove N images to send it.",
+   "Compare N with the model's limit in the catalog; the CLI does not show the limit on /models."
+  ],
+  "where": "agi (chat), then /attach <image file> several times, then send a message"
+ },
+ "S76.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   }
+  ],
+  "needs": "a PDF file",
+  "note": "In Managed privacy mode the code does not send PDFs natively (chat.rs prepare_documents sets native_pdf to false), so results may differ by mode.",
+  "reachable": "yes",
+  "steps": [
+   "Pick a model that shows P in the model list (row shows PDF: yes on /models <model id>).",
+   "Type /attach and the path of a PDF file, and read the attached confirmation.",
+   "Type a question about a specific page or passage in the PDF and press Enter.",
+   "Check the answer uses the PDF content."
+  ],
+  "where": "agi (chat), then /attach <file>, then send a message"
+ },
+ "S76.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "Audio in/out:"
+   }
+  ],
+  "needs": "an audio file",
+  "note": "The code shows the audio flag but no audio attachment or gating path was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /models <model id> for a model.",
+   "Read the Audio in/out: row, yes or no for input and output.",
+   "Type /attach and an audio file path to see whether audio can be attached.",
+   "Compare: the attach command rejects anything that is not an image, PDF or Office file, and no code gates audio input."
+  ],
+  "where": "agi (chat), then /models <model id> (row Audio in/out:)"
+ },
+ "S76.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/dictate"
+   },
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "Using OpenAI Whisper API"
+   }
+  ],
+  "needs": "a microphone and either OPENAI_API_KEY set or a local whisper binary on PATH",
+  "note": "Voice picks the backend from OPENAI_API_KEY or a local whisper binary (voice.rs module notes); no registry lookup of a transcription model was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /dictate and press Enter.",
+   "Speak one short sentence into the microphone.",
+   "Stop and check that the spoken words appear as text in the input."
+  ],
+  "where": "agi (chat), then /dictate"
+ },
+ "S76.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the image models this account can generate with"
+   },
+   {
+    "file": "apps/cli/src/cloud/image.rs",
+    "text": "makes at most"
+   }
+  ],
+  "needs": "a signed-in AGI account in Managed privacy mode",
+  "note": "The image model list comes from the server, so the names and limits depend on the account; the --count flag name was inferred from the command's argument list.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi image --list-models in a terminal.",
+   "Read the image model names listed for the account.",
+   "Run agi image \"a red bicycle\" --count N with N above the model's per-request maximum.",
+   "Read the refusal: makes at most N image per request, and check the image is not generated."
+  ],
+  "where": "agi image --list-models in a terminal, then agi image \"<prompt>\" --count N"
+ },
+ "S76.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "Tool use:"
+   },
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "Flags: T=tools, V=vision, R=reasoning, P=reads PDFs, A=audio input. !=deprecated, B=beta."
+   }
+  ],
+  "needs": "none",
+  "note": "The CLI shows the tool flag but no refusal of tool-dependent turns was found in the code searched.",
+  "reachable": "yes",
+  "steps": [
+   "Type /models <model id> for a model.",
+   "Read the Tool use: row, yes or no.",
+   "Compare with the T flag in the list from agi --list-models."
+  ],
+  "where": "agi (chat), then /models <model id> (row Tool use:)"
+ },
+ "S76.22": {
+  "labels": [],
+  "needs": "a few files in the project folder",
+  "note": "The parallel-tool flag is read from the registry harness; the CLI shows no setting for it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask agi to read three different files in one request.",
+   "Watch whether the three read steps start together or one after another."
+  ],
+  "where": "Shows only as tool calls that run together in one turn"
+ },
+ "S76.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "No CLI control for multi-round tool use was found; the effect is visible only through the tool steps.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask agi a question that needs a search, then a file read, before answering.",
+   "Count the tool steps shown before the final answer."
+  ],
+  "where": "Shows as several tool rounds before one final answer"
+ },
+ "S76.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/effort"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "This model takes no effort setting on this route, so the level applies once you switch to one that does"
+   }
+  ],
+  "needs": "two models, one with effort support and one without",
+  "note": "Whether the picker filters levels to the catalog's supported levels was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Type /effort and press Enter to open the effort picker.",
+   "Read the levels the picker offers for the current model.",
+   "Pick one level and read the reply Effort set to ...",
+   "Type /model to switch to a model with no effort setting and read: This model takes no effort setting on this route, so the level applies once you switch to one that does."
+  ],
+  "where": "agi (chat), then /effort"
+ },
+ "S76.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "does not accept a temperature, so your configured"
+   }
+  ],
+  "needs": "a model that rejects sampling parameters",
+  "note": "The CLI does not list which models reject sampling; the tester must know one, and whether the note appears at start or at switch was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi with a temperature, for example agi -t 0.5.",
+   "Switch with /model to a model that rejects sampling parameters.",
+   "Read the chat line: does not accept a temperature, so your configured 0.5 is not sent to it."
+  ],
+  "where": "agi -t 0.5 (chat), then /model <model id that rejects sampling>"
+ },
+ "S76.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "Context window:"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Context:"
+   }
+  ],
+  "needs": "none",
+  "note": "Trimming or refusal of over-long requests was not confirmed in this search.",
+  "reachable": "yes",
+  "steps": [
+   "Type /models <model id> and read Context window: in tokens.",
+   "Type /status and read the Context: percentage.",
+   "Compare with Expected: the tester should check whether a request over the limit is trimmed or refused."
+  ],
+  "where": "agi (chat), then /models <model id> (row Context window:) and /status (Context:)"
+ },
+ "S76.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "Max output:"
+   }
+  ],
+  "needs": "none",
+  "note": "The cap on requests is applied in config.rs (stated_max_output_tokens) and cannot be seen on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Type /models <model id> and read Max output: in tokens.",
+   "Compare the figure with the catalog's output limit."
+  ],
+  "where": "agi (chat), then /models <model id> (row Max output:)"
+ },
+ "S76.31": {
+  "labels": [],
+  "needs": "none",
+  "note": "The transport choice per model is not shown in the CLI.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask agi a long question in chat.",
+   "Watch whether the answer text appears in pieces while it arrives."
+  ],
+  "where": "Shows as answer text that appears piece by piece"
+ },
+ "S76.32": {
+  "labels": [],
+  "needs": "none",
+  "note": "No cache field was found in the /cost or /models output.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No screen shows prompt-cache capability"
+ },
+ "S76.34": {
+  "labels": [],
+  "needs": "none",
+  "note": "No region setting or display was found in the CLI; routing that refuses routes is in packages/ai/routing/src/auto.ts (server side).",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No screen shows regional route availability"
+ },
+ "S76.35": {
+  "labels": [],
+  "needs": "none",
+  "note": "No retention field was found in the CLI; zero-retention routing is in packages/ai/routing/src/auto.ts (server side).",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No screen shows retention or data-use for a model"
+ },
+ "S76.37": {
+  "labels": [
+   {
+    "file": "apps/cli/src/provider.rs",
+    "text": "deprecated, leaves the catalog"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/model_picker.rs",
+    "text": "deprecated, leaves"
+   }
+  ],
+  "needs": "none",
+  "note": "The picker labels deprecated models; whether any are excluded from the picker was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi --list-models in a terminal, or type /models in chat.",
+   "Find a row marked ! (deprecated) or B (beta).",
+   "Read the line under it: deprecated, leaves the catalog <date>.",
+   "Type /model and check the picker shows the same deprecated, leaves date label."
+  ],
+  "where": "agi --list-models in a terminal, or /models in chat"
+ },
+ "S76.38": {
+  "labels": [],
+  "needs": "none",
+  "note": "Route ranking by price, cache class and retention is in packages/ai/routing/src/auto.ts on the server; the CLI list shows catalog and gateway models only.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Shows only in the price and route order of the server's choice"
+ }
+}

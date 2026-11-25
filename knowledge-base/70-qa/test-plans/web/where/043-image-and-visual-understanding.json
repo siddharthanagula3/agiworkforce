@@ -1,0 +1,235 @@
+{
+ "S43.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "an image file",
+  "note": "The attach path exists, but the upload scanner webhook (UPLOAD_SCAN_WEBHOOK_URL) is only confirmed in code; a live check is needed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat in the web app.",
+   "Open the plus menu in the message box and click \"Add photos & files\".",
+   "Choose one image file.",
+   "Type a question about the image, such as \"What is in this picture?\", and send.",
+   "Look for an answer that describes the image. Expected: the model answers from the image, with no upload refusal message."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose one image > type a question > send"
+ },
+ "S43.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "two image files",
+  "note": "Whether the picker accepts more than one file in one pick is not checked in the files read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat in the web app.",
+   "Open the plus menu and click \"Add photos & files\".",
+   "Choose two or more image files at once.",
+   "Type \"Compare these two images\" and send.",
+   "Look for an answer that names details from both images. Expected: the model received and compared all attached images."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose two or more images > type a comparison question > send"
+ },
+ "S43.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Attach clipboard"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a screenshot",
+  "note": "Whether Attach clipboard accepts an image on the clipboard was not confirmed; pasting into the message box was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Take a screenshot with the macOS screenshot keys and leave it on the clipboard.",
+   "Open a new chat and open the plus menu.",
+   "Click \"Attach clipboard\" (or use \"Add photos & files\" and pick the screenshot file).",
+   "Type \"What does this screenshot show?\" and send.",
+   "Look for an answer that explains what is on the screen. Expected: the model describes the screenshot."
+  ],
+  "where": "Chat > composer plus menu > Attach clipboard (after copying a screenshot), or Chat > Add photos & files > choose a screenshot file"
+ },
+ "S43.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a photo or scanned PDF of a document",
+  "note": "Whether a scanned PDF is accepted as an image was not confirmed in the files read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and open the plus menu.",
+   "Click \"Add photos & files\" and choose a photo or a scanned PDF of a document.",
+   "Type \"Read this document and explain it.\" and send.",
+   "Look for an answer that reads text from the document and explains it. Expected: the model reads the scanned document."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose a photo or scanned PDF > type \"Read this document and explain it\" > send"
+ },
+ "S43.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a chart image",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and open the plus menu.",
+   "Click \"Add photos & files\" and choose a chart image.",
+   "Type \"What trend does this chart show?\" and send.",
+   "Look for an answer that names the data series and the trend. Expected: the model interprets the chart."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose a chart image > type a question about trends > send"
+ },
+ "S43.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a diagram image",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and open the plus menu.",
+   "Click \"Add photos & files\" and choose a diagram image.",
+   "Type \"Explain the structure of this diagram.\" and send.",
+   "Look for an answer that names the parts and how they connect. Expected: the model explains the diagram structure."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose a diagram image > type \"Explain the structure of this diagram\" > send"
+ },
+ "S43.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a photo of handwritten notes",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and open the plus menu.",
+   "Click \"Add photos & files\" and choose a photo of handwritten notes.",
+   "Type \"Transcribe these notes.\" and send.",
+   "Look for a transcription that matches the handwriting. Expected: the model transcribes or answers about the notes."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose a photo of handwritten notes > type \"Transcribe these notes\" > send"
+ },
+ "S43.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "an image with text",
+  "note": "There is no separate OCR control; extraction is done by asking in the chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and open the plus menu.",
+   "Click \"Add photos & files\" and choose an image that contains text.",
+   "Type \"Extract the text in this image.\" and send.",
+   "Select the text in the reply and copy it, then paste it somewhere.",
+   "Look for the copied text to match the text in the image. Expected: the text can be copied and reused."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose an image with text > type \"Extract the text in this image\" > send, then copy the reply"
+ },
+ "S43.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "an image with countable objects",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and open the plus menu.",
+   "Click \"Add photos & files\" and choose an image with a countable number of items.",
+   "Type \"How many of these are in the image?\" and send.",
+   "Count the items yourself and compare with the answer. Expected: the model gives a count."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose an image with several items > type \"How many are there?\" > send"
+ },
+ "S43.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "two scene images",
+  "note": "Multi-file selection in one pick was not confirmed in the files read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and open the plus menu.",
+   "Click \"Add photos & files\" and choose two scene images at once.",
+   "Type \"Describe the differences between these two scenes.\" and send.",
+   "Look for an answer that names differences in both images. Expected: the model describes the differences."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose two scene images > type \"Describe the differences\" > send"
+ },
+ "S43.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a photo or screenshot of a problem",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and open the plus menu.",
+   "Click \"Add photos & files\" and choose a photo or screenshot of a device, error or setup.",
+   "Type \"What is wrong here and what should I try?\" and send.",
+   "Look for numbered troubleshooting steps that refer to the picture. Expected: the model gives troubleshooting steps."
+  ],
+  "where": "Chat > composer plus menu > Add photos & files > choose a photo or screenshot of the problem > type \"What is wrong and what should I try?\" > send"
+ },
+ "S43.17": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Remix"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add from library"
+   }
+  ],
+  "needs": "a previously saved image in the library",
+  "note": "Remix is a host action passed from apps/web/features/library/components/LibraryView.tsx; the Edit and Variation chips are in apps/web/features/chat/components/Composer/ChatComposerNew.tsx and appear only in image mode.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Library\" in the sidebar.",
+   "Open an image item in the library list.",
+   "Click \"Remix\" in its menu.",
+   "The new chat opens with the image attached. Check the image chip and the \"Edit\" or \"Variation\" option.",
+   "Type a change, such as \"Make the sky red\", and send. Expected: the image is used as the reference input for the new generation."
+  ],
+  "where": "Library > open an image item > Remix (then the composer opens with the image attached); or Chat > plus menu > Add from library > pick the image > Edit or Variation"
+ }
+}

@@ -1,0 +1,304 @@
+{
+ "S7.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Start a conversation"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "none",
+  "note": "Centring is CSS (.empty-state uses justify-content: center in a flex transcript); the code does not measure it, so check by eye.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar to open the sidebar.",
+   "If the transcript already has messages, click the New chat (+) button in the header.",
+   "Look at the empty transcript area: the headline 'Start a conversation' and the line 'Ask about your code or describe a change.' should sit in the middle of the area, above the composer.",
+   "Resize the window and check the start view stays centred."
+  ],
+  "where": "AGI Code (sidebar) > New chat (+) button in the header"
+ },
+ "S7.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a conversation with at least one reply",
+  "note": "The width comes from the --conversation-width value of 768px in webviewContent.ts; the column is set by CSS padding on the transcript.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar.",
+   "Click the Sessions button (clock icon, hover title 'Sessions') in the header.",
+   "Click a conversation that already has replies.",
+   "Widen the VS Code window a lot, then narrow it.",
+   "Look that the message text stays in one centred column of about 768 px, with empty space on both sides when wide."
+  ],
+  "where": "AGI Code (sidebar) > Sessions (clock icon in the header) > open a conversation that has replies"
+ },
+ "S7.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   }
+  ],
+  "needs": "a conversation that has produced an artifact",
+  "note": "The artifact is opened with showTextDocument in the active editor group and no column is given, so it may open in the chat's group rather than beside it; the code does not force a split.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that has produced an artifact (AGI Code sidebar or Code: Open Chat in Editor).",
+   "Press Cmd+Shift+P, type 'Code: Show Artifacts' and press Enter.",
+   "Choose an artifact from the list under 'Open an artifact\u2026'.",
+   "Look whether the artifact opens in its own tab beside the conversation, with both visible and usable at once."
+  ],
+  "where": "Command Palette > Code: Show Artifacts > choose an artifact under 'Open an artifact\u2026'"
+ },
+ "S7.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Git Diff"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat in Editor"
+   }
+  ],
+  "needs": "a project folder open in VS Code, optionally a git repository with changes",
+  "note": "The side-by-side layout is VS Code's own sidebar and editor layout; the extension only registers the sidebar and opens chat tabs.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project folder in VS Code and open a file in the editor.",
+   "Click the AGI Code icon in the Activity Bar so the chat shows beside the editor.",
+   "Optionally press Cmd+Shift+P, type 'Code: Git Diff' and press Enter to show changes.",
+   "Look that the conversation, the editor and any diff are visible together in one window."
+  ],
+  "where": "AGI Code (sidebar) beside the editor, or Command Palette > Code: Open Chat in Editor, with Code: Git Diff for changes"
+ },
+ "S7.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat in Editor"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/chatEditorPanel.ts",
+    "text": "AGI Chat"
+   }
+  ],
+  "needs": "a signed-in account to send messages",
+  "note": "The side-by-side split is done by VS Code's drag, not by extension code; each chat is a separate panel.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type 'Code: Open Chat in Editor' and press Enter.",
+   "Repeat step 1 so a second chat tab opens (the second is titled 'AGI Chat 2').",
+   "Drag one chat tab to the right edge of the editor area so both sit side by side.",
+   "Send a short message in each chat and look that both stay visible and usable."
+  ],
+  "where": "Command Palette > Code: Open Chat in Editor (run twice), then drag one 'AGI Chat' tab to the side of the other"
+ },
+ "S7.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat in Editor"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/chatEditorPanel.ts",
+    "text": "AGI Chat"
+   }
+  ],
+  "needs": "a signed-in account to send messages",
+  "note": "Stacking is VS Code's editor-group drag behaviour; no extension code builds a stacked layout.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type 'Code: Open Chat in Editor' and press Enter.",
+   "Repeat step 1 to open a second chat tab.",
+   "Drag one chat tab to the bottom edge of the editor area so it sits below the other.",
+   "Send a short message in each chat and look that both stay visible and usable."
+  ],
+  "where": "Command Palette > Code: Open Chat in Editor (run twice), then drag one 'AGI Chat' tab to the bottom edge of the editor area"
+ },
+ "S7.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Close"
+   }
+  ],
+  "needs": "none",
+  "note": "The usage banner also collapses with a button titled 'Collapse meter' and reopens from 'Show usage details'; the Sessions control is the secondary navigation.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar.",
+   "Click the Sessions button in the header (clock icon, hover title 'Sessions').",
+   "Click the Close button (hover title 'Close') at the top of the Sessions panel.",
+   "Look that the Sessions panel hides and the transcript comes back.",
+   "Click Sessions again and look that it reopens."
+  ],
+  "where": "AGI Code (sidebar) > Sessions (clock icon in the header) > Close"
+ },
+ "S7.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "none",
+  "note": "The extension declares the view only in the Activity Bar container; moving and remembering the spot is VS Code's own behaviour, and the extension does not pin it.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar.",
+   "Drag the AGI Code view to the right edge of the window (Secondary Side Bar) or to the bottom panel area.",
+   "Look that the view now sits in the new edge.",
+   "Quit and reopen VS Code and look whether the view is still in the new place."
+  ],
+  "where": "AGI Code in the Activity Bar > drag the AGI Code panel to the right side bar or the bottom panel"
+ },
+ "S7.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat in Editor"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/chatEditorPanel.ts",
+    "text": "AGI Chat"
+   }
+  ],
+  "needs": "a signed-in account to send messages",
+  "note": "The detach uses VS Code's built-in tab menu, whose item wording is not in this repository, so the exact menu text is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type 'Code: Open Chat in Editor' and press Enter.",
+   "Right-click the 'AGI Chat' tab.",
+   "Choose VS Code's option that moves the editor into a new window.",
+   "Look that the chat opens in its own OS window and can still send a message."
+  ],
+  "where": "Command Palette > Code: Open Chat in Editor, then right-click the 'AGI Chat' tab and move it to a new window using VS Code's tab menu"
+ },
+ "S7.15": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/extension-vscode for 'Full screen', 'Fullscreen', 'Maximi' and 'Expand' in package.json and src; no extension command or control for a full-screen editor was found, only VS Code's own window or Zen Mode.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S7.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a conversation with enough messages to scroll",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar.",
+   "Open or make a conversation with enough messages to scroll.",
+   "Scroll the transcript up with the mouse wheel or trackpad.",
+   "Look that the 'Describe a task\u2026' box stays anchored at the bottom while the messages scroll above it."
+  ],
+  "where": "AGI Code (sidebar) > the 'Describe a task\u2026' box at the bottom"
+ },
+ "S7.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "none",
+  "note": "The code caps the box at 140 px (Math.min(scrollHeight, 140)), so it does not open a separate larger editor.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar.",
+   "Click into the 'Describe a task\u2026' box.",
+   "Type or paste a long prompt of several lines.",
+   "Look that the box grows taller as lines are added, up to about 140 px, then scrolls inside itself."
+  ],
+  "where": "AGI Code (sidebar) > the 'Describe a task\u2026' box at the bottom"
+ },
+ "S7.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a conversation with many messages",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar.",
+   "Click Sessions in the header (clock icon) and open a long conversation, then close Sessions with Close.",
+   "Scroll the transcript with the mouse wheel.",
+   "Look that only the transcript moves, while the header and the 'Describe a task\u2026' box stay in place.",
+   "Scroll over the header or composer and look that the transcript does not move."
+  ],
+  "where": "AGI Code (sidebar) > open a conversation with many messages > scroll the transcript"
+ },
+ "S7.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Collapse meter"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Usage"
+   }
+  ],
+  "needs": "a signed-in account that shows the usage banner",
+  "note": "The code saves only the usage-meter collapse (workspace state) and restores open chat tabs through a serializer; it does not save panel widths, which VS Code controls.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar and find the usage banner.",
+   "Click its \u00d7 button (hover title 'Collapse meter'); look that it shrinks to a 'Usage' pill.",
+   "Quit and reopen VS Code in the same folder, or run Developer: Reload Window from the Command Palette.",
+   "Look that the usage banner is still collapsed to the 'Usage' pill.",
+   "Optionally run Code: Open Chat in Editor, reload, and look whether the AGI Chat tab comes back."
+  ],
+  "where": "AGI Code (sidebar) > the usage banner's 'Collapse meter' button (\u00d7), then reload VS Code"
+ }
+}

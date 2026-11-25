@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + desktop lead
-Last updated: 2026-11-14
+Last updated: 2026-11-24
 
 The public AGI Desktop product is the Electron application under
 `apps/desktop/electron`. The Rust/Tauri implementation in
@@ -168,8 +168,8 @@ sandbox; an unavailable sandbox must not silently become an unrestricted run.
 
 Electron keeps only device-owned shell state such as window preferences,
 approved roots, permission decisions, pairing state, and device identity.
-Account credentials are stored only when Electron `safeStorage` reports that
-operating-system encryption is available; otherwise persistence is refused.
+The account sign-in is the hosted web session, kept in the persistent
+`persist:agi-cloud` Electron session partition.
 Provider API keys are not part of Consumer Desktop Cloud. Future Desktop Code
 provider credentials belong to the shared host credential broker used by CLI
 and VS Code; they must never be copied into renderer storage or Cloud sync.

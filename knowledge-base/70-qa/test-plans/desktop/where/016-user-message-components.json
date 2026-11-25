@@ -1,0 +1,282 @@
+{
+ "S16.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "There is no avatar or visible name. The only author text is a screen-reader-only heading 'You said:' in MessageBubble.tsx, so the visual part is alignment only.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in, start a new chat, type a short message and press Send.",
+   "Look at the message: it sits as a right-aligned bubble, and the assistant reply is a flat left-aligned column with no avatar or name, so the two authors are told apart by alignment and bubble style."
+  ],
+  "where": ""
+ },
+ "S16.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "The exact visible label of the Send control was not confirmed in the files; the transcript bubble is in MessageBubble.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Type a short sentence in the message box at the bottom and press Send.",
+   "Look at the transcript: the sentence you typed should appear in your message bubble above the reply."
+  ],
+  "where": "Start a new chat, type in the message box at the bottom of the chat screen, press Send"
+ },
+ "S16.03": {
+  "labels": [],
+  "needs": "a file to upload, and optionally an image",
+  "note": "The attach control's visible label was not confirmed. The thumbnail is labelled 'View <name> full size' (a template, not a fixed word).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Attach an image or a file to the message box (use the attach control at the bottom of the chat screen), type a short text and press Send.",
+   "Look at the sent message: image thumbnails or a named file chip should appear on that message. Click a thumbnail to open it full size."
+  ],
+  "where": "Start a new chat, attach a file or image to the message box, press Send"
+ },
+ "S16.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageContextChips.tsx",
+    "text": "Prompt:"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageContextChips.tsx",
+    "text": "Context sent with this message"
+   }
+  ],
+  "needs": "a connector with prompts or resources, or a skill",
+  "note": "Only skill, connector prompt and connector resource chips were found. Chips for quoted text, page, editor selection and @mentions were not found in MessageContextChips.tsx or MessageBubble.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat where a skill or a connector (MCP) prompt or resource is available.",
+   "Use the skill, prompt or resource in the message box and press Send.",
+   "Look under the sent user message: chips such as '/<skill name>', 'Prompt:' or 'Resource:' should appear, grouped as 'Context sent with this message'."
+  ],
+  "where": "Chat screen, a sent message with a skill, a connector prompt or a connector resource attached"
+ },
+ "S16.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Sent at"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   }
+  ],
+  "needs": "none",
+  "note": "The time is shown on demand inside the menu, not inline. Only the time (no date) is displayed in the menu.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, send a message in a chat.",
+   "Hover over your sent message (on touch screens the actions stay visible).",
+   "Click the 'More message actions' button under the message.",
+   "Look at the top of the menu: 'Sent at' followed by the time should be shown."
+  ],
+  "where": "Hover over the sent user message > 'More message actions' (the three-dot button) > 'Sent at'"
+ },
+ "S16.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/VariantPager.tsx",
+    "text": "Previous version"
+   }
+  ],
+  "needs": "none",
+  "note": "The text 'Edited message, version n of m' is in VariantPager.tsx; the code did not show whether it is visible or only a screen-reader label. The pager (not a separate 'Edited' tag) is the only marker found.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message, then hover over it and click 'Edit message'.",
+   "Change the text and click 'Save & Retry'.",
+   "Look under the edited message: a version pager with 'Previous version' and 'Next version' arrows appears, and its label should read 'Edited message, version n of m'."
+  ],
+  "where": "Hover over a sent user message > 'Edit message' > save the edit > a version pager appears under the message"
+ },
+ "S16.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Copy message"
+   }
+  ],
+  "needs": "none",
+  "note": "The copy button is inside a condition named hasReadableTurn; it was not confirmed that this condition is true for user messages.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and hover over it.",
+   "Click the copy button (tooltip 'Copy') in the action row under the message.",
+   "Paste into the message box or another app. The icon should change to a check and the label to 'Message copied'. Compare the pasted text with the sent text."
+  ],
+  "where": "Hover over the sent user message > 'Copy message' button (tooltip 'Copy')"
+ },
+ "S16.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Edit message"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/EditableMessage.tsx",
+    "text": "Save & Retry"
+   }
+  ],
+  "needs": "a sent message",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and hover over it.",
+   "Click the pencil button 'Edit message' in the action row.",
+   "The bubble becomes an editor with 'Cancel' and 'Save & Retry' buttons. Change the text and click 'Save & Retry'.",
+   "Look at the thread: the edited message replaces the old one and a new reply appears."
+  ],
+  "where": "Hover over the sent user message > 'Edit message' (pencil button, tooltip 'Edit')"
+ },
+ "S16.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Retry this message"
+   }
+  ],
+  "needs": "none",
+  "note": "The plan calls this 'Resend', but the control is labelled 'Retry' (tooltip 'Retry'). It is not shown in voice mode.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait until the reply finishes (the button is disabled while a reply is running).",
+   "Hover over your sent message and click 'Retry this message' in the action row.",
+   "Look at the thread: a new reply should appear for the same unchanged message."
+  ],
+  "where": "Hover over the sent user message > 'Retry this message' (circular arrow button, tooltip 'Retry')"
+ },
+ "S16.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Branch conversation from here"
+   }
+  ],
+  "needs": "a chat with several messages",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with at least two exchanges.",
+   "Hover over an earlier user message and click 'More message actions'.",
+   "Click 'Branch conversation from here' (it shows 'Creating branch\u2026' while running).",
+   "Look at the new conversation: it should contain the thread up to that message, and the original chat should stay unchanged."
+  ],
+  "where": "Hover over the sent user message > 'More message actions' > 'Branch conversation from here'"
+ },
+ "S16.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/VariantPager.tsx",
+    "text": "Previous version"
+   }
+  ],
+  "needs": "a sent message that you can edit",
+  "note": "The plan records this item as unfinished in the UI. The gate in apps/web/features/chat/lib/message-variants-gate.ts was not read and may hide the pager.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message, then edit it with 'Edit message' > 'Save & Retry' so it has two versions.",
+   "Look under the edited message for the pager arrows.",
+   "Click 'Previous version' and 'Next version' and check the page position changes (n of m), and the thread below follows the chosen version."
+  ],
+  "where": "Hover over an edited user message > 'Previous version' / 'Next version' arrows under the message (appears only after the message has more than one version)"
+ },
+ "S16.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show more"
+   }
+  ],
+  "needs": "a long message to paste or type",
+  "note": "The collapse threshold is a fixed height; the exact length that triggers it is not stated in the files.",
+  "reachable": "yes",
+  "steps": [
+   "Send a long message (several paragraphs of text).",
+   "Look under the message: it should be cut short and a 'Show more' button appears under it.",
+   "Click 'Show more' and check the full message is visible."
+  ],
+  "where": "Chat screen, a long sent user message (collapsed) > 'Show more' button under the message"
+ },
+ "S16.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show less"
+   }
+  ],
+  "needs": "a long message to paste or type",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Follow S16.12 to expand a long message.",
+   "Click 'Show less' under the expanded message.",
+   "Check the message shrinks back to the collapsed height with 'Show more' visible again."
+  ],
+  "where": "Chat screen, an expanded long sent user message > 'Show less' button under the message"
+ },
+ "S16.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Couldn't send. Restored here so you can try again."
+   }
+  ],
+  "needs": "a way to make the network fail (turn off Wi-Fi)",
+  "note": "The code restores the failed text to the composer with this notice. No failed state on the user's own bubble in the transcript was found, which differs from the Expected line.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a chat, and turn off the Wi-Fi or network.",
+   "Type a message and press Send.",
+   "Look at the message box and the transcript: a notice \"Couldn't send. Restored here so you can try again.\" should appear above the composer, with the text restored in the box."
+  ],
+  "where": "Message box at the bottom of the chat screen, after a send fails (for example with the network off)"
+ },
+ "S16.16": {
+  "labels": [],
+  "needs": "a way to make the network fail (turn off Wi-Fi)",
+  "note": "Searched MessageBubble.tsx, ChatMessageList.tsx and ChatComposerNew.tsx for a Retry or Resend control on a failed user send; found none. The only 'Try again' is for a stopped response in ChatMessageList.tsx. A failed send is restored to the composer (see S16.15), where the tester presses Send again, but there is no Retry control that re-sends the same text and attachments.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S16.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Queued"
+   }
+  ],
+  "needs": "a reply that takes time to finish",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that starts a long reply.",
+   "While the reply is still streaming, type a second message in the message box and press Send.",
+   "Look above the message box: a row labelled 'Queued' (or 'Queued 1 of 2:' with more than one) with 'Edit queued message' and 'Cancel queued message' buttons should appear, and it should disappear when the reply goes out."
+  ],
+  "where": "Message box at the bottom of the chat screen, while a reply is still running > 'Queued' row above the box"
+ },
+ "S16.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Couldn't send. Restored here so you can try again."
+   }
+  ],
+  "needs": "two chats, and optionally the network off to test a failed send",
+  "note": "Per-conversation draft sync is in apps/web/features/chat/hooks/use-conversation-draft-sync.ts; the sidebar label for switching chats was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open chat A and type a sentence in the message box but do not press Send.",
+   "Open a different chat, then go back to chat A.",
+   "Look at the message box: the unsent sentence should still be there, while the sent messages stay in the transcript as sent messages.",
+   "Send a message while the network is off (see S16.15): the text should return to the box with the notice 'Couldn't send. Restored here so you can try again.'"
+  ],
+  "where": "Chat screen: type text in the message box, switch to another chat in the sidebar, then come back to the first chat"
+ }
+}

@@ -1,0 +1,329 @@
+{
+ "S21.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Copy code"
+   }
+  ],
+  "needs": "none",
+  "note": "The language name is a dynamic value (CodeBlock.tsx:178), so no fixed visible label exists for it; \"Copy code\" is the aria label on the same bar.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Type \"Write a Python hello world in a code block\" and send.",
+   "Look at the bar above the code box: the language name (for example \"python\") should show there.",
+   "Compare with Expected: each code block shows its language name in a header."
+  ],
+  "where": "Chat > ask for code (e.g. type \"Write a Python hello world\" and send) > top bar of the code block"
+ },
+ "S21.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Expand code"
+   }
+  ],
+  "needs": "none",
+  "note": "Highlighting is done by Shiki (shikiHighlighter.ts) with no visible control; the label shown is only for orientation.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Type \"Write a Python function that adds two numbers\" and send.",
+   "Look at the code block: keywords, strings and names should be in different colours.",
+   "Compare with Expected: code is coloured according to its language."
+  ],
+  "where": "Chat > ask for code (e.g. type \"Write a Python hello world\" and send) > the code block"
+ },
+ "S21.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Copy code"
+   }
+  ],
+  "needs": "none",
+  "note": "The visible text on the control is \"Copy\" (CodeBlock.tsx default); the accessible name is \"Copy code\".",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt that returns a code block, such as \"Write a Python hello world\".",
+   "Move the mouse over the code block and click the Copy control in its top bar.",
+   "Paste into the composer (Cmd+V) and compare with the code block.",
+   "Compare with Expected: the pasted text matches the code exactly."
+  ],
+  "where": "Chat > ask for code > code block > Copy code button"
+ },
+ "S21.04": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Download {{fileName}}"
+   }
+  ],
+  "needs": "none",
+  "note": "The file name comes from codeFileName.ts; the accessible name is \"Download\" followed by the file name.",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt that returns a code block, such as \"Write a Python hello world\".",
+   "Move the mouse over the code block and click the Download control in its top bar.",
+   "Open Downloads in Finder and open the file.",
+   "Compare with Expected: a source file with a sensible extension (for example .py) and the same code."
+  ],
+  "where": "Chat > ask for code > code block > Download button (top bar)"
+ },
+ "S21.08": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Expand code"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Close expanded code"
+   }
+  ],
+  "needs": "none",
+  "note": "Labels are accessible names; the visible control is an icon.",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt that returns a code block, such as \"Write a long Python script\".",
+   "Click the Expand control in the code block's top bar.",
+   "Look at the full-screen dialog that opens; its title should read like \"Python code\".",
+   "Compare with Expected: the code opens in an expanded view and closes with the Close control."
+  ],
+  "where": "Chat > ask for code > code block > Expand code button"
+ },
+ "S21.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactChangesView.tsx",
+    "text": "Changes from version ${fromVersion} to version ${toVersion}"
+   }
+  ],
+  "needs": "a second version of an artifact",
+  "note": "The changed-line highlighting exists in ArtifactChangesView.tsx (aria label at line 104) and in ArtifactPreview.tsx, but I did not find the visible control that opens the compare view, so the path is unconfirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.10": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Copy code"
+   }
+  ],
+  "needs": "none",
+  "note": "Diff colours depend on the model writing a diff-language fence; shikiHighlighter.ts loads the diff language.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Show a git diff that renames a variable in a small Python file, in a diff code block\" and send.",
+   "Look at the answer's code block: lines starting with + and - should be coloured differently.",
+   "Compare with Expected: diff lines are coloured and hunk headers are readable."
+  ],
+  "where": "Chat > ask for a diff in a fenced block > diff code block"
+ },
+ "S21.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Run code"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Code Execution"
+   }
+  ],
+  "needs": "a model that can run code on this deployment",
+  "note": "Whether the menu item is enabled depends on the model and deployment (ChatComposerNew.tsx:6115).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat with Auto selected.",
+   "Click the + button beside the composer and click Run code.",
+   "Type \"Use Python to print the sum of 2 and 3\" and send.",
+   "Look for a Code Execution block under the answer that shows Output.",
+   "Compare with Expected: the code runs and its result appears."
+  ],
+  "where": "Composer > + button > Run code"
+ },
+ "S21.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Coding harness"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "No agent, Python 3, Node.js, git, curl, build-essential, GitHub CLI"
+   }
+  ],
+  "needs": "a paid account, or whatever the deployment allows",
+  "note": "The sidebar entry that leads to /code was not confirmed; the dropdown is in CodeComposer.tsx:323-326 and lists images and harnesses as groups.",
+  "reachable": "yes",
+  "steps": [
+   "Open the /code page.",
+   "Click the Coding harness dropdown.",
+   "Look at the list of runtimes (the default is \"No agent, Python 3, Node.js, git, curl, build-essential, GitHub CLI\").",
+   "Compare with Expected: more than one runtime can be chosen."
+  ],
+  "where": "Address bar: go to /code > Coding harness dropdown"
+ },
+ "S21.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Output"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Code Execution"
+   }
+  ],
+  "needs": "a model that can run code on this deployment",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Run code from the + button (see S21.12).",
+   "Type \"Run Python: print('hello')\" and send.",
+   "Click the Code Execution header if it is collapsed.",
+   "Look for the Output section with the printed text.",
+   "Compare with Expected: stdout is shown in its own panel under the code."
+  ],
+  "where": "Composer > + > Run code, then send a prompt that runs code > Code Execution block > Output"
+ },
+ "S21.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Stderr"
+   }
+  ],
+  "needs": "a model that can run code on this deployment",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Run code from the + button.",
+   "Type \"Run Python: print(1/0)\" and send.",
+   "Click the Code Execution header if it is collapsed.",
+   "Look for the red Stderr section.",
+   "Compare with Expected: stderr is shown separately from Output, in a different colour."
+  ],
+  "where": "Composer > + > Run code, then send a prompt that fails > Code Execution block > Stderr"
+ },
+ "S21.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Exit code:"
+   }
+  ],
+  "needs": "a model that can run code on this deployment",
+  "note": "The line is shown only when the result has a return code.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Run code from the + button.",
+   "Send a prompt that runs code successfully, then one that fails (\"Run Python: print(1/0)\").",
+   "Open the Code Execution block of each answer.",
+   "Look for the Exit code line and the check or x icon in the header.",
+   "Compare with Expected: success and failure show their outcome and exit code."
+  ],
+  "where": "Composer > + > Run code, then send a prompt > Code Execution block > Exit code"
+ },
+ "S21.19": {
+  "labels": [],
+  "needs": "a prompt that produces a file",
+  "note": "Generated-file handling exists in MessageBubble.tsx (around line 1524, non-image files get a download chip) and ArtifactPreview.tsx (around line 1669), but I did not find the visible label for the chip, so the path is unconfirmed.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Plot {{i}}"
+   }
+  ],
+  "needs": "a model that can run code on this deployment",
+  "note": "The heading is built as \"Plot\" plus the number in CodeExecutionBlock.tsx:115.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Run code from the + button.",
+   "Type \"Run Python with matplotlib to plot a sine wave and show it\" and send.",
+   "Click the Code Execution header if it is collapsed.",
+   "Look for the Plot 1 heading and the image under it.",
+   "Compare with Expected: the plot renders inline in the answer."
+  ],
+  "where": "Composer > + > Run code, then send a prompt that draws a plot > Code Execution block > Plot"
+ },
+ "S21.21": {
+  "labels": [],
+  "needs": "",
+  "note": "Retry execution is partial: the code is gated by AGI_E2B_EXECUTION and E2B_API_KEY (apps/web/lib/e2b/gate.ts:16). I searched CodeExecutionBlock.tsx and the chat composer and message files for retry or rerun controls for execution and found none.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.22": {
+  "labels": [],
+  "needs": "",
+  "note": "Stop execution is partial, gated the same way as S21.21. I searched the chat and code folders for an execution stop control and found only the chat turn's stop (ChatComposerNew.tsx onStop), not one for execution.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.25": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Edit this code beside the chat"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Edit"
+   }
+  ],
+  "needs": "none",
+  "note": "The visible word is \"Edit\"; the accessible name is \"Edit this code beside the chat\".",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt that returns a code block, such as \"Write a Python hello world\".",
+   "Click the Edit control in the code block's top bar.",
+   "Look for the code opening in an editable panel beside the chat.",
+   "Type a small change and check that the change shows in the panel.",
+   "Compare with Expected: the code can be edited next to the chat."
+  ],
+  "where": "Chat > ask for code > code block > Edit button"
+ },
+ "S21.29": {
+  "labels": [],
+  "needs": "",
+  "note": "No permission or capability text for code execution was found. CapabilitiesSection.tsx:78 is a save-status line (\"Saving...\", \"Saved\", \"Synced to your account\"), not an explanation of what code can touch. I searched the settings and chat folders for sandbox or permission wording.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Run code"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Run code isn't available for this model on this deployment. Choose Auto or a model that can run code."
+   }
+  ],
+  "needs": "a Free account, or a model that cannot run code",
+  "note": "A second message, \"This free model cannot run code in the sandbox.\", is at ChatComposerNew.tsx:5417.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and choose a model that cannot run code (a free model, or a model the deployment does not allow).",
+   "Click the + button beside the composer.",
+   "Hover over the Run code row.",
+   "Look for the tooltip \"Run code isn't available for this model on this deployment. Choose Auto or a model that can run code.\"",
+   "Compare with Expected: the unavailable state is stated clearly."
+  ],
+  "where": "Composer > + > Run code (greyed out, hover for the tooltip)"
+ }
+}

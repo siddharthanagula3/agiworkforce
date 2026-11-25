@@ -1,0 +1,623 @@
+{
+ "S6.01": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/options/appearance-section.ts",
+    "text": "Theme"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the More button (\u22ee) at the top right of the side panel, then click Extension settings to open the Options page.",
+   "Click Options in the left list, find the Appearance section and the Theme select.",
+   "Choose Light, then Dark, then System, and go back to the side panel after each choice.",
+   "Compare the page background and panel backgrounds in each theme: each should change as a whole with no leftover fixed colours."
+  ],
+  "where": "Page and panel backgrounds across the whole side panel; they change when the theme changes under Extension settings > Options > Theme"
+ },
+ "S6.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   }
+  ],
+  "needs": "none",
+  "note": "The code sets the menu surface through the shared tokens; the exact elevation was not measured.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More (\u22ee) button at the top right of the side panel.",
+   "Look at the menu panel against the chat background behind it.",
+   "Switch the theme to Light and then Dark under Extension settings > Options > Theme and open More again.",
+   "Compare: the menu should look raised above the page in both themes, as a separate surface."
+  ],
+  "where": "Click the More (\u22ee) button in the side panel header; the menu is the raised surface"
+ },
+ "S6.03": {
+  "labels": [],
+  "needs": "a chat reply (signed-in account not verified in code)",
+  "note": "A 4.5:1 contrast ratio needs a colour meter; the tester can only check readability by eye.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send any message in the chat and wait for a reply.",
+   "Read the reply text and the small muted row under the message.",
+   "Switch the theme to Light and then Dark under Extension settings > Options > Theme and look again.",
+   "Compare: primary and muted text should both stay readable on the panel background in both themes."
+  ],
+  "where": "Reply text and muted caption text in the chat, such as the small row under a message"
+ },
+ "S6.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the More (\u22ee) button and look at the edge of the menu.",
+   "Look at the edge of the message box at the bottom of the side panel.",
+   "Switch the theme to Dark under Extension settings > Options > Theme and look at both edges again.",
+   "Compare: both borders should be visible but subtle, in both themes."
+  ],
+  "where": "The border around the message box at the bottom of the chat and the border of the More menu"
+ },
+ "S6.05": {
+  "labels": [],
+  "needs": "a chat reply",
+  "note": "The on-fill and text roles were read in the code, not measured.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Drag across a line of reply text to select it and look at the selection highlight.",
+   "Look at the accent-tinted model selector button in the chat header.",
+   "Switch the theme to Light and then Dark under Extension settings > Options > Theme and repeat.",
+   "Compare: the selection and accent colours should stay readable with the text on them in both themes."
+  ],
+  "where": "Accent colour on the model selector button in the chat header, and the text selection highlight in a reply"
+ },
+ "S6.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Could not copy. Try again."
+   }
+  ],
+  "needs": "a way to make a copy or save fail (not found in code)",
+  "note": "Triggering a real failure was not confirmed, and status colours for success, warning and info were not checked on screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Find a place where the panel shows a failure notice, such as a failed copy of a message.",
+   "Read the notice text and check that it is readable on its background.",
+   "Switch the theme to Dark under Extension settings > Options > Theme and look at the notice again.",
+   "Compare: error and status text should stay readable in both themes."
+  ],
+  "where": "Warning or error text in the panel, for example the copy failure message"
+ },
+ "S6.07": {
+  "labels": [],
+  "needs": "a chat reply with code",
+  "note": "The editorial family was not confirmed on screen; the code declares UI and monospace families in side_panel.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message and read the reply text in the chat.",
+   "Find a code block in a reply, or ask for one.",
+   "Compare the sans-serif text with the monospace code text.",
+   "Compare: the UI font, the editorial font and the monospace font should each look like one declared family."
+  ],
+  "where": "Font faces in chat text, headings and code blocks"
+ },
+ "S6.08": {
+  "labels": [],
+  "needs": "a chat reply with headings",
+  "note": "Whether a reply returns headings depends on the model, and the sizes were read from tokens, not measured.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for an answer with a heading, a sub-heading and a small heading.",
+   "Look at the three heading levels in the reply.",
+   "Compare: each level should have a clear step in size and weight, the same across replies."
+  ],
+  "where": "Headings in a chat reply"
+ },
+ "S6.09": {
+  "labels": [],
+  "needs": "a chat reply",
+  "note": "No in-app text-size control was found in apps/extension/src; respect for the OS text-size setting was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message and read the reply body text.",
+   "Compare the body text with the smaller caption text under a message.",
+   "Compare: body text should use one base size across replies."
+  ],
+  "where": "Body text in the chat and in the menus"
+ },
+ "S6.10": {
+  "labels": [],
+  "needs": "a chat reply",
+  "note": "The caption token resolves to 14px in side_panel.css, which is the small body size, not a 12px role.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message and find the small row under the reply.",
+   "Read the caption text and compare its size with the body text.",
+   "Compare: captions should stay readable and not smaller than the small text size set in the tokens."
+  ],
+  "where": "Caption and metadata text, such as the small row under a chat message"
+ },
+ "S6.11": {
+  "labels": [],
+  "needs": "a chat reply with code",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a short code sample and wait for the reply.",
+   "Compare the code text with the body text next to it.",
+   "Compare: code should use a monospace font and a size of its own."
+  ],
+  "where": "Code blocks and inline code in a chat reply"
+ },
+ "S6.12": {
+  "labels": [],
+  "needs": "a chat reply",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message that gets a multi-line reply with a heading and a code block.",
+   "Compare the line spacing of body text, heading and code.",
+   "Compare: each text role should have its own line spacing that suits its size."
+  ],
+  "where": "Line spacing in multi-line replies, headings, body and code"
+ },
+ "S6.13": {
+  "labels": [],
+  "needs": "a chat reply with several paragraphs",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for an answer with at least three paragraphs.",
+   "Look at the gap between the paragraphs.",
+   "Compare: the gap should be the same between every pair of paragraphs."
+  ],
+  "where": "Gap between paragraphs in a reply"
+ },
+ "S6.14": {
+  "labels": [],
+  "needs": "a chat reply with a list",
+  "note": "The list indent rule was read only by its line number in side_panel.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a list with a nested sub-list.",
+   "Look at the indent of the top list and the nested list.",
+   "Compare: each nested level should step in by the same amount."
+  ],
+  "where": "Indent of bulleted and numbered lists in a reply, and nested lists"
+ },
+ "S6.15": {
+  "labels": [],
+  "needs": "a chat reply with code",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a code block.",
+   "Look at the space between the code text and the edge of the code box on all sides.",
+   "Compare: the padding should look the same on every side."
+  ],
+  "where": "Padding inside code blocks in a reply"
+ },
+ "S6.16": {
+  "labels": [],
+  "needs": "a chat reply with a table",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a small table with a header row.",
+   "Look at the padding in each table cell.",
+   "Compare: all cells should have the same padding and the table should not overflow the panel."
+  ],
+  "where": "Cells of a table in a reply"
+ },
+ "S6.17": {
+  "labels": [],
+  "needs": "a chat reply",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send two messages in a row and wait for both replies.",
+   "Look at the space between each message and the next one.",
+   "Compare: the space between turns should be the same each time."
+  ],
+  "where": "Space between one chat turn and the next"
+ },
+ "S6.18": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Copy message"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Copy response"
+   }
+  ],
+  "needs": "a chat reply",
+  "note": "The action row is shown inside the message bubble; whether it appears only on hover was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for a reply.",
+   "Look at the row directly under your message and under the reply.",
+   "Compare the distance from each message bubble to its action row."
+  ],
+  "where": "Chat: the action row directly under a message, with Copy message under your message and Copy response under a reply"
+ },
+ "S6.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Look at the message box at the bottom of the side panel.",
+   "Click in the box and type a few words.",
+   "Compare the space between the typed text and the box edge, and around the send control."
+  ],
+  "where": "Chat screen: the message box at the bottom of the side panel"
+ },
+ "S6.20": {
+  "labels": [],
+  "needs": "none",
+  "note": "The chat message list uses a fixed 12px 10px padding in side_panel.ts with no width step found in the lines read, so this may not be met; whether Chrome allows the side panel edge to be dragged was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Drag the left edge of the side panel to make it wider, then narrower.",
+   "Look at the margin between the content and the panel edge at each width.",
+   "Compare: the margin should change in steps with the width, not drift."
+  ],
+  "where": "Left and right margin of the chat and page content when the side panel is wider or narrower"
+ },
+ "S6.21": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a few saved chats",
+  "note": "Recent chats is a tooltip and label on the clock icon, not visible text on the button.",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon in the chat header, labelled Recent chats.",
+   "Look at the rows in the list.",
+   "Compare: every row should have the same height, including rows with long titles."
+  ],
+  "where": "Click the Recent chats button (clock icon) in the chat header; the rows in the list are the sidebar history rows"
+ },
+ "S6.22": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Help"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the More (\u22ee) button in the side panel header.",
+   "Look at the height of each menu item.",
+   "Compare: every item should have the same height and padding."
+  ],
+  "where": "Click the More (\u22ee) button in the side panel header; the menu items are Close tabs\u2026, Extension settings, Shortcuts and Help"
+ },
+ "S6.23": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a few saved chats",
+  "note": "The only dialog with its own padding found in the lines read is the media viewer (16px), so a single shared dialog padding was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon in the chat header, labelled Recent chats.",
+   "Look at the space between the sheet edges and its heading, search box and list.",
+   "Compare the inner padding with the menu or other sheets you open."
+  ],
+  "where": "Click the Recent chats button (clock icon) in the chat header; the Recent chats sheet is the dialog"
+ },
+ "S6.24": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Options"
+   },
+   {
+    "file": "apps/extension/src/features/options/appearance-section.ts",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none",
+  "note": "Form spacing is set in apps/extension/src/options.ts; only the Appearance form was checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More (\u22ee) button, then click Extension settings.",
+   "In the Options page, click Options in the left list.",
+   "Look at the Theme label, the select beneath it and the spacing between this row and the next form row.",
+   "Compare: label-to-input and field-to-field spacing should match across the form rows."
+  ],
+  "where": "More (\u22ee) > Extension settings > Options page, left list Options, Appearance section, Theme field"
+ },
+ "S6.25": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "none",
+  "note": "The More (\u22ee) control is a text glyph, not an icon from the icon set.",
+  "reachable": "yes",
+  "steps": [
+   "Look at the clock icon in the chat header and other icon buttons in the panel.",
+   "Compare their size and line weight with each other.",
+   "Compare: icons should come from one family with the same stroke and size."
+  ],
+  "where": "Icons in the chat header, for example the clock icon for Recent chats"
+ },
+ "S6.26": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New schedule"
+   }
+  ],
+  "needs": "none",
+  "note": "The code defines four fixed control heights, but no single screen shows all four at once, so the tester must compare several screens.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the More (\u22ee) button in the side panel header.",
+   "Click \"Shortcuts\" to open the settings page.",
+   "Find the \"Schedules\" heading and look at \"New schedule\" and the other buttons beside it.",
+   "Compare their heights and padding with the side panel buttons, and check they come from a few fixed sizes."
+  ],
+  "where": "Effect is seen on the buttons in More (\u22ee) > Shortcuts > Schedules, for example \"New schedule\". Button sizes are set in apps/extension/src/side_panel.css (--control-sm 30px, --control-md 32px, --control-lg 34px, --control-touch 44px)."
+ },
+ "S6.27": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New schedule"
+   }
+  ],
+  "needs": "none",
+  "note": "Radius values come from the shared corner variables (for example var(--corner-control)); the tester only sees the result, not the scale itself.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the More (\u22ee) button in the side panel header.",
+   "Click \"Shortcuts\".",
+   "Look at the corners of \"New schedule\" and the fields in the schedule form after clicking it.",
+   "Compare the corner curves across buttons, inputs and cards."
+  ],
+  "where": "Effect is seen on rounded corners of buttons and inputs, for example \"New schedule\" under More (\u22ee) > Shortcuts > Schedules."
+ },
+ "S6.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "The exact text of the model button was not found in the code I read, so the tester must find it by its position in the header; the shadow rule is in apps/extension/src/side_panel.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the side panel and open the model menu from the model button in the header.",
+   "Look at the shadow under the open menu.",
+   "Compare it with the shadow on the schedule form dialog or menus opened from More (\u22ee)."
+  ],
+  "where": "Effect is seen on floating menus such as the side panel model menu, which uses the elevation shadow."
+ },
+ "S6.29": {
+  "labels": [],
+  "needs": "a conversation with an image in a reply, for the image-viewer step",
+  "note": "The layer numbers are in apps/extension/src/side_panel.css and apps/extension/src/side_panel.ts; the tester sees only the stacking result.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the side panel and open a floating menu, such as the model menu from the header.",
+   "Scroll the chat behind the open menu.",
+   "Check that the menu stays above the chat text and buttons, and that a full-screen image viewer (opened from an image in a reply) covers the whole panel."
+  ],
+  "where": "Effect is seen when a floating menu or overlay covers page content in the side panel."
+ },
+ "S6.30": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New schedule"
+   }
+  ],
+  "needs": "none",
+  "note": "Durations are named variables such as --duration-instant and --duration-spin in apps/extension/src/side_panel.css.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the More (\u22ee) button in the side panel header.",
+   "Click \"Shortcuts\" and find \"New schedule\".",
+   "Move the pointer on and off \"New schedule\" and watch the colour and border change.",
+   "Open a menu and check the open motion is short and smooth, not slow or bouncy."
+  ],
+  "where": "Effect is seen as fades and slides on hover and when menus open, for example on \"New schedule\" under More (\u22ee) > Shortcuts > Schedules."
+ },
+ "S6.31": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   }
+  ],
+  "needs": "a Mac or another computer where the reduce-motion setting can be changed",
+  "note": "The code reads the operating system setting only; there is no in-app switch for reduced motion, and the loading indicator name was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on the reduce-motion setting in the operating system (find it under Accessibility in System Settings on a Mac; this path is not in the code).",
+   "Open the side panel and send a message, then watch the loading indicator while the reply is being made.",
+   "Open More (\u22ee) > Shortcuts and check that the page moves to a section without a long smooth scroll."
+  ],
+  "where": "Effect is seen when the operating system's reduce-motion setting is on: the code stops looping and travelling animations and turns smooth scrolling off. The macOS menu path is not in the code."
+ },
+ "S6.32": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Options"
+   },
+   {
+    "file": "apps/extension/src/features/options/appearance-section.ts",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none (to test \"System\", change the computer's appearance in System Settings)",
+  "note": "The three choices are System, Light and Dark in apps/extension/src/features/appearance/themePreference.ts; the code does not confirm that code blocks change colour, so check that by eye.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More (\u22ee) button in the side panel header.",
+   "Click \"Extension settings\".",
+   "Click \"Options\" in the left list.",
+   "Under \"Appearance\", open the \"Theme\" menu and choose \"Light\", then \"Dark\", then \"System\".",
+   "Look at the side panel and the settings page: they should switch colours each time, and \"System\" should follow the computer's light or dark setting."
+  ],
+  "where": "More (\u22ee) > Extension settings > Options > Appearance > Theme (choose System, Light or Dark)"
+ },
+ "S6.33": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   }
+  ],
+  "needs": "a Windows computer with High Contrast available; a Mac tester cannot trigger this",
+  "note": "Searched for 'high contrast' and 'prefers-contrast' in apps/extension/src; the only match is the forced-colors rule in apps/extension/src/tokens.ts and apps/extension/src/side_panel.ts. No in-app high-contrast option exists.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On Windows, turn on High Contrast in the system settings (the Windows path is not in the code).",
+   "Open the side panel and then More (\u22ee) > Extension settings.",
+   "Check that text, borders and the focus outline use the system high-contrast colours."
+  ],
+  "where": "Only the Windows High Contrast mode is handled (CSS forced-colors). No in-app control was found, and the code does not respond to prefers-contrast."
+ },
+ "S6.34": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Options"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Create schedule"
+   }
+  ],
+  "needs": "none",
+  "note": "The state rules are in apps/extension/src/side_panel.ts; whether \"Create schedule\" is disabled when empty was not checked in the code.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the More (\u22ee) button and then \"Extension settings\", then \"Options\".",
+   "Move the pointer over a button in the left list and watch its hover state.",
+   "Press Tab to move focus and check the visible focus outline.",
+   "Press and hold a button with the mouse and check its pressed state; look for disabled buttons, such as \"Create schedule\" while the form is empty, and check they look different."
+  ],
+  "where": "Effect is seen on the buttons and the left list in More (\u22ee) > Extension settings > Options."
+ },
+ "S6.35": {
+  "labels": [
+   {
+    "file": "apps/extension/manifest.json",
+    "text": "AGI Extension"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   }
+  ],
+  "needs": "none",
+  "note": "Icon sizes are declared in apps/extension/manifest.json (16, 32, 48, 128); the brand mark on the Options page is apps/extension/icons/icon32.png and the empty-state mark is apps/extension/src/assets or icons/agi-symbol.png as loaded in apps/extension/src/side_panel.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chrome and find the \"AGI Extension\" icon in the toolbar; if it is hidden, open the extensions menu (the puzzle-piece icon) and check its listing.",
+   "Open chrome://extensions and look at the \"AGI Extension\" icon at its large size.",
+   "Open the side panel, click More (\u22ee) > \"Extension settings\", and look at the brand mark and the name \"AGI Extension\" at the top left.",
+   "Open an empty side panel with no conversation and check the large centred logo mark."
+  ],
+  "where": "Chrome toolbar: the \"AGI Extension\" icon. Inside the app: More (\u22ee) > Extension settings, then the brand mark and name at the top left of the Options page."
+ }
+}

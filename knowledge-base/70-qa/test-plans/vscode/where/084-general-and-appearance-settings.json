@@ -1,0 +1,109 @@
+{
+ "S84.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "General"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Model preference"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Choose"
+   }
+  ],
+  "needs": "none",
+  "note": "The Settings screen says \"Auto chooses a model for the current session\" and does not say \"default for new conversations\"; the VS Code setting agiWorkforce.model is described as \"Default LLM model\" in apps/extension-vscode/package.json. I did not verify that a new chat starts with the chosen model.",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon titled Settings at the top of the AGI Code panel.",
+   "Click General in the left list.",
+   "Under Model and reasoning, find Model preference and click Choose.",
+   "Pick a model from the list and confirm it.",
+   "Close Settings, open a new chat, and check that the model shown is the one you picked.",
+   "Compare with Expected: a new conversation should start with the chosen model."
+  ],
+  "where": "Settings (gear icon, title \"Settings\", at the top of the AGI Code panel) > General > Model preference > Choose. Also the command \"Code: Select Model\"."
+ },
+ "S84.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "General"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Reasoning effort"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "/effort"
+   }
+  ],
+  "needs": "none",
+  "note": "The Reasoning effort help text says \"Used only by providers that expose an explicit reasoning-effort control\", and the screen does not say \"default for new turns\". The levels are None, Minimal, Low, Medium, High, xHigh and Max. Whether a turn uses the chosen level depends on the provider, which I did not check.",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon titled Settings at the top of the AGI Code panel.",
+   "Click General in the left list.",
+   "Under Model and reasoning, find Reasoning effort and open its dropdown.",
+   "Pick a different level, for example High.",
+   "Close Settings, then reopen it and check that Reasoning effort still shows High.",
+   "Compare with Expected: the chosen level should be used for new turns."
+  ],
+  "where": "Settings (gear icon, title \"Settings\") > General > Reasoning effort. Also the slash command /effort in the composer."
+ },
+ "S84.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "General"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Agent mode"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Auto"
+   }
+  ],
+  "needs": "none",
+  "note": "The modes in the code are Ask, Auto, Plan and Bypass permissions. There is no chat versus agent choice, so the Expected wording \"chat vs agent/work\" is not what the screen offers. Bypass permissions needs a separate risk confirmation.",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon titled Settings at the top of the AGI Code panel.",
+   "Click General in the left list.",
+   "Under Model and reasoning, find Agent mode and open its dropdown.",
+   "Pick Plan from the list.",
+   "Close Settings, then reopen it and check that Agent mode still shows Plan.",
+   "Compare with Expected: the mode chosen should be the one new conversations start in."
+  ],
+  "where": "Settings (gear icon, title \"Settings\") > General > Agent mode."
+ },
+ "S84.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Help"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/help/helpMenu.ts",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "AGI's own Settings panel has no keyboard shortcut section, so rebinding and disabling happen in VS Code's editor. The row wording and menu items for changing or removing a key come from VS Code, not from this repository. The default key bindings are listed in apps/extension-vscode/package.json.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More icon (ellipsis) at the top of the AGI Code panel.",
+   "Click Help.",
+   "Click Keyboard shortcuts. VS Code's Keyboard Shortcuts tab opens filtered to AGI Code.",
+   "Pick an AGI command row and use the pencil icon or the right-click menu to change its key, or remove its key to disable it.",
+   "Compare with Expected: you should be able to view, rebind and disable AGI shortcuts."
+  ],
+  "where": "More (ellipsis icon, title \"More\", at the top of the AGI Code panel) > Help > Keyboard shortcuts. The item opens VS Code's own Keyboard Shortcuts editor filtered to AGI Code."
+ }
+}

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-11-17
+Last updated: 2026-11-24
 
 Symptoms whose cause is not where the error points. Each entry names what to
 check first, so the usual half hour of chasing the wrong layer is skipped.
@@ -60,8 +60,9 @@ development publishable key (`pk_test_`) forces a handshake redirect. Use a live
 format key for anything automated, which is what CI fixtures do.
 
 **Sign-in fails locally with no useful error.** `CLERK_AUTHORIZED_PARTIES` is
-required; `apps/web/lib/validate-env.ts` lists it. Without it the session is
-rejected as coming from an unrecognised party.
+an important variable; `apps/web/lib/validate-env.ts` warns when it is unset.
+Unset, only the deployment origin is accepted, so a session from another origin
+is rejected as coming from an unrecognised party.
 
 **An environment variable in `.env.local` has no effect.** A value already
 exported in the shell wins: the loader does not override `process.env`. Check the

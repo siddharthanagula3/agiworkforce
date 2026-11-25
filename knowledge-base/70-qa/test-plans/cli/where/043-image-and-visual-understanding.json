@@ -1,0 +1,286 @@
+{
+ "S43.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "switch to a vision model with /model first"
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, an image file",
+  "note": "Whether the model's answer is correct is not checked here; I only traced that the image is staged and sent with the next message.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and pick a vision-capable model with /model (agi refuses images on a model that does not accept them, with the text \"switch to a vision model with /model first\").",
+   "Type /attach followed by the path to a PNG or JPG on your Mac, and press Enter.",
+   "Look for the message \"Attached <name> (<size>). It goes with your next message; /attach remove drops it.\"",
+   "Type a question about the picture (for example \"What is in this image?\") and send.",
+   "Compare the reply with Expected: it should answer about the picture you attached."
+  ],
+  "where": "agi, then type /attach <path to image>, then type your question and send"
+ },
+ "S43.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Staged for the next turn:"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Show what is staged"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, two image files",
+  "note": "apps/cli/src/model_catalog.rs has a max images per request value, and I did not confirm the TUI enforces it when more than one image is staged.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi with a vision-capable model selected by /model.",
+   "Type /attach <first image path> and press Enter, then type /attach <second image path> and press Enter.",
+   "Type /attach list and press Enter. Look for \"Staged for the next turn:\" with both images numbered 1 and 2.",
+   "Type a message such as \"Compare these two images\" and send.",
+   "Compare with Expected: the reply should describe both images and how they differ."
+  ],
+  "where": "agi, then /attach <image 1>, then /attach <image 2>, then /attach list to check"
+ },
+ "S43.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach the image on the clipboard"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "attached {label}"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Ways to add context to your next message:"
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, a screenshot on the clipboard",
+  "note": "Only the clipboard path is coded for a captured or pasted screenshot; I did not find a separate screenshot-capture command in apps/cli.",
+  "reachable": "yes",
+  "steps": [
+   "Take a screenshot so it is on the clipboard, then start agi with a vision-capable model selected by /model.",
+   "Press Ctrl+V in the message box. The status line should show \"attached clipboard (<width>x<height>)\".",
+   "Type /attach list and press Enter to confirm the screenshot is staged.",
+   "Type \"What does this screenshot show?\" and send.",
+   "Compare with Expected: the reply should explain what the screenshot shows."
+  ],
+  "where": "agi, then Ctrl+V in the message box (or /attach clipboard after copying a screenshot)"
+ },
+ "S43.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   }
+  ],
+  "needs": "a vision-capable model for a photo, a document file (PDF or Office) or a scanned PDF",
+  "note": "A PDF goes through the document path, not the image path; apps/cli/src/documents.rs says a PDF with no extractable text may be scanned images, so whether the model reads scanned pages is not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and select a model with /model.",
+   "Type /attach <path to a photo (JPG/PNG) or a scanned PDF> and press Enter.",
+   "Type \"Read this document and explain it\" and send.",
+   "Compare with Expected: the reply should read and explain the document."
+  ],
+  "where": "agi, then /attach <photo or scan path>"
+ },
+ "S43.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, a chart image file",
+  "note": "No chart-specific code path was found; a chart goes through the same generic image attachment.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and select a vision-capable model with /model.",
+   "Type /attach <path to a chart PNG or JPG> and press Enter.",
+   "Type \"What trends does this chart show? Give the main values.\" and send.",
+   "Compare with Expected: the reply should describe the chart's data and trends."
+  ],
+  "where": "agi, then /attach <chart image path>"
+ },
+ "S43.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, a diagram image file",
+  "note": "No diagram-specific code path was found; a diagram goes through the same generic image attachment.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and select a vision-capable model with /model.",
+   "Type /attach <path to a diagram PNG or JPG> and press Enter.",
+   "Type \"Explain the structure of this diagram.\" and send.",
+   "Compare with Expected: the reply should explain the parts of the diagram and how they connect."
+  ],
+  "where": "agi, then /attach <diagram image path>"
+ },
+ "S43.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, a photo of handwritten notes",
+  "note": "No handwriting-specific code path was found; the note is attached through the generic image path.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and select a vision-capable model with /model.",
+   "Type /attach <path to a photo of handwritten notes> and press Enter.",
+   "Type \"Transcribe these handwritten notes.\" and send.",
+   "Compare with Expected: the reply should transcribe or answer questions about the handwriting."
+  ],
+  "where": "agi, then /attach <photo of handwritten notes path>"
+ },
+ "S43.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, an image containing text",
+  "note": "I found no dedicated OCR command or copy button; I searched apps/cli/src for \"ocr\" and \"extract text\" images, and text extraction is only the model's reply. The typed command in where has a stray brace; the actual command is /attach <path to an image containing text>.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and select a vision-capable model with /model.",
+   "Type /attach <path to an image containing text> and press Enter.",
+   "Type \"Extract all the text in this image exactly.\" and send.",
+   "Select the returned text in the terminal with the mouse, copy it, and compare with Expected: the copied text should match the text in the image."
+  ],
+  "where": "agi, then /attach <image path}, then ask for the text"
+ },
+ "S43.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, an image with countable items",
+  "note": "No counting-specific code path was found; the count comes from the model reading the attached image.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and select a vision-capable model with /model.",
+   "Type /attach <path to an image with several items> and press Enter.",
+   "Type \"How many of the <item> are in this image?\" and send.",
+   "Compare with Expected: the reply should give a count of the items."
+  ],
+  "where": "agi, then /attach <image path>, then ask how many items"
+ },
+ "S43.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Staged for the next turn:"
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, two scene images",
+  "note": "Same generic two-image path as S43.02; no scene-specific code found.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and select a vision-capable model with /model.",
+   "Type /attach <path to first scene> and press Enter, then /attach <path to second scene> and press Enter.",
+   "Type \"Describe the differences between these two scenes.\" and send.",
+   "Compare with Expected: the reply should describe differences between the two images."
+  ],
+  "where": "agi, then /attach <scene 1 path>, then /attach <scene 2 path>, then a question"
+ },
+ "S43.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, a photo or screenshot of a problem",
+  "note": "No troubleshooting-specific code path was found; the troubleshooting depends on the model reading the attached image.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and select a vision-capable model with /model.",
+   "Type /attach <path to a photo or screenshot of the error or device> and press Enter.",
+   "Type \"What is wrong here, and what steps should I take to fix it?\" and send.",
+   "Compare with Expected: the reply should give troubleshooting steps for what the picture shows."
+  ],
+  "where": "agi, then /attach <photo or screenshot of the problem path>, then describe the problem"
+ },
+ "S43.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach it without scaling it down, for fine detail"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "It is sent without being scaled down, so it costs more input"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attached {label}. It goes with your next message; /attach remove drops it."
+   }
+  ],
+  "needs": "a vision-capable model selected with /model, a large detailed image",
+  "note": "The code has two modes only: scaled to fit by default and full resolution with --full (apps/cli/src/tui/tui_app.rs and apps/cli/src/lib.rs). The words high-detail and reduced-detail do not appear in the CLI; I did not trace the size the model actually receives, so end-to-end honouring is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and select a vision-capable model with /model.",
+   "Type /attach <path to a large, detailed image> and press Enter. Note the message \"Attached <name> (<size>). It goes with your next message; /attach remove drops it.\"",
+   "Type /attach remove all, then type /attach --full <same image path> and press Enter.",
+   "Look for the message \"It is sent without being scaled down, so it costs more input\".",
+   "Compare with Expected: the full-resolution attach should be the only one that says it is not scaled down, and the reply should show more detail when asked about fine text."
+  ],
+  "where": "agi, then /attach --full <image path> and compare with /attach <image path>"
+ }
+}

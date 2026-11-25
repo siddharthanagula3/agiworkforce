@@ -1,0 +1,585 @@
+{
+ "S78.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Reasoning effort"
+   }
+  ],
+  "needs": "none",
+  "note": "The code cited at WebSettingsModal.tsx:243 is a per-feature capability-decision hook (useCapabilityDecision), not one resolver found by name.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Open the model button at the bottom of the composer and switch between two models.",
+   "Compare which controls appear (for example the Reasoning effort button) with what Expected says."
+  ],
+  "where": "No single resolver screen. Its effect shows in the composer controls and in Settings toggles, for example the Reasoning effort button."
+ },
+ "S78.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Reasoning effort"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "none",
+  "note": "Which models have reasoning comes from live catalogue data; the exact model list was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Open the model picker from the model name button at the bottom of the composer and pick a reasoning-capable model.",
+   "Look for the Reasoning effort button in the composer footer.",
+   "Pick a model with no reasoning support and check that the Reasoning effort button is gone or changed, as Expected says."
+  ],
+  "where": "Composer > model button > choose a model with reasoning > Reasoning effort button beside the composer"
+ },
+ "S78.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Use Auto"
+   }
+  ],
+  "needs": "a file to upload; a model on your plan that cannot read the file",
+  "note": "The composer's accepted-file rules are in ChatComposerNew.tsx; the exact file-type list per model was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the plus menu in the composer and click Add photos & files.",
+   "Choose an image or a PDF from your computer.",
+   "Open the model picker and select a model that cannot read that file type.",
+   "Look for the warning that says the selected model can't read the attached file, and the Use Auto button, and compare with Expected."
+  ],
+  "where": "Composer > plus menu > Add photos & files, then the model picker"
+ },
+ "S78.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Reasoning effort"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Off is not supported by this model."
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a reasoning-capable model.",
+   "Click the Reasoning effort button in the composer footer.",
+   "Read the marks on the slider and the note under it.",
+   "Switch to another model, open the button again, and compare the marks with Expected."
+  ],
+  "where": "Composer > Reasoning effort button > slider popover"
+ },
+ "S78.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create video"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Video length"
+   }
+  ],
+  "needs": "a paid account (video generation is gated by plan)",
+  "note": "Whether a Free account sees these controls was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the plus menu and click Create video.",
+   "Open the Video model button.",
+   "Look at the Video aspect ratio, Video quality and Video length buttons in the composer.",
+   "Change the video model and check that the offered settings change, as Expected says."
+  ],
+  "where": "Composer > plus menu > Create video, then the video controls in the composer"
+ },
+ "S78.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Code is on paid plans"
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Code"
+   }
+  ],
+  "needs": "a Free account and a paid account",
+  "note": "The server refusal on the session route is not visible to a person; only the UI state is.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and click Code in the sidebar.",
+   "Look for the notice Code is on paid plans and the Upgrade button.",
+   "Sign in with a paid account and check the Code page changes.",
+   "Compare with Expected; the server-side check cannot be seen from the screen."
+  ],
+  "where": "Sidebar > Code (the Code page)"
+ },
+ "S78.08": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Limit reached"
+   }
+  ],
+  "needs": "a paid account with some usage (or a Free account)",
+  "note": "How the Settings window is opened was not traced in code; Usage is the settings nav item.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Settings window and click Usage.",
+   "Read the percent used bars and the note about the UTC calendar month.",
+   "Check the limit message, for example Limit reached, when a limit is used up.",
+   "Compare what is shown with the allowance shown elsewhere in Settings, as Expected says."
+  ],
+  "where": "Settings window > Usage"
+ },
+ "S78.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspaceConsolePointer.tsx",
+    "text": "Workspace administration"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Policy"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Zero data retention only"
+   }
+  ],
+  "needs": "an admin account in a workspace and a second account in the same workspace",
+  "note": "The console page is also at /workspace/policy.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a workspace owner or admin and open Settings, then Workspace.",
+   "Click Workspace administration, then Policy.",
+   "Change a setting such as Zero data retention only and save.",
+   "Sign in as a member of the same workspace and check the restricted choice is limited, as Expected says."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Policy"
+ },
+ "S78.10": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Transfer ownership"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Roles"
+   }
+  ],
+  "needs": "an admin account and a member account in the same workspace",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as an owner or admin and open Settings, then Workspace; note the Transfer ownership button.",
+   "Sign in as a plain member of the same workspace and open Settings, then Workspace.",
+   "Check that owner and admin controls (such as Transfer ownership) are not shown.",
+   "Compare with Expected; the server refusal cannot be seen from the screen."
+  ],
+  "where": "Settings > Workspace"
+ },
+ "S78.11": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Privacy"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Only use AI providers based in the US"
+   }
+  ],
+  "needs": "none",
+  "note": "The label string is in apps/web/features/settings/components/UsOnlyRoutingPanel.tsx (const LABEL); the Privacy nav item is in packages/ui/ui/src/settings-nav.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Privacy.",
+   "Turn on Only use AI providers based in the US.",
+   "Open the model picker and look for models that are marked unavailable.",
+   "Compare with Expected; the note says models without a US-based provider are unavailable."
+  ],
+  "where": "Settings > Privacy > Only use AI providers based in the US"
+ },
+ "S78.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AgeConfirmationStep.tsx",
+    "text": "Confirm your age"
+   },
+   {
+    "file": "apps/web/features/auth/AgeConfirmationStep.tsx",
+    "text": "Age requirements"
+   }
+  ],
+  "needs": "a new account to sign up",
+  "note": "The ineligible wording is built from a template in packages/contracts/types/src/account-eligibility.ts, and the age input itself was not traced; the cited RecordTermsAcceptance.tsx lines moved.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new account on the sign-up page and reach the Confirm your age step.",
+   "Read the notice that says this service is for adults.",
+   "Complete the step with an age under 18 if the step offers that choice.",
+   "Check the screen that tells you that you must be at least 18 to continue, and compare with Expected."
+  ],
+  "where": "Sign-up > Confirm your age step"
+ },
+ "S78.13": {
+  "labels": [
+   {
+    "file": "apps/web/app/plugins/[id]/ConnectorChecklist.tsx",
+    "text": "Required connectors"
+   },
+   {
+    "file": "apps/web/app/plugins/[id]/ConnectorChecklist.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Plugins"
+   }
+  ],
+  "needs": "an account where some connectors are not connected yet",
+  "note": "The route from the Plugins item to a plugin page was not traced; the plugin page URL is /plugins/<id>.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin that needs connectors from the Plugins item in the composer plus menu.",
+   "Scroll to Required connectors.",
+   "Look at each connector row: Checking, then Connected or a Connect link.",
+   "Compare with Expected."
+  ],
+  "where": "Plugins (composer plus menu) > a plugin page (/plugins/<id>) > Required connectors"
+ },
+ "S78.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Work with local code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Desktop app"
+   }
+  ],
+  "needs": "a Desktop app signed in to the same account (to see online or offline status)",
+  "note": "The status text comes from apps/web/features/desktop-host/hooks/use-paired-desktop.ts; the exact trigger label of the Code more menu was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on the web app and click Code in the sidebar.",
+   "Open the Code menu that holds Work with local code.",
+   "Hover or read the Desktop app row: the status says the paired desktop is online, asleep or offline.",
+   "Compare with Expected; with no paired desktop the row links to the download page."
+  ],
+  "where": "Code page > the Code more menu > Work with local code (Desktop app)"
+ },
+ "S78.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Your plan does not include managed environments."
+   },
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Code"
+   }
+  ],
+  "needs": "a Free account (to see the plan notice)",
+  "note": "Which of the two notices shows depends on the live deployment setting.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click Code in the sidebar.",
+   "If the deployment has managed environments off, read Managed environments are not enabled on this deployment.",
+   "If the plan does not include them, read Your plan does not include managed environments.",
+   "Compare with Expected; when the environment is being prepared the page says it is still being prepared."
+  ],
+  "where": "Sidebar > Code"
+ },
+ "S78.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Temporarily unavailable"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Not available in this app"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Coming soon"
+   }
+  ],
+  "needs": "none (a provider outage must be present for the Temporarily unavailable row)",
+  "note": "The Temporarily unavailable state depends on live provider status, so it may not appear in a normal test run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker from the model name button in the composer.",
+   "Look for rows with Coming soon or Beta labels and rows marked Not available in this app.",
+   "Look for a row marked Temporarily unavailable.",
+   "Compare the wording: Temporarily unavailable means a temporary provider problem; Not available in this app means not offered here."
+  ],
+  "where": "Composer > model button > Models picker"
+ },
+ "S78.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Use the browser"
+   }
+  ],
+  "needs": "the Desktop app on a Mac, and the web app in a browser",
+  "note": "The rows appear only when the desktop host is present (ChatComposerNew.tsx sets showDesktopActionRows from desktopHost).",
+  "reachable": "yes",
+  "steps": [
+   "In the web app, open the composer plus menu and note that Use the browser, Run a local command and Use this computer are not listed.",
+   "Open the same plus menu in the Desktop app.",
+   "Check that Use the browser appears there.",
+   "Compare with Expected."
+  ],
+  "where": "Composer > plus menu > Use the browser (Desktop app only)"
+ },
+ "S78.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Coming soon"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "Locked rows read as '<plan> and above' built from a template; the exact plan label depends on the catalogue.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and open the model picker.",
+   "Find a row with a lock label such as an upgrade-plan label, or Coming soon.",
+   "Hover or click the locked row and read the reason.",
+   "Check the row stays visible and shows why it is locked, as Expected says."
+  ],
+  "where": "Composer > model button > Models picker > a locked row"
+ },
+ "S78.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Upgrade to use"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "What each plan includes"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account and open the model picker.",
+   "Find a row marked Upgrade to use with a plan name.",
+   "Click the row or the link What each plan includes.",
+   "Check that the plan that unlocks it is named and the upgrade path is reachable, as Expected says."
+  ],
+  "where": "Composer > model button > Models picker > locked row > Upgrade to use, and the link What each plan includes"
+ },
+ "S78.20": {
+  "labels": [
+   {
+    "file": "apps/web/app/plugins/[id]/ConnectorChecklist.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "apps/web/app/plugins/[id]/ConnectorChecklist.tsx",
+    "text": "Required connectors"
+   }
+  ],
+  "needs": "an outside account (such as Google or GitHub) to finish connecting",
+  "note": "The Connect link goes to /connectors.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin that needs connectors.",
+   "Find a connector row that shows Connect.",
+   "Click Connect and confirm it opens the connectors page.",
+   "Compare with Expected: the connector to connect is named in the row and the link gives the way to connect."
+  ],
+  "where": "Plugins page for a plugin (/plugins/<id>) > Required connectors > Connect"
+ },
+ "S78.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Use the browser"
+   },
+   {
+    "file": "apps/web/features/settings/sections/VoiceSection.tsx",
+    "text": "Microphone"
+   }
+  ],
+  "needs": "the Desktop app; a Chrome extension paired for the browser text; a microphone for the Voice settings",
+  "note": "The dictation start error shows The microphone could not be started. Try again. (apps/web/features/chat/hooks/use-dictation.ts); no pre-permission explanation for the microphone was found.",
+  "reachable": "yes",
+  "steps": [
+   "In the Desktop app, open the composer plus menu and click Use the browser.",
+   "Read the dialog text that says every action asks you first.",
+   "Open Settings > Voice and look at the Microphone choice.",
+   "Compare with Expected; no microphone permission explanation was found before the system prompt."
+  ],
+  "where": "Composer > plus menu > Use the browser (Desktop app)"
+ },
+ "S78.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Choose a compatible model"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Use Auto"
+   }
+  ],
+  "needs": "an image file; a model on your plan that cannot read images",
+  "note": "The server-side refusal text for an unsupported feature is in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Attach an image from Add photos & files.",
+   "Open the model picker and choose a model that cannot read images.",
+   "Read the warning that says the selected model can't read the attached image.",
+   "Check the Use Auto button and the Choose a compatible model button, and compare with Expected."
+  ],
+  "where": "Composer > plus menu > Add photos & files, then the model picker"
+ },
+ "S78.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Work with local code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Desktop app"
+   }
+  ],
+  "needs": "a Desktop app signed in to the same account",
+  "note": "The session menu also has a Desktop app row (CodeSessionMenu.tsx); the trigger for the Code more menu was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on the web app and open Code.",
+   "Open the Code menu that holds Work with local code, and choose the Desktop app row.",
+   "If the Desktop app is paired and online, check that the link opens the same work in Desktop.",
+   "Compare with Expected; there is no equivalent action in the chat composer."
+  ],
+  "where": "Code page > Work with local code (Desktop app)"
+ },
+ "S78.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "On this device"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Your own keys"
+   }
+  ],
+  "needs": "a local model runtime (Ollama or LM Studio) for the On this device section; a workspace admin account for the Policy modes",
+  "note": "Only partly confirmed: the local choice is in the picker, but the own-key and cloud choice per message was not located. Settings > Models & Keys (packages/ui/ui/src/settings-nav.ts) may hold keys.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker and look for the section On this device.",
+   "Choose a local model there and send a message.",
+   "As a workspace admin, open Workspace administration > Policy and read the Local, Your own keys and Cloud modes.",
+   "Compare with Expected; a per-message choice between own key and managed cloud was not found."
+  ],
+  "where": "Composer > model button > On this device (local models); workspace owners set Your own keys and Cloud in Workspace administration > Policy"
+ },
+ "S78.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Remove attachments"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Choose a compatible model"
+   }
+  ],
+  "needs": "a file to upload; a model on your plan that cannot read it",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Attach an image or PDF.",
+   "Switch to a model that cannot read it.",
+   "Read the warning, then click Choose a compatible model or Use Auto.",
+   "Click Remove attachments on another try and check the file is removed, as Expected says."
+  ],
+  "where": "Composer > attach a file > switch model > attachment warning with Remove attachments and Choose a compatible model"
+ },
+ "S78.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Fast mode"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Reasoning effort"
+   }
+  ],
+  "needs": "a paid account (Fast mode is plan-dependent; not verified)",
+  "note": "The unsupported-parameter message comes from the server in request-processor.ts; the removal before sending is not visible on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Choose a model and open the Reasoning effort button.",
+   "Turn on the Fast mode switch.",
+   "Choose a model that does not offer Fast mode, and send a message.",
+   "Look for the message Fast mode is not available for that model, and check whether the option was removed before sending, as Expected says."
+  ],
+  "where": "Composer > Reasoning effort button > Fast mode switch"
+ },
+ "S78.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Work"
+   }
+  ],
+  "needs": "a Free account and a paid plan change it can make (Stripe checkout), in the same workspace",
+  "note": "The Code line cites ChatComposerNew.tsx:1067 and use-billing-queries.ts:108; the effect is inner behaviour (billing data is refetched with staleTime 0 and refetchOnWindowFocus true), so the tester only sees it through the controls above. The Desktop shell is Electron showing the hosted web app, so these are the same web screens. I did not confirm the plus button's visible label or the Desktop-only path for plan changes.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in with a Free account, open a chat, and open the composer's plus menu. Note whether the \"Create image\" and \"Create video\" rows appear, and whether the \"Chat\" / \"Work\" mode choice appears.",
+   "Open Settings > Billing and start a plan change (this opens a Stripe page; complete it or use a test plan change).",
+   "Return to the app window and bring it back into focus, without reloading or reinstalling.",
+   "Open the composer's plus menu again and check whether \"Create image\" and \"Create video\" now show, and whether \"Work\" is now selectable, matching the new plan."
+  ],
+  "where": "Live refresh of gated controls: the chat composer's Work mode and Create image / Create video rows update after a plan change, with no restart. The plan change is made in Settings > Billing."
+ }
+}

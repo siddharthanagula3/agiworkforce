@@ -1,0 +1,1214 @@
+[
+ {
+  "id": "FREE-IMAGE",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "Cause 1 (Create image dead end) hits production Free users: it comes from the shipped apps/web/config/free-pools.json and the code, not from this test machine. It stays until the two remaining image rows end (qwen-quota-252 on 2026-11-26, qwen-quota-273 on 2027-01-01), after which the catalogue has no image models and the label becomes Upgrade. Paid plans are not affected (freeMediaAccess returns ",
+  "causes": [],
+  "refute_votes": "REFUTED(medium), stands(medium)",
+  "design": {
+   "id": "FREE-IMAGE",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/FREE-IMAGE.md",
+   "one_line": "One root cause covers the Create image Retry, the dead Enter on an image edit, and the Free typed-request outcome: the server reports \"unknown\" for a row that is permanently not integrated. Fix the contract so Free gets \"not_offered\" and the existing Upgrade paths open. Separately fix SVG cropping and blank SVG replies in the shared renderer.",
+   "parts": [
+    {
+     "symptom": "Create image shows Retry and 'could not be checked' on Free",
+     "action": "fix_in_code",
+     "summary": "Make freeMediaAvailability return not_offered for permanently unavailable rows (not_integrated and others), so the plus menu and slash command show Upgrade. Keep 'unknown' only for retryable reasons. Split the failed-fetch copy from the server-unavailable copy. Covers video too. The tester's 'Retry does not re-request' is wrong (server.log 11814, 11823, 12138)."
+    },
+    {
+     "symptom": "Edit follow-up: Enter and Send do nothing, text stays, survives reload",
+     "action": "fix_in_code",
+     "summary": "Cause found in code and log. handleComposerSend (WebChatPage.tsx:4537) gates a typed image request on Free, calls resolveLimitedFreeMedia, gets 'unknown' (same root as C1), shows a toast and returns false, which keeps the draft. server.log has one free-quota GET per press (13819, 14311, 14319, 14807) and no other request. The C1 fix makes it open Upgrade (4604-4605). Also split the toast copy by cause. Latent silent exits get notices. Whether a toast actually showed is unproven (not seen in screenshots)."
+    },
+    {
+     "symptom": "Typed 'Generate an image' on Free (clarify card about SVG)",
+     "action": "no_change",
+     "summary": "The card came from the tester's lowercase 'w-7-f1:' label defeating the router. An unlabelled request is intercepted by handleComposerSend and, after the C1 fix, opens Upgrade with no 403, no user bubble and no wasted round trip. For callers that skip the gate, the 403 renders the inline paywall card (mediaPaywallRecovery.ts:153), not a toast."
+    },
+    {
+     "symptom": "SVG drawing cut off in a 256 px frame, dark bars in Light",
+     "action": "fix_in_code",
+     "summary": "SvgConceptGallery: viewBox from plain numeric width/height and fit to the frame, scroll fallback for unscalable SVGs, aspect-ratio frame, background resolved from the host theme and passed by value (not a transparent iframe, not a hard-coded colour)."
+    },
+    {
+     "symptom": "SVG answer blank, turn 'complete', also after reload",
+     "action": "fix_in_code",
+     "summary": "Server.log shows 94 text deltas and 98 output tokens, no tool call, so the text arrived and was dropped by the renderer. Extract raw un-fenced <svg> blocks as slides, and show a one-line note plus the source when a drawing cannot be sanitised."
+    },
+    {
+     "symptom": "Free has no servable image model",
+     "action": "owner_decision",
+     "summary": "After the fix Free sees Upgrade. Whether to source a Free image allowance (provider credential, quota, terms-review approval) is a separate owner call. Also whether 'Edit that image' after an SVG answer should stay a chat turn (default: opens Upgrade)."
+    }
+   ],
+   "files": [
+    "packages/contracts/cloud-contracts/src/free-quota.ts",
+    "apps/web/lib/free-quota-authorization.ts",
+    "apps/web/features/models/lib/free-media.ts",
+    "apps/web/features/chat/lib/free-media-choice.ts",
+    "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "apps/web/features/chat/pages/WebChatPage.tsx",
+    "packages/ui/unified-chat/src/components/markdown/SvgConceptGallery.tsx",
+    "packages/ui/unified-chat/src/components/markdown/svgGallery.ts"
+   ],
+   "needs_owner_decision": false,
+   "risk": "medium",
+   "size": "medium",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": true,
+   "commit_subject": "fix(web): show upgrade when free image creation is not offered and keep svg drawings visible",
+   "owner_question": "Should Free get a real image allowance (needs a provider credential or quota and a terms-review approval)? And after an SVG answer on Free, should a typed \"Edit that image\" stay a chat turn instead of opening Upgrade? The design ships with Upgrade for both and needs no owner action."
+  },
+  "critique_must_fix": 3,
+  "revised": true
+ },
+ {
+  "id": "XLSX",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "Likely yes wherever the production deployment does not set AGI_E2B_CHAT_TEMPLATE to an image that has LibreOffice. I could not verify the production setting. The repo ledger (audit/ledger/ecosystem-capability-ledger.jsonl S31.03, S95.22, S110.03) lists building the template and setting AGI_E2B_CHAT_TEMPLATE as an owner switch-on that was still pending, so treat production as affected until the own",
+  "causes": [
+   {
+    "symptom": "Any .xlsx with a formula fails with 'workbook recalculation failed', on Free and Ultra. Word and PowerPoint work.",
+    "kind": "product_defect",
+    "cause": "The xlsx path in managed-office-file-service.ts (994-1014) detects <f> cells and requires LibreOffice recalculation in the E2B sandbox before it returns the file. recalculateManagedWorkbook (managed-office-preservation.ts:757-838) runs `python3 -c` that needs `libreoffice` or `soffice` and fails clo"
+   },
+   {
+    "symptom": "Local machine never had the Office sandbox template.",
+    "kind": "setup_limit",
+    "cause": "AGI_E2B_CHAT_TEMPLATE is not set in the local env, so the sandbox has no soffice. This explains why it failed here. Whether production sets it is unknown from the repo."
+   },
+   {
+    "symptom": "Free retry in plain words: 'the spreadsheet file-generation tool isn't available' (a false claim in the sense that the tool exists).",
+    "kind": "product_defect",
+    "cause": "On that turn the tool really was absent from the request. create_office_file is added only when request.office_creation is true (request-processor.ts:1262). The web client sets it only from an explicit option (useChatStream.ts:4641), otherwise the server infers it only if the prompt has one of the v"
+   },
+   {
+    "symptom": "Ultra: retries say 'create_office_file tool isn't available' and 'failed twice'.",
+    "kind": "provider_or_model_limit",
+    "cause": "On Ultra the tool was offered and called on all four turns and failed each time with the recalculation error (server.log 8760/8763/8927/8933, 10534, 11496/11511, 12149/12320). The model ((model name)) then paraphrased the failure as 'isn't available'. It is the same root cause as the first row."
+   },
+   {
+    "symptom": "The file that does arrive has a typed Total 5, not a formula.",
+    "kind": "tester_error",
+    "cause": "The tester told the model 'plain values, no formulas'. With no <f> cells the xlsx path skips recalculation (managed-office-file-service.ts:1004-1007) and succeeds. This is the designed path, so the model had to drop the formula to get any file."
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "XLSX",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/XLSX.md",
+   "one_line": "Calculate simple formulas on the server and cache the value in the workbook, never fail delivery (unresolved formulas become text with a notice), and keep the file tool offered in threads that already made Office files without changing routing.",
+   "parts": [
+    {
+     "symptom": "Any .xlsx with a formula fails with 'recalculation failed' (no LibreOffice in default sandbox, inferred)",
+     "action": "fix_in_code",
+     "summary": "New pure calculator with pinned Excel semantics writes cached values; builder adds fullCalcOnLoad; service skips the sandbox when all formulas are calculated, and on failure rebuilds unresolved cells as text and returns ok with a notice the model relays."
+    },
+    {
+     "symptom": "Follow-up says 'the create_office_file tool isn't available' (Ultra 'Now just the Excel spreadsheet...', Free 'try ... again')",
+     "action": "fix_in_code",
+     "summary": "Do not widen the verb list. Add a soft tool offer that does not set office_creation (no agentic routing, no 422), only when the thread already did Office work and the message names an Office noun."
+    },
+    {
+     "symptom": "Typed Total 5 instead of a SUM formula",
+     "action": "no_change",
+     "summary": "Tester workaround; disappears once formulas work."
+    },
+    {
+     "symptom": "Office template may be missing on this machine or in production",
+     "action": "owner_setup",
+     "summary": "Template build is optional for spreadsheets after the fix; run which soffice in a default sandbox to confirm the inferred cause."
+    }
+   ],
+   "files": [
+    "apps/web/lib/services/managed-workbook-calculator.ts (new)",
+    "apps/web/lib/services/managed-workbook-builder.ts",
+    "apps/web/lib/services/managed-office-file-service.ts",
+    "apps/web/lib/services/managed-office-preservation.ts",
+    "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+    "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts"
+   ],
+   "needs_owner_decision": false,
+   "risk": "medium",
+   "size": "medium",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": false,
+   "commit_subject": "fix(web): build excel workbooks with calculated formulas and keep the file tool for follow-ups"
+  },
+  "critique_must_fix": 4,
+  "revised": true
+ },
+ {
+  "id": "RETRY-WRONG-TURN",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "The false 'no response' banner (a reload during a durable cloud-agent turn, with the server finishing the turn afterwards) is client reload logic with no test-machine dependency, so production users on any plan that runs the cloud agent turn would hit it, and it is more likely on slow, tool-heavy turns (Office files, research). The test machine did not cause it. The 'wrong turn' symptom is the var",
+  "causes": [
+   {
+    "symptom": "False banner 'The model returned no response for this turn' after a reload mid-answer; the answer is missing from the page",
+    "kind": "product_defect",
+    "cause": "The server's durable cloud-agent workflow finished the turn after the page had already loaded the conversation and persisted a complete assistant row. The client loaded the conversation once at reload and had no mechanism that re-reads it when a turn it started finishes server-side. The banner is de"
+   },
+   {
+    "symptom": "Retry regenerates the first message's answer as variant 2/2 and 3/3 and hides later turns",
+    "kind": "tester_error",
+    "cause": "What was regenerated was the first user message, not the failed one. The DB shows both retry answers (9db65954 at 13:59:06 and 83f1006c at 14:00:19) with parent_id e965a781 (the first user message), so the client sent regenerateParentMessageId = the first user message. The banner's Retry cannot prod"
+   },
+   {
+    "symptom": "Nothing tells the reader that retrying an older message hides later turns",
+    "kind": "product_defect",
+    "cause": "The control on an older user message is labelled only 'Retry' with a tooltip 'Retry'. With variants enabled it silently branches the thread (no confirmation, unlike the non-variant path at WebChatPage.tsx:5826-5837) and the only cue is the small 2/2 pager on the answer. The same icon sits one line a"
+   },
+   {
+    "symptom": "Stale client state reaches the Retry in the first place",
+    "kind": "product_defect",
+    "cause": "If the person had pressed the banner Retry, the client would have resent a message the server had already answered: the client's rows lack the saved answer, so regenerateCreatesSibling (useChatStream.ts:895-899) sees no answer under u3 and would append a duplicate answer under it. This did not happe"
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "RETRY-WRONG-TURN",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/RETRY-WRONG-TURN.md",
+   "one_line": "Re-read the conversation when the in-flight run ends so the saved answer appears and the false no-response banner never shows, and relabel the older-message retry button so it is not confused with the banner's Retry.",
+   "parts": [
+    {
+     "symptom": "False 'model returned no response' banner after a reload mid-turn; saved answer missing",
+     "action": "fix_in_code",
+     "summary": "The runs poll in useChatStream.ts:4050-4144 stops on idle without re-reading messages. Add a pure shouldReReadSettledTurn rule and a WebChatPage effect that calls refreshOpenConversation when the trailing user message has no live turn."
+    },
+    {
+     "symptom": "Retry regenerated the first message (2/2, 3/3) and hid later turns",
+     "action": "fix_in_code",
+     "summary": "The banner's Retry targets the last message, so the bubble's refresh button was probably pressed (unproven). Relabel it 'Retry from this message' with tooltip 'Retry from here'. Variants behaviour is unchanged."
+    },
+    {
+     "symptom": "Retry pressed on stale rows would add a duplicate answer",
+     "action": "no_change",
+     "summary": "Follows from the stale page; the first fix removes it."
+    }
+   ],
+   "files": [
+    "apps/web/features/chat/lib/turn-error-notice.ts",
+    "apps/web/features/chat/pages/WebChatPage.tsx",
+    "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "apps/web/features/chat/lib/turn-error-notice.reread.test.ts"
+   ],
+   "needs_owner_decision": false,
+   "risk": "low",
+   "size": "small",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": true,
+   "commit_subject": "fix(web): re-read the conversation when a recovered turn finishes and clarify the older-message retry"
+  },
+  "critique_must_fix": 0,
+  "revised": false
+ },
+ {
+  "id": "RELOAD-MID-ANSWER",
+  "classification": "product_defect",
+  "confidence": "high",
+  "affects_production": "Yes, for any signed-in user on any plan whose turn runs on the managed durable workflow. That is the default, since the durable kill switch is only an environment variable (durable-initial-turns.ts:9-18). A reload (or a closed and reopened tab) during an answer shows the user message with Preparing and then nothing, or the false 'no response' banner. The answer is on the server and appears only af",
+  "causes": [
+   {
+    "symptom": "The answer is missing after the reload, and the spinner then disappears too. Only a second manual reload shows the answer.",
+    "kind": "product_defect",
+    "cause": "After a reload the page can only watch whether a run is still active; it cannot re-attach to the answer and never loads the finished answer. useChatStream.ts:4056-4136 polls GET /runs?conversationId every 5 s and sets the Preparing/Stop state while a run is active (4120). When the run goes idle it o"
+   },
+   {
+    "symptom": "W-9 shows 'The model returned no response for this turn' even though the model did answer.",
+    "kind": "product_defect",
+    "cause": "The banner is the fallback for a last message that is a user message. Once the run is idle and the 45 s grace since the user message's createdAt has passed, resolveTurnErrorNotice returns incompleteTurnNoticeMessage. For role 'user' that always maps to the 'emptyResponse' text (turn-error-notice.ts:"
+   },
+   {
+    "symptom": "In W-3 there is a long gap with only 'Preparing', and later a gap with nothing at all.",
+    "kind": "provider_or_model_limit",
+    "cause": "Mostly not part of this bug. The turn took about 34 s before the first answer text (first provider line at 741, step finished at 750, 25 to 34 s after the send), and recovery shows only the generic Preparing row because it has no streamed content to show. Slow first words are tracked as SLOW-FIRST-W"
+   },
+   {
+    "symptom": "Possible extra cause: turns that run in the request instead of the durable workflow die on reload.",
+    "kind": "product_defect",
+    "cause": "The turn only survives the reload if it ran on the durable workflow. If the turn runs request-scoped (kill switch AGI_DURABLE_INITIAL_TURNS=0, durable breaker open, first-event budget missed, no billing reservation), the tool loop is bound to request.signal and ends with the connection (route.ts:934"
+   },
+   {
+    "symptom": "Retry on the banner regenerates the first turn and hides later turns.",
+    "kind": "product_defect",
+    "cause": "Separate problem, tracked as RETRY-WRONG-TURN. I did not analyse it here. It matters for this issue because the misleading banner is what sends the user into that Retry."
+   },
+   {
+    "symptom": "No video of the run.",
+    "kind": "setup_limit",
+    "cause": "Playwright's ffmpeg binary is missing on the test machine. This does not affect the reload behaviour."
+   }
+  ],
+  "refute_votes": "stands(high), stands(medium)",
+  "design": {
+   "id": "RELOAD-MID-ANSWER",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/RELOAD-MID-ANSWER.md",
+   "one_line": "After a reload mid-answer the recovery poll never re-reads the saved answer; make it refetch the open conversation once the run is no longer active.",
+   "parts": [
+    {
+     "symptom": "Answer missing after reload, spinner vanishes, only second reload shows it",
+     "action": "fix_in_code",
+     "summary": "useChatStream exposes a settledRecovery signal after the poll ends; WebChatPage calls refreshOpenConversation on it."
+    },
+    {
+     "symptom": "False 'model returned no response' banner (W-9)",
+     "action": "fix_in_code",
+     "summary": "Same root; with the transcript refetched the banner no longer triggers, no change to turn-error-notice."
+    },
+    {
+     "symptom": "Long Preparing gap before first text",
+     "action": "no_change",
+     "summary": "Provider/model latency, tracked as SLOW-FIRST-WORDS."
+    },
+    {
+     "symptom": "Request-scoped turns may die on reload",
+     "action": "no_change",
+     "summary": "Untraced separate risk; refetch shows whatever is saved. Needs its own trace."
+    },
+    {
+     "symptom": "Retry banner regenerates wrong turn",
+     "action": "no_change",
+     "summary": "Separate item RETRY-WRONG-TURN."
+    },
+    {
+     "symptom": "No video",
+     "action": "no_change",
+     "summary": "Test machine lacks ffmpeg."
+    }
+   ],
+   "files": [
+    "apps/web/lib/hooks/useChatStream.ts",
+    "apps/web/features/chat/pages/WebChatPage.tsx",
+    "apps/web/lib/hooks/useChatStream.test.tsx"
+   ],
+   "needs_owner_decision": false,
+   "risk": "low",
+   "size": "small",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": true,
+   "commit_subject": "fix(web): reload saved answer when a recovered turn finishes"
+  },
+  "critique_must_fix": 0,
+  "revised": false
+ },
+ {
+  "id": "SLOW-FIRST-WORDS",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "Yes for causes 1 and 3. A production user on any managed plan that runs Auto on an effort-capable model (Premium, Max and Ultra and any paid plan that sends the default medium effort) will see nothing but 'Generating response...' until the first answer text, because reasoning lines are held on every web turn (tool-loop.ts:4248, 4310-4322) and the client sends medium effort by default. The Free lan",
+  "causes": [
+   {
+    "symptom": "Subscribed one-line question: nothing visible for 4 to 8 s, then the reasoning label and the answer arrive together.",
+    "kind": "product_defect",
+    "cause": "Three things combine. (a) The web client sends effort 'medium' by default: apps/web/shared/stores/thinking-store.ts:7 sets DEFAULT_EFFORT medium, and packages/contracts/types/src/reasoning-settings.ts:85-105 passes the requested effort through unchanged when the model id ('auto') has no catalog entr"
+   },
+   {
+    "symptom": "Free first artifact request: about 23 s of 'Generating response...' before any text.",
+    "kind": "provider_or_model_limit",
+    "cause": "On this turn the provider call itself took 22.7 s to return its first chunk. The gen_ai.stream.start span was 22761 ms (log line 19440). The conversation-title request to the same provider (24 max tokens) and the chat step both completed within about 14 ms of each other at the end of that wait (line"
+   },
+   {
+    "symptom": "Premium turn with PDF plus image: 13 to 25 s to first words.",
+    "kind": "product_defect",
+    "cause": "Everything stacks before the provider speaks. For conversation 94690397 (user ending 9sQq6Y) chat.turn took 7367 ms, of which attachments_and_memory_policy_ms was 4154 ms (line 21173). hydrateChatAttachments (request-processor.ts:4175-4196, chat-attachment-hydration.ts:368-414) re-reads each attache"
+   },
+   {
+    "symptom": "The log's llm_ttft_observed (1 to 3 s) disagrees with what testers saw, and testers could not match log lines to their runs.",
+    "kind": "product_defect",
+    "cause": "The metric is recorded when the step ends, from the first provider line, which can be a reasoning or meta line that the user never sees (tool-loop.ts:3323-3345, 4300-4302). It excludes server prep and the lines held back by cause 1. The shared log's llm_ttft_observed rows have no user id on the tool"
+   },
+   {
+    "symptom": "A connector-oauth error repeats about 131 times per request in the log (for example lines 18746-18878 and 19155-19436).",
+    "kind": "setup_limit",
+    "cause": "CONNECTOR_OAUTH_REDIRECT_BASE_URL is a loopback http URL under a compiled production build, so getConnectorOAuthRedirectUri logs an error on every call (oauth-registry.ts:222-241). This is test-machine configuration. It is unmemoized log spam, a possible small contributor to load, but no timing in t"
+   },
+   {
+    "symptom": "Local setup effects on timing.",
+    "kind": "setup_limit",
+    "cause": "Database queries returned 'relation public.connector_permission_generations does not exist' on every turn (lines 18739-18741, 21175-21177). It is cheap (1 to 5 ms) and caught, so it did not cause the slowness. UPLOAD_SCAN_REQUIRED=false (the files are named .scanned) removes a scan step, so producti"
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "SLOW-FIRST-WORDS",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/SLOW-FIRST-WORDS.md",
+   "one_line": "Stream the reasoning summary as soon as it arrives instead of holding it until the first answer word, without losing failover or the output-limit retry; add spans to find the unmeasured 3 s of attachment work; leave the provider stall alone.",
+   "parts": [
+    {
+     "symptom": "Premium one-line question: spinner for 4 to 8 s, then reasoning and answer together",
+     "action": "fix_in_code",
+     "summary": "tool-loop.ts holds reasoning lines until answer text (4310-4318). Release them on reasoning text. Add an answerReachedClient flag so failover (4525) and the three retries (4432, 4456, 4468) still work after reasoning is shown. Whether the first summary delta arrives early enough is not measurable from the log; the person-style check records it."
+    },
+    {
+     "symptom": "Free first artifact request: about 23 s of Generating response",
+     "action": "no_change",
+     "summary": "The provider call took 22.7 s to start (log 19440) with 0 thought tokens. It points to a provider or test-network stall that the 25 s first-token deadline does not catch. It is not reproduced. Shortening the deadline would cut legitimate slow first lines, so leave it until production TTFT data exists."
+    },
+    {
+     "symptom": "Premium PDF plus image: 13 to 25 s to first words",
+     "action": "fix_in_code",
+     "summary": "The earlier diagnosis blamed storage reads. The reads were parallel and took under 0.9 s. About 3.2 s of the 4154 ms phase has no span and is likely PDF extraction or the memory-policy read. Add spans and extract attachments concurrently if extraction is the cost. The reasoning release in the first part covers the rest. No cache or migration."
+    },
+    {
+     "symptom": "Default medium effort on trivial Auto turns",
+     "action": "owner_decision",
+     "summary": "The web store sends medium on every new chat. Letting Auto send no effort unless the person picks one would cut reasoning cost and wait. It changes cost and answer depth on every app that shares the store, so it is the owner's call."
+    }
+   ],
+   "files": [
+    "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+    "apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts",
+    "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+    "apps/web/app/api/llm/v1/chat/completions/__tests__/route.managed-failover.test.ts"
+   ],
+   "needs_owner_decision": true,
+   "owner_question": "Should Auto stop sending the client's default medium reasoning effort, so the model catalog default applies unless the person picks one? It cuts cost and wait on simple questions, and it also lowers answer depth on every app that shares the thinking store. Recommendation: decide after the reasoning-release timings are measured.",
+   "risk": "medium",
+   "size": "small",
+   "overlaps_web_lane_edits": true,
+   "overlaps_other_agent": false,
+   "commit_subject": "fix(web): stream reasoning before the first answer word and time attachment prep"
+  },
+  "critique_must_fix": 1,
+  "revised": false
+ },
+ {
+  "id": "ARTIFACT-AFTER-STOP",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "Yes. Cause 1 needs no test-machine feature: any plan (Free to Ultra) that presses Stop while an artifact fence is open, or reloads a stopped or interrupted artifact turn, gets the raw fence, because it is pure client logic in MessageBubble and the shared derivation. The Free tester reproduced the same raw block and blank preview, and the log shows no setup-specific failure on those turns. Cause 2 ",
+  "causes": [
+   {
+    "symptom": "After Stop (and after a reload of a stopped or interrupted turn) the unfinished artifact source shows in chat as a raw html code block with a preview strip, nex",
+    "kind": "product_defect",
+    "cause": "While streaming, MessageBubble hides the growing fence only through `streamingBlock = message.isStreaming ? trailingArtifactBlock : null` (MessageBubble.tsx:1510) and cuts the content at streamingBlock.startIndex (MessageBubble.tsx:2056-2058). When Stop ends the stream, isStreaming is false, so stre"
+   },
+   {
+    "symptom": "After Try again and Continue generating complete, the reply is still a raw code block with preview and never becomes an artifact card, even after reload",
+    "kind": "product_defect",
+    "cause": "Under the persisted policy `artifactDerivation: explicit-v1` (stamped by the server at assistant-turn-persistence.ts:310 and :442), a fence is an artifact only if its first line is an explicit marker such as `<!-- @artifact -->` (artifact-derivation.ts:114-136 and 159-162, inclusion 'explicit-render"
+   },
+   {
+    "symptom": "Retry interrupted by a reload leaves half a document and 'Continue generating'; log shows a mid-stream TypeError",
+    "kind": "product_defect",
+    "cause": "The reload closed the SSE connection 866 ms after the retry began (server.log line 3950: sse_stream_disconnected, elapsedMs 866). stream-transform.ts:668-679 then calls controller.enqueue on a closed controller, which throws `TypeError: Invalid state: Controller is already closed` (server.log line 3"
+   },
+   {
+    "symptom": "The edit shows as a second artifact with the same name; the panel opens on 'v1/2' (old 36 version) instead of the newest reply; Outputs lists two identical 'Liv",
+    "kind": "product_defect",
+    "cause": "By design an edit made in a new message is a new artifact whose id is derived from conversationId:messageId:ordinal (artifact-derivation.ts computeDerivedArtifactId, :359-368), and versions are chained across messages by type plus lowercase title only (artifact-lineage.ts:9-12, 25-44, used at Artifa"
+   },
+   {
+    "symptom": "Console 404 for /api/chat/conversations/<id>/branches on the first turn (same tester row)",
+    "kind": "product_defect",
+    "cause": "Not traced; separate and not part of this problem."
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "ARTIFACT-AFTER-STOP",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/ARTIFACT-AFTER-STOP.md",
+   "one_line": "After Stop or a reload, a partial artifact now shows as one card marked partial with no raw code block. The raw block is hidden from the message's own stopped or truncated state, and the partial flag is re-set on a cold open.",
+   "parts": [
+    {
+     "symptom": "Raw html block with preview next to the Live Sum card after Stop",
+     "action": "fix_in_code",
+     "summary": "MessageBubble hides the open fence once the turn has ended as stopped or truncated (not awaiting approval) or has a flagged card. A retentionBlocked guard keeps the raw block when no card can be made. This avoids a flash on the first post-Stop render."
+    },
+    {
+     "symptom": "After reload or Try again then reload, only half a raw block, an empty preview and Continue generating",
+     "action": "fix_in_code",
+     "summary": "A new store action, markArtifactInterrupted, sets only the side-map flag on a known id. The hook calls it on a cold open when the message is stopped or truncated. This covers the localStorage and cloud copies, whose flag is lost on reload. A retry-then-reload turn is saved as truncated with no finishReason, so the gate includes metadata.truncated. No content changes, so nothing is pushed."
+    },
+    {
+     "symptom": "Unmarked reply never becomes a card",
+     "action": "owner_decision",
+     "summary": "The model left out the artifact marker. A new explicit-v2 policy for complete pages is a larger separate task. No code until the owner decides."
+    },
+    {
+     "symptom": "Two Live Sum entries and v1/2, plus the TypeError log line",
+     "action": "no_change",
+     "summary": "Versioning by title is by design. The step 4 check now names the lineage order (v3/3 after a partial, v2/2 in a fresh chat) and says it was not run. The log line is cosmetic, with an optional info-level log change and no billing change."
+    }
+   ],
+   "files": [
+    "apps/web/features/chat/stores/artifacts-store.ts",
+    "apps/web/features/chat/hooks/use-streaming-artifact.ts",
+    "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts"
+   ],
+   "needs_owner_decision": true,
+   "risk": "medium",
+   "size": "medium",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": false,
+   "owner_question": "When the model replies with a full html page but leaves out the artifact marker, should it still become a card? Recommendation: yes for a complete page, in a new explicit-v2 policy applied only to new turns, done as its own task.",
+   "commit_subject": "fix(web): keep a stopped artifact as one partial card across reload"
+  },
+  "critique_must_fix": 3,
+  "revised": true
+ },
+ {
+  "id": "IMAGE-EDIT-AND-LIMIT",
+  "classification": "mixed",
+  "confidence": "high",
+  "affects_production": "Yes, both symptoms follow the code, not the test machine. Edit: every paid plan that has image generation, and anyone using the default Create-image model, which is the first image model in the catalog order (currently (model name)). The server only accepts a source image for the openai image API, so only GPT Image models can really edit, on all plans. Limit: any plan that has the rollin",
+  "causes": [
+   {
+    "symptom": "Image edit regenerates the whole picture and unrelated shapes change",
+    "kind": "product_defect",
+    "cause": "(1) The Create-image default model is the first image model in catalog order: IMAGE_MODEL_DEFAULT = IMAGE_MODELS[0] (apps/web/features/chat/lib/imageGenerationOptions.ts:46), set as the initial composer state at apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1239. In the tester's run"
+   },
+   {
+    "symptom": "At the credit limit an image send fails silently: empty reply, no message",
+    "kind": "product_defect",
+    "cause": "The server refuses correctly. The image route reserves credits first (apps/web/app/api/media/image/lib/managed-image-generation.ts:745-766), gets a ManagedUsageRequestError, and managedUsageErrorResponse returns 429 with code rolling_five_hour_limit_reached and the message 'Your rolling 5-hour usage"
+   },
+   {
+    "symptom": "The limit message and sidebar meter stay stale after image generations (39/50 until reload)",
+    "kind": "product_defect",
+    "cause": "Related but secondary. The usage summary is not refreshed after an image job settles, so the composer banner and meter read the old figure. I did not trace the refresh hook. A smaller point: the 429 body carries `resets_at` (managed-usage-request-service.ts:117) but the client reads `reset_at` (apps"
+   },
+   {
+    "symptom": "Hitting the limit at all (50/50 after about two images)",
+    "kind": "setup_limit",
+    "cause": "This is the credit allowance the test account actually had, with reservations settled per call. Rate limits were scaled by 4 on the test machine, but the 5-hour credit window is a plan figure, not a rate limit. The refusal itself is correct behaviour, so the only defect is how it is shown (see the s"
+   }
+  ],
+  "refute_votes": "stands(medium), stands(high)",
+  "design": {
+   "id": "IMAGE-EDIT-AND-LIMIT",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/IMAGE-EDIT-AND-LIMIT.md",
+   "one_line": "All three blockers were right and are fixed in the design: a failed edit keeps the finished picture, the reload step now matches how the limit block works, and the card picks its edit model with the composer's own rule.",
+   "parts": [
+    {
+     "symptom": "Premium edit on a model that cannot edit does a text-only regeneration, so the picture changes everywhere",
+     "action": "fix_in_code",
+     "summary": "The card always takes the edit path when an edit-capable model exists. It uses the composer's own rule through one shared helper and a small store. The hint names the model before submit, and with no edit model the card says it makes a new picture."
+    },
+    {
+     "symptom": "At the credit limit an image send shows nothing under the prompt",
+     "action": "fix_in_code",
+     "summary": "applyImageError raises the account-wide block to the composer and refreshes the usage summary. A row that already holds a picture never stores the account-wide paywall, so a failed edit keeps the original card. finalMetadata clears paywall, and an accepted image send clears the block."
+    },
+    {
+     "symptom": "The reset time is lost on image refusals (resets_at vs reset_at)",
+     "action": "fix_in_code",
+     "summary": "Read resets_at first, then reset_at. This is low value because resolveMediaPaywallSlot already falls back to the usage summary. Grep for routes that still send reset_at before dropping it."
+    },
+    {
+     "symptom": "The limit banner does not survive a reload",
+     "action": "owner_decision",
+     "summary": "accountUsageBlock is not persisted and nothing rehydrates it, for text and image alike. After a reload the person sees only the usage-summary warning, whose text at 100% I did not verify. Acceptance is rewritten to say so. Decision: should the reload view also show the Upgrade button (derive from the summary or render the stored row)?"
+    },
+    {
+     "symptom": "Default image model cannot edit, and Gemini editing is unsupported",
+     "action": "owner_decision",
+     "summary": "Keep the default (the card now switches to an edit model on demand). Gemini edit support needs a provider-docs check and is not in this release. Edits on another model may cost differently, and the hint says which model."
+    }
+   ],
+   "files": [
+    "apps/web/features/chat/pages/WebChatPage.tsx",
+    "apps/web/lib/hooks/useMediaGeneration.ts",
+    "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "apps/web/features/chat/lib/imageGenerationOptions.ts",
+    "apps/web/features/chat/stores/image-edit-model.ts"
+   ],
+   "needs_owner_decision": true,
+   "risk": "medium",
+   "size": "medium",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": false,
+   "owner_question": "After a reload at the credit limit, should the person see the Upgrade or top-up button again? Today only the usage-summary warning shows, for text and image alike. Showing the button would mean either deriving the block from the summary on load, or showing the stored row as an inline card.",
+   "commit_subject": "fix(web): keep edited pictures at the limit and edit on a capable model"
+  },
+  "critique_must_fix": 3,
+  "revised": true
+ },
+ {
+  "id": "VOICE-MIC",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "Yes for the silent exit and the 'conversation unavailable' toast. Both are plain code paths, not test-machine settings. The conversation is created before the microphone is requested, and the catch discards it before the destination check. Voice mode is open to Free accounts (their sessions are funded from the free allowance in the log), so Free, Premium, Max and Ultra are all affected, on web, an",
+  "causes": [
+   {
+    "symptom": "Free account: Start voice mode with the mic denied shows nothing at all.",
+    "kind": "product_defect",
+    "cause": "Voice start on /chat first creates a conversation (WebChatPage.tsx:6695-6717, with router.replace to /chat/<id> at :6713) and only then asks for the microphone (live-voice-session.ts:480). On a mic failure, the catch in use-voice-session.ts:696-698 discards the conversation and sets owner.conversati"
+   },
+   {
+    "symptom": "Ultra run: toast 'This conversation is unavailable. It may have been deleted.' after a mic failure.",
+    "kind": "product_defect",
+    "cause": "The same create-then-discard flow. The conversation is created and the URL is replaced with /chat/<id> before the mic is requested. When the mic fails, the discard handler deletes the conversation. The route effect in WebChatPage.tsx:2355-2385 then calls loadConversation for that id, which is no lon"
+   },
+   {
+    "symptom": "Ultra run: the error reads 'The voice connection could not be established.' with no microphone guidance.",
+    "kind": "setup_limit",
+    "cause": "microphoneError (live-voice-session.ts:290-303) maps only NotAllowedError and SecurityError to the microphone-denied message and NotFoundError and OverconstrainedError to 'No microphone is available in this browser.' Every other name, including NotSupportedError, NotReadableError (mic in use by anot"
+   },
+   {
+    "symptom": "Voice mode never produced a transcript or reply from the fake microphone, and dictation returned Mongolian and Arabic text. This is related evidence, not part o",
+    "kind": "setup_limit",
+    "cause": "The Ultra tester's Web Audio probe read peak 0 for the kit's WAV in two browser builds, and peak 1.0 for Chrome's default fake beep. So the fake mic delivered silence. The Free tester's fake recording was 1.57 s looped with almost no pause. Both are test-instrument limits. Staying on 'Listening' wit"
+   },
+   {
+    "symptom": "Related to the discard flow: repeated PUT requests to conversations that no longer exist.",
+    "kind": "product_defect",
+    "cause": "After the discard, a pending update (the title rename) for the deleted conversation keeps being sent and returns 404, for example 14:30:17, 14:30:42 and 14:30:59. This is noise from the same create-then-discard design, not a person-visible symptom."
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "VOICE-MIC",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/VOICE-MIC.md",
+   "one_line": "Voice start discards its own new conversation before checking the screen is still current, so a denied microphone exits silently or shows a bogus 404 toast; fix the order, route before delete, and sharpen mic wording.",
+   "parts": [
+    {
+     "symptom": "Free: denied mic shows nothing, voice closes silently",
+     "action": "fix_in_code",
+     "summary": "Track the discarded conversation id on the attempt and let destinationIsCurrent accept it, so the fail event is dispatched and the error stays with Try again (use-voice-session.ts)."
+    },
+    {
+     "symptom": "Ultra: toast 'This conversation is unavailable' after mic failure",
+     "action": "fix_in_code",
+     "summary": "In handleVoiceDiscardConversation, reset the route to /chat before deleting so the route effect never loads the deleted id (WebChatPage.tsx)."
+    },
+    {
+     "symptom": "Generic 'connection could not be established' and no guidance to allow the mic",
+     "action": "fix_in_code",
+     "summary": "Add 'in use' wording for NotReadable/AbortError, add browser-settings guidance to the denied text, mark in-use as unrecoverable (live-voice-session.ts). Tester's NotSupportedError itself is a headless-test limit."
+    },
+    {
+     "symptom": "Fake mic silence and gibberish dictation",
+     "action": "no_change",
+     "summary": "Test-instrument limit, not part of this problem."
+    },
+    {
+     "symptom": "PUTs to deleted conversations in log",
+     "action": "no_change",
+     "summary": "Noise from create-then-discard; goes away with the mic-failure fix, not person-visible."
+    }
+   ],
+   "files": [
+    "apps/web/features/chat/hooks/use-voice-session.ts",
+    "apps/web/features/chat/pages/WebChatPage.tsx",
+    "apps/web/features/chat/lib/live-voice-session.ts",
+    "apps/web/features/chat/lib/live-voice-session.test.ts"
+   ],
+   "needs_owner_decision": false,
+   "risk": "low",
+   "size": "small",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": true,
+   "commit_subject": "fix(web): keep voice mode open with a clear message when the microphone fails"
+  },
+  "critique_must_fix": 0,
+  "revised": false
+ },
+ {
+  "id": "PROJECT-CHAT-AS-WORK",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "Work-mode takeover of project chats: yes. Any production account with the agi_work capability (pro, max, max_15x, team, team_premium, enterprise per packages/contracts/types/src/billing-catalog.ts:341,354; Free and Basic keep ordinary chat) that sends a first message from a project page will land in a Work session, with the dock, the Work composer, and the autonomy notice. Search-limit wording and",
+  "causes": [
+   {
+    "symptom": "Plain project chat opens as a Work session (dock, Work title suffix, Work composer text, autonomy notice)",
+    "kind": "product_defect",
+    "cause": "Product decision, working as coded. When the chat page has a preselected project and the account has the AGI Work capability, ChatComposerNew sets workMode to 'agiwork' (ChatComposerNew.tsx:1210-1227). The project page hands off to /chat?projectId=...&handoff (app/chat/projects/[id]/page.tsx:230-260"
+   },
+   {
+    "symptom": "About 13 s before first words on a plain 12-paragraph prompt",
+    "kind": "provider_or_model_limit",
+    "cause": "Web search is offered natively on every chat turn, not only in Work (request-processor.ts:2562-2582 appendWebSearchTool; OpenAI gets {type:'web_search'}). The model ((model name) via Auto) chose to ground three times though search was not required. Log: turn c8a96b9f... 'web_search.required':false,'we"
+   },
+   {
+    "symptom": "Red 'Search limit reached' rows with model-facing text shown to the person",
+    "kind": "product_defect",
+    "cause": "When the third grounded search is counted the server emits a progress row 'Search limit reached' (tool-loop.ts:6970-6990, status 'completed') whose detail is nativeSearchBudgetExhaustedMessage (web-search-tool.ts:579-584): 'Search limit reached: this turn has already grounded its 3 allowed times. No"
+   },
+   {
+    "symptom": "Project file upload and 'Add text' source fail with generic error",
+    "kind": "setup_limit",
+    "cause": "The local database does not have migration 0419. INSERT into project_knowledge_files fails: 'column \"storage_targets\" of relation \"project_knowledge_files\" does not exist' (server.log:28876-28880, 29374-29379, 29561-29565; API error 'Failed to create knowledge file' 500). 0419 adds that column (apps"
+   },
+   {
+    "symptom": "The same error shows twice when adding a source (modal and banner behind it)",
+    "kind": "product_defect",
+    "cause": "SourcesPanel.handleUpload and handleUploadText catch the error, set its own uploadState error banner, then rethrow (SourcesPanel.tsx:222-237); AddSourcesModal catches the rethrow and sets submitError (AddSourcesModal.tsx:87-89, 120-122). Both render the same text. In Project settings > Files (Knowle"
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "PROJECT-CHAT-AS-WORK",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/PROJECT-CHAT-AS-WORK.md",
+   "one_line": "Project chats open as plain chats (project stays, Work one click away); search-cap row reworded for the person; failed source adds show one message, including Google Drive; the folder button is Work-only.",
+   "parts": [
+    {
+     "symptom": "Project chat opens as Work with dock and autonomy notice",
+     "action": "fix_in_code",
+     "summary": "Drop the Work auto-entry for a preselected project; let Chat carry a project; show the project tab in Chat; keep the project and clear the folder on switch to Chat; gate the folder button on Work mode (blocker 1 fix)."
+    },
+    {
+     "symptom": "About 13 s before first words (3 searches)",
+     "action": "no_change",
+     "summary": "Model behaviour with an env cap (default 3); not shown to be Work effort until the first request body is checked."
+    },
+    {
+     "symptom": "Search limit row shows model-facing text and red rows after Stop",
+     "action": "fix_in_code",
+     "summary": "Reword the row for the person (what happened only); red-after-Stop not traced and left as a separate item."
+    },
+    {
+     "symptom": "Project upload and Add text fail with the generic error",
+     "action": "owner_setup",
+     "summary": "Local DB lacks migration 0419 and later; apply them and check production status."
+    },
+    {
+     "symptom": "Same error twice when adding a source (file, text, Google Drive)",
+     "action": "fix_in_code",
+     "summary": "The throwing paths show no banner; only drop and file input set the banner. The Drive handler gets the same split (blocker 2 fix) plus a Drive test."
+    }
+   ],
+   "files": [
+    "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "apps/web/features/chat/components/Composer/ChatComposerNew.test.tsx",
+    "apps/web/lib/web-search/web-search-tool.ts",
+    "apps/web/lib/web-search/web-search-tool.test.ts",
+    "apps/web/lib/chat/tool-loop.ts",
+    "apps/web/features/projects/components/SourcesPanel.tsx"
+   ],
+   "needs_owner_decision": true,
+   "risk": "medium",
+   "size": "medium",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": true,
+   "owner_question": "Should a project chat open as a plain chat for Work-capable plans, as Claude and ChatGPT do, reversing the coded Work auto-entry? Recommended: yes.",
+   "commit_subject": "fix(web): open project chats as plain chats and show one source error"
+  },
+  "critique_must_fix": 2,
+  "revised": true
+ },
+ {
+  "id": "MANUAL-PLAN-PERIOD",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "Yes, but only for accounts whose subscription row is hand-edited with a current_period_end in the past. That includes any plan the owner grants by editing the subscriptions row. The first such account is the App Review demo account (docs/runbooks/mobile-store-first-release.md section 10 item 4 and known-flaws row MOBILE-REVIEW-ACCOUNT-PLAN-GRANT-01). Granted plans run as personal Basic, Premium, M",
+  "causes": [
+   {
+    "symptom": "Chat is refused on a manual plan once its period end passes, and nothing ever renews it.",
+    "kind": "setup_limit",
+    "cause": "Nothing advances current_period_start or current_period_end for a manual plan. Only the Stripe webhook (app/api/stripe-webhook/lib/db.ts:889, 1211, 1224, 1439) and the mobile IAP services (lib/services/mobile-iap-ledger-service.ts:653, mobile-iap-notification-service.ts:581) roll a period. The night"
+   },
+   {
+    "symptom": "Real design gap: how a hand-granted plan should behave at period end is undefined in production, so the same failure would hit any granted plan.",
+    "kind": "product_defect",
+    "cause": "No product route grants a plan. Access codes grant upgrade access only (docs/runbooks/mobile-store-first-release.md:1727-1732; audit/registers/known-flaws.md row MOBILE-REVIEW-ACCOUNT-PLAN-GRANT-01, which lists features/admin/services/operator-upgrade-access.ts and says no operator action gives an a"
+   },
+   {
+    "symptom": "Usage says 'No usage yet. Your full limits are available.' and the period bar shows 0% while chat is refused.",
+    "kind": "product_defect",
+    "cause": "A lapse-detection bug in the usage summary, traced by reading code only (not run). normalizeBalance turns the DB's all-null zero row into account_id '' and period_end '' (lib/services/credit-service.ts:145-147). getManagedUsageSummary then does `balance?.period_end ?? subscription?.current_period_en"
+   },
+   {
+    "symptom": "Billing says Active with no period or renewal information and no way to renew; the error tells the person to 'check Settings > Billing'.",
+    "kind": "product_defect",
+    "cause": "For source 'manual', planPeriodEndKind returns null unless the plan is ending or trialing (subscription-owner-presentation.ts:44-48), so BillingSection (features/settings/sections/BillingSection.tsx:616) shows no period line. Status stays 'active' because nothing moves the status when a period ends."
+   },
+   {
+    "symptom": "The refusal appears as a raw 'Error:' reply with only Retry and no Upgrade, renew or contact-support action.",
+    "kind": "product_defect",
+    "cause": "The new error code billing_period_not_renewed is missing from MANAGED_QUOTA_BLOCKS (packages/contracts/types/src/billing-catalog.ts, near :952-1000; grep for the code in that package gives 0 hits). classifyManagedQuotaErrorCode returns null, so resolveManagedQuotaRecovery returns null (lib/services/"
+   },
+   {
+    "symptom": "A second, different refusal wording on the same account: title generation logs 'Usage budget exhausted for this billing period. Upgrade your plan or add credits",
+    "kind": "product_defect",
+    "cause": "The title-generation path reserves managed usage through managed-usage-request-service.ts:424-428 ('declined' maps to the budget-exhausted message, code insufficient_credits). It does not use the lapse check, so it names the wrong cause. It is log-only here, and the chat title is kept truncated."
+   },
+   {
+    "symptom": "The Premium 'window nearly full' account was not at 95% and never reached the five-hour-limit message.",
+    "kind": "setup_limit",
+    "cause": "Seed data for this account was provisioned with a one-month period (provision.ts:126-134), which then lapsed, so the lapse gate (request-processor.ts:6016) runs before any window check. That is an artefact of the test accounts, not production."
+   }
+  ],
+  "refute_votes": "stands(high), stands(medium)",
+  "design": {
+   "id": "MANUAL-PLAN-PERIOD",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/MANUAL-PLAN-PERIOD.md",
+   "one_line": "Give hand-granted active plans a rolling monthly credit period at read time, so chat no longer refuses them after the seeded end date; also fix the usage summary hiding a real lapse.",
+   "parts": [
+    {
+     "symptom": "Chat refused on a granted plan after current_period_end passes",
+     "action": "fix_in_code",
+     "summary": "Add resolveGrantedPlanPeriod and a SubscriptionService.resolvePeriod used by getSubscription and the reset-credits cron, rolling only manual, active, non-ending, non-contract plans."
+    },
+    {
+     "symptom": "Advised production grant with no end date would also fail (null becomes 1970)",
+     "action": "fix_in_code",
+     "summary": "Same helper handles null start and end; add a test; runbook text updated only after the person-style check passes."
+    },
+    {
+     "symptom": "Usage says no usage yet and full limits while chat is refused",
+     "action": "fix_in_code",
+     "summary": "Summary service falls back to the subscription dates when the balance row has no account, so the lapse text shows for real lapses."
+    },
+    {
+     "symptom": "Billing shows Active with no period or renewal and no renew action",
+     "action": "no_change",
+     "summary": "By design for a granted plan; the error stops pointing there once the plan no longer lapses."
+    },
+    {
+     "symptom": "Whether granted plans should ever expire by date",
+     "action": "owner_decision",
+     "summary": "Recommend never by date; end a grant by setting canceled or cancel_at_period_end; owner runs the production row statement."
+    }
+   ],
+   "files": [
+    "apps/web/lib/server/managed-usage-period.ts",
+    "apps/web/lib/services/subscription-service.ts",
+    "apps/web/app/api/cron/reset-credits/route.ts",
+    "apps/web/lib/services/managed-usage-summary-service.ts",
+    "docs/runbooks/mobile-store-first-release.md"
+   ],
+   "needs_owner_decision": true,
+   "owner_question": "Should a hand-granted paid plan (no Stripe, Apple or Google id) get a fresh monthly allowance forever and never lapse by date, ending only when you set it canceled or ending? I recommend yes.",
+   "risk": "medium",
+   "size": "medium",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": false,
+   "commit_subject": "fix(web): give hand-granted plans a rolling monthly credit period"
+  },
+  "critique_must_fix": 0,
+  "revised": false
+ },
+ {
+  "id": "LIMIT-DENIAL-RAW",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "Yes for both product defects; the lapsed-period state itself is test data. (a) Raw denial: any paid, self-serve or comped plan whose period has ended without renewal (failed card, expired comp) gets the raw 'Error:' turn, since the missing mapping in billing-catalog.ts is plan-independent. Free users never reach billingPeriodLapsed, because that check sits in the non-Free branch (request-processor",
+  "causes": [
+   {
+    "symptom": "Lapsed-period denial renders as a raw 'Response failed' / 'Error: ...' turn with a Retry banner and no Upgrade or waitlist path",
+    "kind": "product_defect",
+    "cause": "The server refuses with code 'billing_period_not_renewed' (request-processor.ts:3043, 3058-3075; raised at 6016-6017). The client turns a refusal into a recovery card only if classifyManagedQuotaErrorCode knows the code. It is absent from MANAGED_QUOTA_BLOCKS (packages/contracts/types/src/billing-ca"
+   },
+   {
+    "symptom": "Usage page says full limits available while sends are refused; each send logs 'No credit account found, allocating credits' and 'Credits allocated successfully'",
+    "kind": "product_defect",
+    "cause": "For a subscription whose current_period_end is past, allocateCreditsForPeriod (subscription-service.ts:158-208) creates or returns an account for the ended period. getBalance calls get_credit_balance_microusd, which only returns accounts with period_end > now() (apps/web/db/neon/0182_managed_usage_m"
+   },
+   {
+    "symptom": "The test account was in a lapsed-period state instead of the intended 'five-hour window 95% used' state",
+    "kind": "setup_limit",
+    "cause": "The seeded account's subscription period ended Nov 19, 2026 and was never renewed on a machine dated Nov 24. This is test data, not a product path, and it is why the real five-hour-window refusal text and its recovery were never exercised."
+   },
+   {
+    "symptom": "Free: 'You've reached the Free limit for now' banner right after Stop, although the next message works and it disappears on reload",
+    "kind": "product_defect",
+    "cause": "Inferred, not seen directly (the /api/usage response body is not in the log). A Free turn reserves the whole remaining window up front when no estimate is given (free-trial-service.ts:661-690; the comment at 'A turn holds the whole remaining window' near line 735 says so), and an unmetered promoted "
+   },
+   {
+    "symptom": "Banner looks clipped behind the composer",
+    "kind": "product_defect",
+    "cause": "UsageWarningBanner is built as a tab with rounded-t-xl, border-x and border-t only (packages/ui/unified-chat/src/components/UsageWarningBanner.tsx:30-37), meant to sit flush on the composer's top edge. In WebChatPage it is placed in a stack with other notices above the composer (WebChatPage.tsx:7779"
+   },
+   {
+    "symptom": "Whether the model can answer within a limit, or what the provider said",
+    "kind": "provider_or_model_limit",
+    "cause": "No provider involvement: the lapsed refusal is decided before any provider call (402 in 302 ms), and the Free banner is a client reading of our own ledger."
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "LIMIT-DENIAL-RAW",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/LIMIT-DENIAL-RAW.md",
+   "one_line": "A lapsed paid plan now gets a composer notice with one working button (Manage billing, or Contact support on a plan with no Stripe subscription). The Free \"limit reached\" banner after Stop is on hold until someone reproduces it.",
+   "parts": [
+    {
+     "symptom": "Paid plan whose period ended shows 'Response failed', an 'Error:' prefix and a red Retry banner, with no Upgrade, Manage billing or support link (W-19)",
+     "action": "fix_in_code",
+     "summary": "Add billing_period_not_renewed to the shared catalog with showUpgradeCta true. The server then returns manage_billing (Stripe) or contact_support. The web slot resolver takes that action. The composer notice keeps its button, and a block-keyed helper stops the 'Use <model>' override. contact_support is wired through one shared type at every site, with a new openSupport handler. The Work, voice, media, desktop, extension, VS Code and mobile consumers of the new catalog entry are each checked."
+    },
+    {
+     "symptom": "Usage page says 'No usage yet. Your full limits are available.' and Billing says Active with no dates, while sends are refused",
+     "action": "owner_decision",
+     "summary": "The refusal card now tells the truth. Billing and Usage wording for a lapsed period needs the owner's copy, so it is not part of this fix."
+    },
+    {
+     "symptom": "Free account shows 'You've reached the Free limit for now' right after Stop, partly hidden by the composer",
+     "action": "fix_in_code",
+     "summary": "On hold. The cause is inferred and was not reproduced. Reproduce it first. The first option is a client-only refetch after settlement. The server display change would bring back the 'usage says available but sends are refused' mismatch for the length of the lease, so it ships only if the reproduction needs it. Banner clipping: no change until seen on a real limit."
+    },
+    {
+     "symptom": "Comped or admin-set plan has no renewal path",
+     "action": "owner_decision",
+     "summary": "Recommendation: show Contact support at /support. The alternative is automatic renewal of comped periods, which is a product and money decision."
+    },
+    {
+     "symptom": "Test account was lapsed, not at 95% of the five-hour window",
+     "action": "no_change",
+     "summary": "Test-machine data. The real five-hour refusal was never exercised in this run and needs its own check."
+    }
+   ],
+   "files": [
+    "packages/contracts/types/src/billing-catalog.ts",
+    "packages/contracts/types/src/work-usage.ts",
+    "apps/web/lib/services/managed-usage-request-service.ts",
+    "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+    "apps/web/features/chat/lib/quotaPaywallSlot.ts",
+    "apps/web/features/chat/lib/mediaPaywallRecovery.ts",
+    "apps/web/features/chat/types/message-metadata.ts",
+    "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "apps/web/lib/hooks/useMediaGeneration.ts",
+    "apps/web/features/chat/stores/account-usage-block.ts",
+    "apps/web/features/chat/stores/voice-input-store.ts",
+    "apps/web/features/chat/pages/WebChatPage.tsx",
+    "packages/ui/unified-chat/src/hooks/useChat.ts",
+    "apps/mobile/services/apiErrors.ts"
+   ],
+   "needs_owner_decision": true,
+   "risk": "medium",
+   "size": "medium",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": true,
+   "owner_question": "When a comped or admin-set plan (no Stripe subscription) lapses, should the person see 'Contact support' (/support, recommended), or should the server renew comped periods automatically? Also: what should the Billing and Usage pages say for a lapsed period? The recommendation is 'Plan period ended on <date>' with the allowance meter hidden.",
+   "commit_subject": "fix(web): show a recovery notice when a plan period has not renewed"
+  },
+  "critique_must_fix": 3,
+  "revised": true
+ },
+ {
+  "id": "WORK-FREE-AND-RELOAD",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "1. Free and Basic missing explanation: yes. It affects every Free and Basic account on web, and the mobile project Work tab carries the same copy.\n\n2. Scaffold text replacing the user's message after an approval: yes, if the code reading holds. It needs no local setup. It hits paid Work runs that pause for at least one approval (Premium, Max, Ultra and team plans, the plans with agi_work). The sam",
+  "causes": [
+   {
+    "symptom": "Free account: Work absent, no Upgrade or waitlist message; the project Work tab promises a switch that does not exist.",
+    "kind": "product_defect",
+    "cause": "Work is gated by capability canUseAgiWork, which needs the agi_work plan capability. That capability is listed for pro, max, max_15x, team, team_premium and enterprise only (packages/contracts/types/src/billing-catalog.ts:341,354), and the handshake strips it for lower tiers (lib/services/capability"
+   },
+   {
+    "symptom": "Free: the 'downloadable summary' card has no download and carries an 'Example' badge, while the reply says it is 'ready below'.",
+    "kind": "provider_or_model_limit",
+    "cause": "The Free turn ran as plain chat with no Work and no file tools. The model wrote an answer-UI 'files' block with no url. The card renders a non-link div plus an 'Example' badge when item.url is absent (features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx:633-690, badge at 654-658). The "
+   },
+   {
+    "symptom": "After reload, an extra user bubble shows the internal scaffold ('[attached file: ...]' plus 'Work through this plan in order ... Step N:').",
+    "kind": "product_defect",
+    "cause": "Probable cause, code-derived and not seen at runtime. The tool loop appends agiWorkExecutionDirective to the last user message in the in-memory messages array (app/api/llm/v1/chat/completions/lib/tool-loop.ts:6298-6304; text at lib/agiwork-plan.ts:218-224), and the hydrated attachment header (lib/ch"
+   },
+   {
+    "symptom": "After reload the old plan card shows live Start work and Cancel again; Progress shows the request and Plan twice.",
+    "kind": "setup_limit",
+    "cause": "On Start work the client sends the plan as a replacement turn: handleAgiWorkPlanDecision calls sendReplacingMessages with the rollback ids (features/chat/pages/WebChatPage.tsx:6388-6402, 5213-5256). Once the replacement turn is committed, deleteServerMessages issues one DELETE per replaced row, the "
+   },
+   {
+    "symptom": "Chat title becomes 'Please attach the route brief so I can identify the station...'.",
+    "kind": "product_defect",
+    "cause": "Stage 2 title generation sends the first user message as a bare user turn to a cheap no-reasoning model ((model name), max 24 tokens) with a one-line system prompt (app/api/chat/conversations/[id]/messages/lib/generate-title.ts:53-55, 150-158). The message text says 'Using the attached route brief' bu"
+   },
+   {
+    "symptom": "Run code approval is labelled 'High risk, can change or delete data' for a read-only PDF read, and the first tool call failed with 'ModuleNotFoundError: No modu",
+    "kind": "setup_limit",
+    "cause": "Not traced; these are separate rows in the tester's list, not in this problem's description. The sandbox missing pymupdf could be a test-sandbox setup limit or a real sandbox image gap. The risk label is generic to the code-execution tool."
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "WORK-FREE-AND-RELOAD",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/WORK-FREE-AND-RELOAD.md",
+   "one_line": "Show a locked Work switch with an upgrade path on lower plans, stop approval resumes from overwriting the user's message, hide stale plan buttons, explain preview-only file cards, and harden the title prompt.",
+   "parts": [
+    {
+     "symptom": "Free: no Chat/Work switch, no upgrade message; project Work tab promises a switch",
+     "action": "fix_in_code",
+     "summary": "Show a locked Work segment that opens the existing upgrade/waitlist flow, and make the project Work tab say Work is not on the plan. Both use one pure plan-check function and the catalog upgrade message."
+    },
+    {
+     "symptom": "Free: downloadable summary card has no download and an Example chip",
+     "action": "fix_in_code",
+     "summary": "The model limit stays, since a model with no file tool cannot make a link. The card now says Preview and explains it is not a downloadable file. A prompt-version change is left as an optional later step."
+    },
+    {
+     "symptom": "Ultra reload: extra user bubble shows the attached-file header and Work through this plan scaffold",
+     "action": "fix_in_code",
+     "summary": "A resume re-persisted the checkpointed user message over the real row. Drop user_message from replayed checkpoint requests; all four resume routes use that one function. Add a test."
+    },
+    {
+     "symptom": "Ultra reload: old plan card shows live Start work and Cancel; Progress doubled",
+     "action": "fix_in_code",
+     "summary": "The trigger is the test machine, where migration 0416 is missing and the replace DELETEs failed. In production a lost delete could still leave a live stale card, so awaitingApproval is honored only on the latest assistant message. Duplicate rows after a lost delete remain and are listed as a later server-side option."
+    },
+    {
+     "symptom": "Ultra reload: chat retitled 'Please attach the route brief ...'",
+     "action": "fix_in_code",
+     "summary": "The titler model, which has no file, answered the message instead of titling it. This cause is my own trace and the raw output is not logged. Harden the title system prompt and wrap the message as data."
+    },
+    {
+     "symptom": "Rows already overwritten by the resume bug keep scaffold text",
+     "action": "owner_decision",
+     "summary": "A one-off production repair could restore the typed sentence. It is optional and the fix does not depend on it."
+    }
+   ],
+   "files": [
+    "apps/web/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request.ts",
+    "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "apps/web/features/chat/lib/agiwork-access.ts",
+    "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "apps/web/features/projects/components/ProjectWorkPanel.tsx",
+    "apps/web/app/chat/projects/[id]/page.tsx",
+    "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx",
+    "packages/contracts/types/src/answer-ui.ts",
+    "apps/web/app/api/chat/conversations/[id]/messages/lib/generate-title.ts"
+   ],
+   "needs_owner_decision": true,
+   "risk": "medium",
+   "size": "medium",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": true,
+   "owner_question": "Should a one-off production data repair restore the typed sentence in user messages already overwritten with the attached-file header and Work scaffold? Recommendation: yes after the fix ships, run on a copy first, or skip if there are no real users yet. The code fix does not depend on the answer.",
+   "commit_subject": "fix(web): keep work turns intact after approval and reload, and explain work on lower plans"
+  },
+  "critique_must_fix": 0,
+  "revised": false
+ },
+ {
+  "id": "CLOUD-CODE-FIRST-TURN",
+  "classification": "mixed",
+  "confidence": "medium",
+  "affects_production": "Yes for the first-turn cancellation and the Stop copy. They sit in shared code with no test-machine dependency (the service, loop, hook and page, all unchanged on the web-lane branch and the live checkout). Every person on a plan that can use Cloud Code (availability.planEntitled) who starts a new standalone task from /code is hit, because the page change is always faster than a multi-step turn. T",
+  "causes": [
+   {
+    "symptom": "The first turn of every new cloud task is cancelled about 1s after start, and the page shows nothing until a reload.",
+    "kind": "product_defect",
+    "cause": "A new cloud task is started from /code, so it first creates the session and then starts the turn. createSession calls router.push(codeSessionPath(id)) at CloudCodePage.tsx:873, and startTurn then POSTs /agent while the client waits for the response (CloudCodePage.tsx:1106, :785). /code and /code/[se"
+   },
+   {
+    "symptom": "No live progress while a cloud turn works. Only 'Ns Working' shows, and steps appear after the turn ends or after Stop.",
+    "kind": "product_defect",
+    "cause": "The /agent route answers once with NextResponse.json(result) after the whole turn (agent/route.ts:166-179), so nothing streams. The server writes each step to cloud_code_agent_steps while the turn runs (cloud-code-agent-service.ts:770), and cloud-code-session-service.ts:503 can read them. The page n"
+   },
+   {
+    "symptom": "After Stop, the transcript says 'The model failed to produce a response. Try again, or choose Auto...' next to Cancelled.",
+    "kind": "product_defect",
+    "cause": "The Stop request flips the deadline's cancelled flag through the 2.5s poll, which aborts the loop signal (cloud-code-agent-service.ts:154-170). The aborted provider stream reports 'Request was aborted.' as a stream error chunk. drainAssistantTurn collects it into drained.error (cloud-code-agent-loop"
+   },
+   {
+    "symptom": "No GitHub repository list, so no pull request could be tried. Offline, 'Run this task again' gives no feedback. The header badge shows 'Isola...' at 390px wide.",
+    "kind": "setup_limit",
+    "cause": "The GitHub App is unconfigured on the test machine, so GitHub connector linking is disabled and /api/connectors answers 501. That is the setup limit. The picker's message is honest. The offline and badge problems are separate small page defects. I did not trace either one."
+   }
+  ],
+  "refute_votes": "stands(high), stands(medium)",
+  "design": {
+   "id": "CLOUD-CODE-FIRST-TURN",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/CLOUD-CODE-FIRST-TURN.md",
+   "one_line": "The first cloud task turn is cancelled by the page remount and nothing shows live. Fix: detach the turn from the request, make the page watch the stored turn, and stop labelling a user Stop as a provider error.",
+   "parts": [
+    {
+     "symptom": "First turn cancelled about 1 s after start, blank session, 'connection dropped' after reload",
+     "action": "fix_in_code",
+     "summary": "Detach the inline turn's signal from the request in cloud-code-turn-transport.ts (and the approval resume). Ship it only together with the page re-read, because alone it leaves a blank page until reload. Delete the now-dead 'connection dropped' branch."
+    },
+    {
+     "symptom": "No live steps; spinner can hang on a stranded row",
+     "action": "fix_in_code",
+     "summary": "Page watches the stored turn (reuse the live checkout's poll, or a 4 s re-read fallback in the same change). Spinner age is measured from a new turn updatedAt (column already exists, no migration), so a resumed turn after approval stays live."
+    },
+    {
+     "symptom": "'The model failed to produce a response' after Stop",
+     "action": "fix_in_code",
+     "summary": "cloud-code-agent-loop.ts drained.error branch returns cancelled when the signal is aborted; the service drops errorMessage when the stop was requested. This part can land alone."
+    },
+    {
+     "symptom": "Abandoned turn keeps spending after the client leaves",
+     "action": "owner_decision",
+     "summary": "Owner confirms an abandoned turn runs to its budget or Stop. The session run lease and the 'Code session is busy' conflict already block a second parallel turn on the same session."
+    },
+    {
+     "symptom": "No GitHub repository list, so no pull request",
+     "action": "no_change",
+     "summary": "Test machine has no GitHub App; not a product defect."
+    }
+   ],
+   "files": [
+    "apps/web/lib/services/cloud-code-turn-transport.ts",
+    "apps/web/lib/services/cloud-code-agent-approval-service.ts",
+    "apps/web/lib/services/cloud-code-agent-loop.ts",
+    "apps/web/lib/services/cloud-code-agent-service.ts",
+    "apps/web/lib/services/cloud-code-session-service.ts",
+    "packages/contracts/types/src/cloud-code.ts",
+    "packages/contracts/cloud-contracts/src/cloud-code-transcript.ts",
+    "apps/web/features/code/CloudCodePage.tsx"
+   ],
+   "needs_owner_decision": true,
+   "owner_question": "Should a cloud code turn keep running to completion after the person closes the tab or reloads, spending provider and sandbox cost until its step bound, time budget or Stop? Today closing the tab cancels it. Recommendation: yes, as Claude Code on the web does.",
+   "risk": "medium",
+   "size": "medium",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": true,
+   "commit_subject": "fix(web): keep cloud code turns running after the page leaves and show them live"
+  },
+  "critique_must_fix": 2,
+  "revised": true
+ },
+ {
+  "id": "OFFLINE-BANNER-STUCK",
+  "classification": "product_defect",
+  "confidence": "medium",
+  "affects_production": "Yes. Both paths are ordinary browser code with no test-setting dependency (the server log shows the offline requests never reached the server, so rate limits, provider keys and scans are irrelevant). Every plan and the Free tier hit it: after a Wi-Fi drop and recovery, anyone who pressed Enter while offline keeps a yellow warning until they send, and anyone whose sidebar action (archive, pin, rena",
+  "causes": [
+   {
+    "symptom": "(A) 'You are offline ... draft is saved' banner survives reconnect",
+    "kind": "product_defect",
+    "cause": "The banner text is composer-local state (localNotice), set by the Enter-while-offline branch in submitMessage and never tied to the online state. useOnlineStatus does update on the online event, which re-enables Send, but nothing clears localNotice. The only clears are a new draft reset (setLocalNot"
+   },
+   {
+    "symptom": "(A) The banner promises 'can be sent after you reconnect', but nothing sends automatically, and Enter did not send on the first try in W-5",
+    "kind": "product_defect",
+    "cause": "Copy overpromises. The draft is only kept in the textbox; the user must press Send again. The failed first Enter in W-5 after 'Check again' is not established. The offline branch returns early and does not mark anything to resend. The tester notes say Enter did not send but the Send button did. Poss"
+   },
+   {
+    "symptom": "(B) Offline archive: stale red 'You appear to be offline' notice with Retry that outlives the outage and misleads",
+    "kind": "product_defect",
+    "cause": "The archive PUT is made by useConversations.updateConversation. On a fetch failure it calls setError(toUserMessage(err, ...), id), which writes the single shared chat-store error that is also the failed-turn banner. networkErrorMessage turns the failure into 'You appear to be offline. Check your con"
+   },
+   {
+    "symptom": "(B) 'No feedback at all' when archiving offline",
+    "kind": "product_defect",
+    "cause": "By design the code does give feedback: runSessionRowAction shows the toast 'Could not archive this conversation' when updateConversation returns false, and handleArchiveSession awaits it. That toast is transient and the screenshot at 12 shows none, so whether it was shown and missed (taken after it "
+   },
+   {
+    "symptom": "W-9 tester wondered whether this is an artifact of the headless offline switch",
+    "kind": "tester_error",
+    "cause": "Not a test artifact. Playwright context.setOffline fires the same offline and online events a real browser does (the existing e2e depends on that). The stale notice stems from code that never listens for them."
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "OFFLINE-BANNER-STUCK",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/OFFLINE-BANNER-STUCK.md",
+   "one_line": "Clear the stale offline composer notice and the stale offline store error when the browser fires online.",
+   "parts": [
+    {
+     "symptom": "(A) yellow offline draft banner stays after reconnect",
+     "action": "fix_in_code",
+     "summary": "Effect in ChatComposerNew clears localNotice when online turns true and it equals the offline copy."
+    },
+    {
+     "symptom": "(A) Enter did not send first time in W-5",
+     "action": "no_change",
+     "summary": "Not established; likely resolved by the stale banner fix. Recheck in the person-style run."
+    },
+    {
+     "symptom": "(B) red offline notice with turn Retry stays after reconnect",
+     "action": "fix_in_code",
+     "summary": "Clear the shared chat error on the online event when it is the offline message; add a shared offlineErrorMessage helper."
+    },
+    {
+     "symptom": "(B) no feedback on offline archive",
+     "action": "no_change",
+     "summary": "Toast exists in sidebar-session-actions; not proven missing. Optional follow-up to stop routing sidebar failures through the turn-error channel."
+    }
+   ],
+   "files": [
+    "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "apps/web/lib/hooks/useConversations.ts",
+    "packages/ui/ui/src/lib/network-error.ts",
+    "apps/web/features/chat/components/Composer/ChatComposerNew.sendPending.test.tsx",
+    "apps/web/e2e/composer-offline.spec.ts"
+   ],
+   "needs_owner_decision": false,
+   "risk": "low",
+   "size": "small",
+   "overlaps_web_lane_edits": true,
+   "overlaps_other_agent": false,
+   "commit_subject": "fix(web): clear stale offline notices when the connection returns"
+  },
+  "critique_must_fix": 0,
+  "revised": false
+ },
+ {
+  "id": "SEARCH-STOP-AND-CAP",
+  "classification": "product_defect",
+  "confidence": "medium",
+  "affects_production": "Yes, for every plan, since none of the code involved is plan-gated or specific to this machine. (1) Stopping a hosted-search turn before the first text token (any provider path that only flushes search results at first text, which is the OpenAI path used by Luna on Free and by OpenAI models on paid plans) leaves all search rows as 'Partial, see body' or red, and shows the false 'didn't return resu",
+  "causes": [
+   {
+    "symptom": "Five amber 'Searching the web - Partial, see body' rows after Stop (red in the Work panel), even though the provider finished four of the five searches",
+    "kind": "product_defect",
+    "cause": "The OpenAI stream translator only emits a search's result event when the first text token arrives or the response completes (flushWebSearchResults at packages/ai/providers/openai/src/stream-responses.ts:446-453 and 592). Search rows stay 'running' until then. When Stop lands first, finishAgentActivi"
+   },
+   {
+    "symptom": "Contradictory text: 'Search stopped' header plus 'Web search didn't return results for this turn, so the answer relies on the model's own knowledge' next to 'Re",
+    "kind": "product_defect",
+    "cause": "The no-results notice does not know about Stop. webSearchNoticeFor (packages/ui/unified-chat/src/lib/web-search-notice.ts:21-37) is guarded by producedNoVisibleOutput, but that flag returns false for a stopped turn (apps/web/features/chat/components/messages/MessageBubble.tsx:2225, 'finishReason ==="
+   },
+   {
+    "symptom": "The person sees a 'Search limit reached' row, with internal wording, for a normal question; five searches ran against a cap of three",
+    "kind": "product_defect",
+    "cause": "Two parts. (a) The cap is a hard-coded per-turn default of 3 (20 in research mode), overridable only by env AGI_NATIVE_SEARCH_MAX_USES (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2542-2560). When the count is reached, the tool loop emits a progress row 'Search limit reached' w"
+   },
+   {
+    "symptom": "W-11: after Stop the project chat shows no answer text, but a reload shows 7 paragraphs; the Work panel shows two 'Search limit reached' rows, one red with no d",
+    "kind": "product_defect",
+    "cause": "Not fully traced. Server side, a turn that was stopped had a provider step that finished with text anyway (log line 31559 region: a step with 125 output_text deltas and finishReason stop at 14:21:52, then stop_reason cancelled at the same instant). The client saved the abort with whatever text it he"
+   },
+   {
+    "symptom": "Free-limit banner 'You've reached the Free limit for now. Resets in 4 hr 52 min' appeared right after Stop",
+    "kind": "setup_limit",
+    "cause": "The banner is the composer usage warning from the managed-usage summary (apps/web/features/chat/pages/WebChatPage.tsx:1836-1868, selectUsageWarning with FREE_USAGE_LIMIT_REACHED_HEADLINE in packages/contracts/types/src/usage-vocabulary.ts:184). It is refreshed after a turn (a GET /api/usage at 13:54"
+   }
+  ],
+  "refute_votes": "stands(medium), stands(medium)",
+  "design": {
+   "id": "SEARCH-STOP-AND-CAP",
+   "design_file": "~/.cache/agi-audit/web-lane/wave2/SEARCH-STOP-AND-CAP.md",
+   "one_line": "After Stop, search rows read \"Stopped\" in a muted colour, the false \"no results\" notice is gone, and W-11's missing text after Stop is a named follow-up that still blocks release.",
+   "parts": [
+    {
+     "symptom": "Amber 'Partial, see body' rows (red in Work panel) after user Stop",
+     "action": "fix_in_code",
+     "summary": "New 'stopped' inline status mapped from 'cancelled' in ToolCallCard; Work panel stops painting cancelled red."
+    },
+    {
+     "symptom": "False 'Web search didn't return results' notice next to 'Response stopped.'",
+     "action": "fix_in_code",
+     "summary": "Optional `stopped` field on webSearchNoticeFor, passed from web MessageBubble and mobile messageTurnNotices."
+    },
+    {
+     "symptom": "Search limit reached row / 5 searches against a cap of 3",
+     "action": "no_change",
+     "summary": "Wording and placement owned by PROJECT-CHAT-AS-WORK; cap and provider overshoot stay."
+    },
+    {
+     "symptom": "W-11 no answer text after Stop, full text after reload",
+     "action": "fix_in_code",
+     "summary": "Not fixed here; named follow-up STOP-KEEPS-TEXT-ON-SCREEN added as a release gate, starting at useChatStream.ts:6141-6170."
+    }
+   ],
+   "files": [
+    "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
+    "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
+    "packages/ui/unified-chat/src/lib/web-search-notice.ts",
+    "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "apps/mobile/src/features/chat/components/messageTurnNotices.ts"
+   ],
+   "needs_owner_decision": false,
+   "risk": "low",
+   "size": "small",
+   "overlaps_web_lane_edits": false,
+   "overlaps_other_agent": false,
+   "commit_subject": "fix(chat): show stopped search rows calmly and drop the false no-results notice"
+  },
+  "critique_must_fix": 2,
+  "revised": true
+ }
+]

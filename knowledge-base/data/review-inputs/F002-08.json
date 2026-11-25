@@ -1,0 +1,615 @@
+{
+ "feature": {
+  "id": "F002-08",
+  "aliases": [
+   "Enterprise page",
+   "/enterprise",
+   "Contact sales",
+   "Talk to sales",
+   "/contact-sales",
+   "Discuss Enterprise access",
+   "Request a follow-up",
+   "Enterprise waitlist",
+   "Partners page",
+   "Partner application",
+   "/partners",
+   "/contact",
+   "/support",
+   "Contact and support",
+   "S2.24",
+   "S2.35",
+   "S2.36",
+   "S2.37"
+  ],
+  "summary": "Web pages that let a company reach the team: /enterprise describes the Enterprise offer and sends visitors to /contact-sales (an email page); /contact drafts an email; /support lists channels; a dialog stores an Enterprise follow-up email; /partners emails partner applications. Mobile About has support links. The CLI has no contact entry found.",
+  "purpose": {
+   "what_it_does": "Presents the Enterprise offering and gives several ways to start a conversation: an email address, a mail-draft composer, a stored email request with consent, and a partner application form that emails the team (apps/web/app/enterprise/page.tsx:64-299; apps/web/app/contact-sales/page.tsx; apps/web/app/partners/PartnerApplicationForm.tsx).",
+   "why_it_exists": "Enterprise is contract-priced and not self-serve (packages/contracts/types/src/billing-catalog.ts:219-224), and the company states there is no partner program yet but wants to hear from integrators (apps/web/app/partners/page.tsx:68).",
+   "who_uses_it": "Company buyers, security reviewers, integration builders, consultancies, and any visitor needing support.",
+   "problems_solved": [
+    "Buyer needs a sales route for SSO, retention and governance",
+    "Partner or plugin builder needs a way to apply",
+    "Visitor needs honest support channels and response commitments per plan (apps/web/features/marketing/components/pages/company/support-content.ts:13-36)",
+    "Consent for storing an email must be recorded (apps/web/app/api/waitlist/public/route.ts:166)"
+   ],
+   "use_cases": [
+    "A security lead reads /enterprise, clicks Contact sales and emails the sales inbox with team size and review needs (apps/web/app/contact-sales/page.tsx:43-60).",
+    "A visitor on /desktop clicks 'Discuss Enterprise access', enters an email, ticks consent and presses 'Request a follow-up' (apps/web/app/desktop/page.tsx:53-56; WaitlistDialog.tsx:116, 172).",
+    "A plugin builder fills the partner form and gets a reference like PA-XXXXXXXXXX (apps/web/app/api/partners/apply/route.ts:21-24).",
+    "A logged-in user raises a ticket from Settings > Help rather than email (apps/web/app/support/page.tsx:111)."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: footer Product > Enterprise, Company > Partners, Company > Contact, Resources > Support (apps/web/features/marketing/components/system/nav.ts:165-225).",
+    "Web: 'Contact sales' on /enterprise and on the Team band of /pricing (enterprise/page.tsx:77, 289; pricing/page.tsx:1206).",
+    "Web: 'Discuss Enterprise access' button on /desktop and /mobile hero (desktop/page.tsx:54; mobile/page.tsx:102).",
+    "Web: Apply to partner at /partners#apply (partners/page.tsx:126-137).",
+    "Mobile: About screen > Support section: Help Center, Service Status, Send Feedback, Contact Support (only when signed in and in Cloud mode), Email Support (apps/mobile/app/(app)/about.tsx:115, 275-331).",
+    "CLI: /feedback and /bug commands send feedback to the team (apps/cli/src/claude_parity.rs:194-199; apps/cli/src/cloud/feedback.rs:5); one error message points to agiworkforce.com/support (apps/cli/src/errors.rs:1582). No sales or contact page entry found. The brief cites tui_app.rs:3531, which is status-footer code, not a contact entry.",
+    "Desktop, VS Code, Chrome: none found."
+   ],
+   "prerequisites": [
+    "None for web pages and the dialog.",
+    "Mobile Contact Support needs sign-in and Cloud mode (about.tsx:115).",
+    "CLI feedback needs the CLI cloud feedback endpoint (apps/cli/src/cloud/feedback.rs:5); sign-in rules not opened."
+   ],
+   "screens_and_controls": [
+    "/enterprise: hero with 'Contact sales', sections on identity, policy, audit, retention and compliance, an audit-export sample, closing 'Contact sales' (enterprise/page.tsx:64-299).",
+    "/contact-sales: title 'Talk to sales.', 'Email <address>' and 'See what Enterprise includes' buttons, a 'Which door you need' table (contact-sales/page.tsx:43-65).",
+    "/contact: Name, Email, Subject, Message fields; the button opens a prefilled draft in the visitor's mail app (contact/page.tsx:17-40, 79).",
+    "/support: channels, support-by-tier table, buttons 'Email a bug report', 'Raise a ticket', 'Check service status', 'Open the contact page' (support/page.tsx:99-120).",
+    "Enterprise dialog: eyebrow 'Enterprise \u00b7 contract access', title 'Discuss Enterprise access', Email address, consent checkboxes, submit 'Request a follow-up', close button (WaitlistDialog.tsx:112-176).",
+    "/partners: fields Your name, Work email, Company, Website (optional), 'What do you want to build with us?' select, 'Tell us about it', 'Send application' (PartnerApplicationForm.tsx:99-199)."
+   ],
+   "journey": [
+    "Open /enterprise (or /pricing Enterprise card) and read what is implemented.",
+    "Press Contact sales; /contact-sales opens with an email link.",
+    "Email the address with team size, surfaces, review needs and timeline.",
+    "Or on /desktop or /mobile press 'Discuss Enterprise access', fill email, tick the required consent, press 'Request a follow-up'; the dialog says a person will contact you (WaitlistDialog.tsx:100-110).",
+    "Or on /partners press 'Apply to partner', fill the form and send; the page shows 'Application sent.' with the reference (PartnerApplicationForm.tsx:82-86)."
+   ],
+   "feedback_and_outputs": [
+    "Dialog success: 'You're on the list.' with a withdrawal link to /privacy/requests (WaitlistDialog.tsx:95-110).",
+    "Dialog errors: 'Enter a valid email address.' or 'Tick the box agreeing to your email being stored before joining.' (WaitlistDialog.tsx:51-60).",
+    "Partner success: reference starting PA- (route.ts:21-24); errors 'Your application was not sent, so nothing reached us. Try again.' and a rate-limit message (PartnerApplicationForm.tsx:16, 67).",
+    "/contact: 'Email draft opened.' status, nothing stored (contact/page.tsx:76-80, 110-120)."
+   ],
+   "settings": [
+    "Withdrawal of a stored address: /privacy/requests, no account needed (WaitlistDialog.tsx:105-110).",
+    "Operator: AGI_SUPPORT_FALLBACK_EMAIL, RESEND_API_KEY and AGI_SUPPORT_FROM_EMAIL decide where partner mail goes and whether it can be sent (apps/web/lib/support/handoff/resend-client.ts:324-334; config.ts:87)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "/enterprise exists and its Contact sales buttons go to /contact-sales (enterprise/page.tsx:77, 289).",
+    "/contact-sales is an email-only page (contact-sales/page.tsx:43-100).",
+    "/contact is a mail-draft composer; nothing is sent or stored by the site (contact/page.tsx:30, 79).",
+    "The Enterprise dialog validates the email, requires the Enterprise consent, posts through joinPublicWaitlist with consent surface web-waitlist-modal (WaitlistDialog.tsx:51-71) to /api/waitlist/public, which checks CSRF bound to an anonymous session, a rate limit, consent decisions, honours Global Privacy Control, writes the consent ledger and upserts cloud_managed_waitlist on (email, source) (apps/web/app/api/waitlist/public/route.ts:95-198).",
+    "The partner form exists, posts to /api/partners/apply and the route checks CSRF, rate limit and schema, then emails the team inbox with a reply-to and returns a reference; it stores nothing in the database (apps/web/app/api/partners/apply/route.ts:27-81). The brief's 'web missing' for S2.37 is out of date.",
+    "Partner page states honestly that no partner program exists yet (partners/page.tsx:68).",
+    "Mobile About shows Email Support always and Contact Support when signed in on Cloud (about.tsx:115, 313-331)."
+   ],
+   "incomplete": [
+    "The stored Enterprise request is not on the Enterprise sales path: /enterprise and /pricing go to the email page, while the dialog is opened from /desktop and /mobile (apps/web/app/desktop/page.tsx:53; apps/web/app/mobile/page.tsx:101). Whether other pages mount it is unknown beyond SurfaceSections (features/marketing/components/SurfaceSections.tsx:16).",
+    "Partner applications are emailed only; there is no record, status or admin view in the database [inferred from route.ts:27-81].",
+    "Developer 'listing' submissions go through the plugin directory, not the partner form (partners/page.tsx text 'List a plugin in the directory'); not opened further."
+   ],
+   "disconnected_or_disabled": [
+    "If the email provider is not configured the partner route answers that the application could not be sent (route.ts:68-79; resend-client.ts:327-334)."
+   ],
+   "not_available": [
+    "CLI: no sales, contact or partner page entry found in apps/cli/src.",
+    "Desktop, VS Code, Chrome: nothing found.",
+    "Mobile: no sales or partner form."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "A public page presents the Enterprise offering with a sales path.",
+     "source": "brief S2.24"
+    },
+    {
+     "statement": "A contact or support page lets a visitor reach the company.",
+     "source": "brief S2.35"
+    },
+    {
+     "statement": "A form lets a prospect request an Enterprise conversation and the request is stored.",
+     "source": "brief S2.36"
+    },
+    {
+     "statement": "Partners and developers can submit a listing or partnership application through a form.",
+     "source": "brief S2.37"
+    },
+    {
+     "statement": "Enterprise dialog says a person will contact the visitor about contract-scoped access; consent is required before submit; submit goes through the waitlist client with surface web-waitlist-modal.",
+     "source": "brief S2.36; apps/web/features/marketing/components/WaitlistDialog.tsx:51-71, 100-110"
+    },
+    {
+     "statement": "Enterprise capabilities are contract scoped and reached through sales; there is no dedicated capacity.",
+     "source": "apps/web/app/contact-sales/page.tsx:80-98"
+    }
+   ],
+   "acceptance_criteria": [
+    "Every Contact sales button on /enterprise and /pricing opens /contact-sales with a working mailto link.",
+    "The dialog refuses an invalid email and refuses submit without the required consent, and sends nothing in either case.",
+    "A valid dialog submit creates one cloud_managed_waitlist row (idempotent per email and source) and a consent record.",
+    "Partner form with fewer than 20 message characters is refused before any request.",
+    "A valid partner application returns a PA- reference and an email arrives at the team inbox with reply-to set.",
+    "/contact never stores the visitor's text.",
+    "Mobile Contact Support is hidden when signed out or in Local mode."
+   ],
+   "inferred": [
+    "The stored Enterprise request should be reachable from the Enterprise page to meet 'the request is stored' for S2.36 [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Open the Enterprise dialog from /enterprise and /pricing, or state that email is the only route.",
+    "[proposed] Store partner applications with a status so none is lost if mail fails."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "screen",
+    "name": "EnterprisePage",
+    "path": "apps/web/app/enterprise/page.tsx",
+    "role": "Enterprise offer page with Contact sales links."
+   },
+   {
+    "kind": "screen",
+    "name": "ContactSalesPage",
+    "path": "apps/web/app/contact-sales/page.tsx",
+    "role": "Email-only sales page."
+   },
+   {
+    "kind": "screen",
+    "name": "ContactPage",
+    "path": "apps/web/app/contact/page.tsx",
+    "role": "Mail-draft composer."
+   },
+   {
+    "kind": "screen",
+    "name": "SupportPage",
+    "path": "apps/web/app/support/page.tsx",
+    "role": "Channels, support by tier, bug-report guidance."
+   },
+   {
+    "kind": "config",
+    "name": "SUPPORT_ROWS",
+    "path": "apps/web/features/marketing/components/pages/company/support-content.ts",
+    "role": "Per-plan support commitments table."
+   },
+   {
+    "kind": "component",
+    "name": "WaitlistDialog",
+    "path": "apps/web/features/marketing/components/WaitlistDialog.tsx",
+    "role": "Enterprise follow-up dialog."
+   },
+   {
+    "kind": "component",
+    "name": "WaitlistModalProvider and WaitlistTrigger",
+    "path": "apps/web/features/marketing/components/WaitlistModal.tsx",
+    "role": "Opens the dialog lazily; mounted in Providers (apps/web/app/Providers.tsx:24)."
+   },
+   {
+    "kind": "service",
+    "name": "joinPublicWaitlist",
+    "path": "apps/web/lib/services/waitlistServiceClient.ts",
+    "role": "Fetches a token then POSTs with 10 s and 15 s deadlines."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET and POST /api/waitlist/public",
+    "path": "apps/web/app/api/waitlist/public/route.ts",
+    "role": "Token mint, consent, store."
+   },
+   {
+    "kind": "config",
+    "name": "Consent purposes",
+    "path": "apps/web/lib/consent-purposes.ts",
+    "role": "enterprise_waitlist (required) and product_updates (optional) wording."
+   },
+   {
+    "kind": "table",
+    "name": "cloud_managed_waitlist",
+    "path": "apps/web/db/neon/0011_waitlist.sql",
+    "role": "Stores email, source, optional user id."
+   },
+   {
+    "kind": "table",
+    "name": "consent_records",
+    "path": "apps/web/db/neon/0113_dpdp_consent_records.sql",
+    "role": "Append-only consent ledger."
+   },
+   {
+    "kind": "screen",
+    "name": "PartnersPage and PartnerApplicationForm",
+    "path": "apps/web/app/partners/PartnerApplicationForm.tsx",
+    "role": "Partner form and its page (apps/web/app/partners/page.tsx)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/partners/apply",
+    "path": "apps/web/app/api/partners/apply/route.ts",
+    "role": "Validates and emails the application."
+   },
+   {
+    "kind": "schema",
+    "name": "PartnerApplicationRequestSchema",
+    "path": "packages/contracts/cloud-contracts/src/partner-applications.ts",
+    "role": "Fields, kinds (integration, delivery, runtime, other), limits."
+   },
+   {
+    "kind": "service",
+    "name": "sendSupportEmail",
+    "path": "apps/web/lib/support/handoff/resend-client.ts",
+    "role": "Email delivery used by the partner route."
+   },
+   {
+    "kind": "screen",
+    "name": "Mobile AboutScreen",
+    "path": "apps/mobile/app/(app)/about.tsx",
+    "role": "Support links and legal links on the phone."
+   },
+   {
+    "kind": "command",
+    "name": "/feedback and /bug",
+    "path": "apps/cli/src/claude_parity.rs",
+    "role": "CLI feedback command (lines 194-199) posting to /api/feedback (apps/cli/src/cloud/feedback.rs:5)."
+   },
+   {
+    "kind": "test",
+    "name": "Partner and waitlist tests",
+    "path": "apps/web/app/partners/PartnerApplicationForm.test.tsx",
+    "role": "Form behaviour tests."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Visitor opens a page; Contact sales is an email link; the composer builds a mailto link in the browser.",
+     "runs_on": "device",
+     "evidence": "apps/web/app/contact/page.tsx:30; apps/web/app/contact-sales/page.tsx:43-60"
+    },
+    {
+     "what_happens": "Dialog validates email and consent locally.",
+     "runs_on": "device",
+     "evidence": "apps/web/features/marketing/components/WaitlistDialog.tsx:51-60"
+    },
+    {
+     "what_happens": "Client fetches an anonymous-session CSRF token, then POSTs email, source and consent.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/web/lib/services/waitlistServiceClient.ts:28-60; route.ts:80-93"
+    },
+    {
+     "what_happens": "Server checks CSRF and rate limit, validates consent, records the consent ledger and upserts the waitlist row.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/api/waitlist/public/route.ts:95-198"
+    },
+    {
+     "what_happens": "Partner form POSTs to /api/partners/apply; server validates and sends an email through the email provider.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/api/partners/apply/route.ts:27-66"
+    },
+    {
+     "what_happens": "The email provider delivers the message to the team inbox.",
+     "runs_on": "outside service",
+     "evidence": "apps/web/lib/support/handoff/resend-client.ts:324"
+    }
+   ],
+   "data": [
+    {
+     "what": "Waitlist email, source, optional user id, timestamps",
+     "where_stored": "table cloud_managed_waitlist",
+     "synced": "server only",
+     "retained_or_deleted": "Not removed by account deletion if given without an account; a person removes it after a /privacy/requests withdrawal (apps/web/app/privacy/page.tsx survivors table; WaitlistDialog.tsx:166-172)"
+    },
+    {
+     "what": "Consent decisions (hashed email if anonymous)",
+     "where_stored": "table consent_records",
+     "synced": "server only",
+     "retained_or_deleted": "Append-only; a withdrawal adds a row (db/neon/0113_dpdp_consent_records.sql:1-20)"
+    },
+    {
+     "what": "Partner application text and contact details",
+     "where_stored": "Team email inbox (not our database); reference logged",
+     "synced": "not applicable",
+     "retained_or_deleted": "unknown (mail retention not in the repository)"
+    },
+    {
+     "what": "Mail-composer text",
+     "where_stored": "nowhere on the site; the visitor's mail app",
+     "synced": "no",
+     "retained_or_deleted": "not stored (contact/page.tsx:79)"
+    }
+   ],
+   "models_and_providers": "No AI model takes part. Email delivery uses the email provider behind sendSupportEmail; its name is not recorded here beyond the RESEND_API_KEY setting name."
+  },
+  "access_and_usage": {
+   "account": "None required for any web form. Partner route reads an optional signed-in user id (route.ts:36). Mobile Contact Support needs a Clerk sign-in and Cloud mode (about.tsx:115).",
+   "permissions": "Anonymous access; CSRF token bound to an anonymous session cookie (waitlist route.ts:80-97).",
+   "subscription": "No entitlement is needed. Enterprise itself is contract-priced (billing-catalog.ts:219-224). Support commitments differ by plan: Team first response within 1 business day, Enterprise a named contact (support-content.ts:22-30).",
+   "limits_and_metering": "Rate limit bucket 'waitlist' for both waitlist and partner routes (waitlist route.ts:98; partners route.ts:31). Email max 254 characters; partner message 20 to 3000 characters (partner-applications.ts).",
+   "flags": "Email provider configuration (RESEND_API_KEY, AGI_SUPPORT_FROM_EMAIL, AGI_SUPPORT_FALLBACK_EMAIL). No feature flag found for the dialog.",
+   "model_compatibility": "none found in the code",
+   "provider_restrictions": "Email provider required for partner applications; Global Privacy Control turns optional grants off (waitlist route.ts:119-124).",
+   "local_mode": "Not applicable: these are web pages. Mobile Local mode hides Contact Support but Email Support still shows (about.tsx:313-331)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Dialog submitting",
+    "behaviour": "Fields disabled, button reads 'Sending\u2026'; a second submit is ignored.",
+    "evidence": "WaitlistDialog.tsx:45-47, 160-172"
+   },
+   {
+    "state": "Dialog error",
+    "behaviour": "Error text in a role=alert region; editing clears it.",
+    "evidence": "WaitlistDialog.tsx:178-188"
+   },
+   {
+    "state": "Dialog timeout or failure",
+    "behaviour": "Client returns 'Failed to join waitlist. Please try again.'; deadlines 10 s for the token and 15 s for the post.",
+    "evidence": "waitlistServiceClient.ts:20-24, 76-80"
+   },
+   {
+    "state": "Consent refused",
+    "behaviour": "Server returns CONSENT_REQUIRED and stores nothing.",
+    "evidence": "waitlist route.ts:144-158"
+   },
+   {
+    "state": "Consent ledger or database down",
+    "behaviour": "Request refused with an error; nothing stored.",
+    "evidence": "waitlist route.ts:166-197"
+   },
+   {
+    "state": "Partner rate limit",
+    "behaviour": "Message about too many applications from this network.",
+    "evidence": "PartnerApplicationForm.tsx:67"
+   },
+   {
+    "state": "Partner mail cannot be delivered",
+    "behaviour": "503 style user-safe message 'Your application could not be sent right now...'; error logged as partner_application_undeliverable.",
+    "evidence": "partners/apply/route.ts:68-79"
+   },
+   {
+    "state": "No mail app on /contact",
+    "behaviour": "Error text pointing to the address; whether browsers without a handler show it is not handled in the code.",
+    "evidence": "contact/page.tsx:33-36"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Labelled inputs, alert roles and a close label on the dialog.",
+    "evidence": "WaitlistDialog.tsx:14, 129-140; PartnerApplicationForm.tsx"
+   },
+   {
+    "state": "Phone view of /support",
+    "behaviour": "A phone marker hides plan and tier content.",
+    "evidence": "apps/web/app/support/page.tsx:50-60; apps/web/app/support/__tests__/SupportFromPhone.test.tsx"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/app/partners/PartnerApplicationForm.test.tsx",
+     "covers": "Sends the application and shows the reference; asks for missing fields; keeps the form and explains when not sent."
+    },
+    {
+     "path": "apps/web/app/api/partners/apply/__tests__/route.test.ts",
+     "covers": "Sends to the team inbox with reply-to and returns a reference; reports undeliverable; refuses incomplete input."
+    },
+    {
+     "path": "apps/web/features/marketing/components/WaitlistModal.test.tsx",
+     "covers": "No automatic modal, opens from a trigger, anonymous signup, close, local email validation, service error."
+    },
+    {
+     "path": "apps/web/__tests__/api/waitlist-public.security.test.ts",
+     "covers": "CSRF enforcement, rate limit, anonymous capture."
+    },
+    {
+     "path": "apps/web/__tests__/api/waitlist-public.token-binding.test.ts",
+     "covers": "Token bound to the anonymous session for signed-in and signed-out visitors; no caching."
+    },
+    {
+     "path": "apps/web/app/contact-sales/page.test.tsx",
+     "covers": "Email links use the canonical mailto; no mail client opened automatically."
+    },
+    {
+     "path": "apps/web/app/support/__tests__/SupportFromPhone.test.tsx",
+     "covers": "Phone view shows channels only."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Dialog consent gate",
+     "steps": [
+      "Open /desktop and press 'Discuss Enterprise access'.",
+      "Enter a valid email, leave the consent box unticked, press 'Request a follow-up'."
+     ],
+     "expected": "Message 'Tick the box agreeing...', no network post."
+    },
+    {
+     "name": "Dialog stores once",
+     "steps": [
+      "Submit the same email twice from the same page with consent."
+     ],
+     "expected": "One cloud_managed_waitlist row for that email and source; two consent entries; success message each time."
+    },
+    {
+     "name": "Partner application",
+     "steps": [
+      "Open /partners#apply, fill all required fields with a message over 20 characters, send."
+     ],
+     "expected": "Reference PA-... shown; mail arrives at the inbox with reply-to equal to the visitor's address."
+    },
+    {
+     "name": "Mail not configured",
+     "steps": [
+      "Run with RESEND_API_KEY unset and submit the partner form."
+     ],
+     "expected": "User-safe 'could not be sent' message, nothing delivered."
+    },
+    {
+     "name": "Mobile support links",
+     "steps": [
+      "Open Settings > About on mobile signed out, then signed in on Cloud."
+     ],
+     "expected": "Email Support always; Contact Support only when signed in on Cloud."
+    }
+   ],
+   "diagnostics": [
+    "Log events partner_application_sent and partner_application_undeliverable (partners/apply/route.ts:71-80).",
+    "Log lines '[waitlist/public] Consent ledger unavailable; refusing signup' and 'DB unreachable; refusing signup' (waitlist/public/route.ts).",
+    "Tables cloud_managed_waitlist and consent_records."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "The Enterprise page and pricing Enterprise card do not open the dialog that stores a request; they point to an email page. The first draft said /enterprise has a 'Talk to sales' button that opens the dialog; code shows 'Contact sales' to /contact-sales.",
+    "affects": "Enterprise prospects (web)",
+    "evidence": "apps/web/app/enterprise/page.tsx:77; apps/web/app/pricing/page.tsx:1224; apps/web/app/desktop/page.tsx:53",
+    "work_needed": "Decide the canonical sales intake and connect it, or update the brief's 'request is stored'."
+   },
+   {
+    "gap": "Brief S2.37 says 'web missing' but the partner form and endpoint exist.",
+    "affects": "Brief readers",
+    "evidence": "apps/web/app/partners/PartnerApplicationForm.tsx:50; apps/web/app/api/partners/apply/route.ts:82",
+    "work_needed": "Update the brief status."
+   },
+   {
+    "gap": "Partner applications exist only as email; no record or status.",
+    "affects": "Partners, operators (web)",
+    "evidence": "apps/web/app/api/partners/apply/route.ts:27-81",
+    "work_needed": "Optional table with status, or keep email as the stated design."
+   },
+   {
+    "gap": "CLI contact entry is unverified: only /feedback and an error-message link exist; the brief's cited line is status-footer code.",
+    "affects": "CLI users",
+    "evidence": "apps/cli/src/claude_parity.rs:194; apps/cli/src/tui/tui_app.rs:3531",
+    "work_needed": "Decide whether the CLI needs a support link in /help and add it."
+   },
+   {
+    "gap": "The first draft said the dialog button is 'Join'; code says 'Request a follow-up'.",
+    "affects": "Testers",
+    "evidence": "apps/web/features/marketing/components/PublicWaitlistForm.tsx:19",
+    "work_needed": "Use the current label in test plans."
+   },
+   {
+    "gap": "No contact or sales entry on Desktop, VS Code or Chrome apps.",
+    "affects": "Users of those apps",
+    "evidence": "none found in the code",
+    "work_needed": "Decide scope; the brief marks them n/a."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:mobile",
+   "surface:cli",
+   "api:GET /api/waitlist/public",
+   "api:POST /api/waitlist/public",
+   "api:POST /api/partners/apply",
+   "table:cloud_managed_waitlist",
+   "table:consent_records",
+   "plan:enterprise",
+   "plan:team",
+   "file:apps/web/features/marketing/components/WaitlistDialog.tsx",
+   "SYS-security-and-privacy",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-api-and-contracts",
+   "SYS-observability-and-operations",
+   "F002-07",
+   "F002-10"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/marketing/components/WaitlistDialog.tsx",
+    "evidence": "Dialog component."
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/waitlist/public",
+    "evidence": "waitlist/public/route.ts:200."
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/partners/apply",
+    "evidence": "partners/apply/route.ts:82."
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:cloud_managed_waitlist",
+    "evidence": "waitlist/public/route.ts:182."
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:consent_records",
+    "evidence": "apps/web/lib/server/consent-records.ts:96."
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-security-and-privacy",
+    "evidence": "CSRF, rate limits, consent ledger, Global Privacy Control (waitlist/public/route.ts:95-124)."
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:enterprise",
+    "evidence": "Enterprise is contract-priced (billing-catalog.ts:219-224); support rows differ by plan (support-content.ts:13-36)."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "About screen support links (about.tsx:275-331)."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "/feedback command only (claude_parity.rs:194)."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/partners/PartnerApplicationForm.test.tsx",
+    "evidence": "File exists."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/__tests__/api/waitlist-public.security.test.ts",
+    "evidence": "File exists."
+   },
+   {
+    "rel": "configured_by",
+    "to": "RESEND_API_KEY and AGI_SUPPORT_FALLBACK_EMAIL",
+    "evidence": "resend-client.ts:327; config.ts:87."
+   }
+  ],
+  "unknowns": [
+   "Which other pages mount the Enterprise dialog.",
+   "How the team reads or follows up the waitlist table (no admin view opened).",
+   "Retention of partner emails.",
+   "Whether the CLI TUI offers any support link besides /feedback.",
+   "What the Desktop app shows for these pages."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "7",
+   "claim": "Rate limit bucket 'waitlist' for both waitlist and partner routes (waitlist route.ts:98; partners route.ts:31)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "POST waitlist and partner apply use 'waitlist', but the waitlist GET token mint uses the 'default' bucket.",
+   "evidence": "apps/web/app/api/waitlist/public/route.ts:82 ('default') vs :98 ('waitlist'); partners/apply/route.ts:31",
+   "correction": "The 'waitlist' bucket covers the waitlist POST and the partner POST; the waitlist token GET uses 'default'."
+  },
+  {
+   "section": "8",
+   "claim": "Consent refused: server returns CONSENT_REQUIRED and stores nothing",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "CONSENT_REQUIRED (400) is returned when a decided purpose is refused. A missing decision gives a validation error instead. Both happen before the ledger or table write, so nothing is stored.",
+   "evidence": "apps/web/app/api/waitlist/public/route.ts:130-158",
+   "correction": "Refusing the required purpose returns CONSENT_REQUIRED; omitting the decision returns a validation error listing the purpose. Neither stores anything."
+  }
+ ],
+ "missing_facts": [
+  "The waitlist GET token mint uses rate-limit bucket 'default', not 'waitlist' (apps/web/app/api/waitlist/public/route.ts:82).",
+  "Enterprise support has a 4-business-hour service-down response commitment, which section 7 leaves out (apps/web/features/marketing/components/pages/company/support-content.ts:~25-28).",
+  "The partner route sends with idempotencyKey partner-application:<reference> and puts the signed-in account id in the email body (apps/web/app/api/partners/apply/route.ts:~58,~96); section 7 mentions only the optional user id."
+ ]
+}

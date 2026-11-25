@@ -1,0 +1,440 @@
+{
+ "S60.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Hand a task to a new cloud Code session for this GitHub checkout"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Working on it in the cloud with"
+   }
+  ],
+  "needs": "a signed-in AGI account and a GitHub checkout",
+  "note": "No separate work-task screen exists in the terminal. The normal message box starts an ordinary chat turn; agi code start is the only task-run entry found. The Code line's tui_app.rs references are a message send path, not a work-task composer.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi code --help and find the start line.",
+   "Run agi code start \"Summarize the README in this folder\" (add -y to skip the review prompt).",
+   "Read the review text shown before the cloud session starts.",
+   "Check the line 'Working on it in the cloud with' and the link it prints, then compare with Expected."
+  ],
+  "where": "agi code start \"<task>\" (type in a terminal), or agi code --help to see it"
+ },
+ "S60.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/rename"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Name the current session"
+   }
+  ],
+  "needs": "none",
+  "note": "This renames a chat session, not a separate work task. A cloud session with no title is listed as Untitled by agi code list.",
+  "reachable": "yes",
+  "steps": [
+   "Start the agi chat screen.",
+   "Type /rename Quarterly report and press Enter.",
+   "Type /history and press Enter.",
+   "Check that the session shows the new title, compared with Expected."
+  ],
+  "where": "/rename <title> (typed in the chat), then /history to see the list"
+ },
+ "S60.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "What the cloud session should do."
+   }
+  ],
+  "needs": "a signed-in AGI account and a GitHub checkout",
+  "note": "The objective is the task text given to agi code start. No separate objective field was found in the local chat.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi code start \"Fix the typo in docs/intro.md\" -y and note the session id it prints.",
+   "Run agi code show <id>.",
+   "Check that the task text is shown back as what the session should do.",
+   "Compare with Expected."
+  ],
+  "where": "agi code start \"<task>\", then agi code show <id>"
+ },
+ "S60.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/mention_popup.rs",
+    "text": "Files"
+   }
+  ],
+  "needs": "none",
+  "note": "The @ popup lists workspace files only. Connectors have a read-only policy screen at /connectors, and no per-task source picker was found, so the choice of connectors and project is partial.",
+  "reachable": "yes",
+  "steps": [
+   "Start the agi chat screen.",
+   "Type @ in the message box.",
+   "Look at the popup and type a few letters of a file name to narrow it.",
+   "Check the list shows project files, compared with Expected."
+  ],
+  "where": "Type @ in the message box, then look at the list headed Files"
+ },
+ "S60.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Tools the model can call in this session"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Allow specific tools or tool patterns."
+   }
+  ],
+  "needs": "none",
+  "note": "Tools are chosen by a start flag only. No picker is shown before a run, so choosing per task is partial.",
+  "reachable": "yes",
+  "steps": [
+   "Type /tools and press Enter.",
+   "Read the list titled Tools the model can call in this session.",
+   "Quit and start again with agi --allowedTools <names> using one tool name.",
+   "Type /tools again and check only that tool is listed, compared with Expected."
+  ],
+  "where": "/tools to view the tools; choose at start with agi --allowedTools <names>"
+ },
+ "S60.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/model"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether the run record stores the chosen model was not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Type /model and press Enter.",
+   "Pick a model from the list.",
+   "Send a short message.",
+   "Compare the model shown in the status line with Expected."
+  ],
+  "where": "/model (typed in the chat), then pick a model"
+ },
+ "S60.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Effort set to"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /effort and press Enter.",
+   "Pick a level such as high from the list.",
+   "Check the message Effort set to ... and the effort: label in the status line.",
+   "Send a short message and compare with Expected."
+  ],
+  "where": "/effort (typed in the chat), then pick a level"
+ },
+ "S60.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Usage: /budget <credits> | /budget off"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Each turn now stops once it has spent"
+   }
+  ],
+  "needs": "a paid account with credits",
+  "note": "The cap applies to each turn, not to the whole task. The stop at the cap was not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Type /budget 5 and press Enter.",
+   "Check the reply Each turn now stops once it has spent 5 credits.",
+   "Send a task that costs more than the cap.",
+   "Check that the turn stops at the cap, compared with Expected."
+  ],
+  "where": "/budget <credits> (typed in the chat), for example /budget 5"
+ },
+ "S60.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Plan approved. Mutating tools enabled for this session."
+   },
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "Plan rejected. Feedback queued for the model on the next turn."
+   }
+  ],
+  "needs": "none",
+  "note": "The terminal offers approve and reject, but no edit of the plan was found. A cloud work-plan review exists in apps/cli/src/cloud/work_plan.rs but no terminal screen for it was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /plan and press Enter.",
+   "Send a task so the model writes a plan with update_plan.",
+   "Type /plan show and read the steps.",
+   "Type /plan accept, or /plan reject Use a smaller scope, and check the reply, compared with Expected."
+  ],
+  "where": "/plan to enter plan mode, then /plan show and /plan accept or /plan reject <feedback>"
+ },
+ "S60.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "steps outstanding"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "No plan yet. Ask the model to call update_plan."
+   }
+  ],
+  "needs": "none",
+  "note": "Per-step status is produced by the plan's render_markdown, which was not read in full, so the accuracy of each step's status was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task that makes the model write a multi-step plan.",
+   "Type /plan show and press Enter.",
+   "Read the numbered steps shown under Plan.",
+   "Check the line with steps outstanding, compared with Expected."
+  ],
+  "where": "/plan show (typed in the chat) after the model writes a plan"
+ },
+ "S60.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "working, Esc or Ctrl-C to cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "The running state is shown per tool row (TranscriptCellState::Running). No separate current-step marker for a plan step was found.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task that uses several tools.",
+   "Watch the footer while it works.",
+   "Look for the tool rows in the transcript marked as running.",
+   "Compare the running row with Expected."
+  ],
+  "where": "Message box: send a task, then watch the transcript while it runs"
+ },
+ "S60.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "working at once"
+   }
+  ],
+  "needs": "none",
+  "note": "The line appears only when two or more tool or subagent rows are running together.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task that asks for several independent checks at once.",
+   "While it runs, look below the transcript for the line with the symbol and working at once.",
+   "Read the count and whether it says tools or subagents.",
+   "Compare with Expected."
+  ],
+  "where": "Send a task that makes the model run several tools or subagents at once, then look under the transcript"
+ },
+ "S60.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/question_overlay.rs",
+    "text": "Question from the agent"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/question_overlay.rs",
+    "text": "Type your own answer"
+   }
+  ],
+  "needs": "none",
+  "note": "The overlay appears only when the model chooses to call ask_user. The person cannot open it directly.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task such as: ask me which of two file names to use before you create anything.",
+   "Wait for the overlay titled Question from the agent.",
+   "Pick one choice, or choose Type your own answer and type a reply.",
+   "Check the agent continues with your answer, compared with Expected."
+  ],
+  "where": "Send a task that makes the agent call ask_user; the overlay Question from the agent opens"
+ },
+ "S60.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Deny All"
+   }
+  ],
+  "needs": "a test folder that you can delete",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi --permission-mode approve in a test folder.",
+   "Send: create a file named test.txt that contains the word hi.",
+   "When the Tool Approval box opens, read the buttons.",
+   "Press No, then check that test.txt was not created, compared with Expected."
+  ],
+  "where": "Start with agi --permission-mode approve, send an action that changes a file, then the Tool Approval box opens"
+ },
+ "S60.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "type to queue a message"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "messages queued"
+   }
+  ],
+  "needs": "none",
+  "note": "Code shows queued prompts; it was not confirmed whether the queued text reaches the running turn or only the next one.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task that takes some time.",
+   "While it works, type new guidance and press Enter.",
+   "Check the footer says the message is queued.",
+   "Check the task is not restarted when the current turn finishes, compared with Expected."
+  ],
+  "where": "Message box: type a new message while the agent is still working, then press Enter"
+ },
+ "S60.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "Enter resume"
+   }
+  ],
+  "needs": "a saved chat session",
+  "note": "This resumes a saved chat. Resuming a stopped step inside a running agent task was not found in the terminal code.",
+  "reachable": "yes",
+  "steps": [
+   "Type /resume and press Enter.",
+   "Use the arrow keys to choose a session.",
+   "Press Enter to resume it.",
+   "Check that the earlier messages appear and the reply says Resumed session, compared with Expected."
+  ],
+  "where": "/resume (typed in the chat), then Enter on a session in the list"
+ },
+ "S60.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "working, Esc or Ctrl-C to cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "Server-side cancel is used only for a cloud turn started by agi code start (Ctrl-C prints Stopping the cloud turn). The local Esc path was not confirmed to cancel on the server.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task that takes some time.",
+   "While it works, look at the footer that says Esc or Ctrl-C to cancel.",
+   "Press Esc.",
+   "Check that the run stops and the transcript says it was stopped, compared with Expected."
+  ],
+  "where": "While the agent works, press Esc or Ctrl-C in the message box"
+ },
+ "S60.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Branched conversation"
+   }
+  ],
+  "needs": "none",
+  "note": "This copies the chat into a new session. It is not a copy of a work task's steps.",
+  "reachable": "yes",
+  "steps": [
+   "Have a chat with a few messages.",
+   "Type /branch and press Enter.",
+   "Read the reply Branched conversation ... Resume with: agi --session <id>.",
+   "Open the new session and edit a message, compared with Expected."
+  ],
+  "where": "/branch or /fork (typed in the chat)"
+ },
+ "S60.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/save-skill"
+   }
+  ],
+  "needs": "a finished task in the chat",
+  "note": "The skill is written by the model from a prompt, so check the file content as well as its presence.",
+  "reachable": "yes",
+  "steps": [
+   "Finish a short task in the chat.",
+   "Type /save-skill release-notes and press Enter.",
+   "Let the agent finish writing the skill.",
+   "Check that .agiworkforce/skills/release-notes/SKILL.md exists in the folder, compared with Expected."
+  ],
+  "where": "Type /save-skill <name> (typed in the chat) after a finished task"
+ },
+ "S60.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "No summary panel shown when a task ends was found. The final reply in the transcript is what the agent writes. /recap sends a prompt that asks the model for a recap. Searched for summary, result and recap in apps/cli/src.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.30": {
+  "labels": [],
+  "needs": "none",
+  "note": "No list of files a task produced, with open or download, was found. /artifacts lists account artifacts and /diff shows workspace changes. Searched for deliverable, output file and artifact in apps/cli/src.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S60.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List cloud Code sessions."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/tasks"
+   }
+  ],
+  "needs": "a signed-in AGI account with past cloud sessions",
+  "note": "/tasks lists only subagent tasks of this session. Cloud task history comes from agi code list.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi code list --status all.",
+   "Read each session with its state in brackets.",
+   "Run agi code show <id> for one session.",
+   "Compare with Expected. For local chats, type /history instead."
+  ],
+  "where": "agi code list --status all, then agi code show <id}"
+ },
+ "S60.34": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Bring a cloud Code session here"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Open a cloud Code session in the browser."
+   }
+  ],
+  "needs": "two devices signed in to the same AGI account, and a GitHub checkout on the second device",
+  "note": "Needs a second device to check, so it cannot be done on one machine alone.",
+  "reachable": "yes",
+  "steps": [
+   "Start a cloud task on one device with agi code start \"<task>\".",
+   "On a second device, run agi code list.",
+   "Run agi code open <id> to follow it in the browser, or agi resume --teleport <id> in the same checkout.",
+   "Compare the state on both devices with Expected."
+  ],
+  "where": "agi code list, then agi resume --teleport <id> in a GitHub checkout, or agi code open <id> in the browser"
+ }
+}

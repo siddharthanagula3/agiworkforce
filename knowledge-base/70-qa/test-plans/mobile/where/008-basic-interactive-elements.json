@@ -1,0 +1,878 @@
+{
+ "S8.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(auth)/reset-password.tsx",
+    "text": "Open Web Account"
+   }
+  ],
+  "needs": "a password recovery link (or a way to open the reset-password route)",
+  "note": "The screen is reached by a deep link (apps/mobile/app/_layout.tsx routes segments reset-password), so there is no in-app menu path; the primary style itself is the default variant in apps/mobile/components/ui/button.tsx (teal fill).",
+  "reachable": "yes",
+  "steps": [
+   "Open the password recovery link so the Reset password screen opens (the app routes to (auth)/reset-password).",
+   "Read the text: \"Password recovery opens in your AGI web account.\"",
+   "Look at the filled teal button \"Open Web Account\" (default primary style).",
+   "Compare the label colour with the button fill: it should be readable.",
+   "Compare with Expected: the main action has the emphasised primary style."
+  ],
+  "where": "Reset password screen (opened from a password recovery link, not from a menu) > Open Web Account button"
+ },
+ "S8.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(auth)/reset-password.tsx",
+    "text": "Lost Your Email or Two-Factor Device?"
+   },
+   {
+    "file": "apps/mobile/app/(auth)/reset-password.tsx",
+    "text": "Back to Sign In"
+   }
+  ],
+  "needs": "a password recovery link",
+  "note": "The outline style is set by variant=\"outline\" in apps/mobile/app/(auth)/reset-password.tsx; the outline colours are in apps/mobile/components/ui/button.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Reset password screen (same route as S8.01).",
+   "Look at the buttons under the text: \"Open Web Account\" is filled, \"Lost Your Email or Two-Factor Device?\" and \"Back to Sign In\" have an outline style.",
+   "Compare the outline buttons with the filled one: they should look less prominent.",
+   "Check that the outline buttons sit beside the primary action."
+  ],
+  "where": "Reset password screen > Lost Your Email or Two-Factor Device? button"
+ },
+ "S8.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleForm.tsx",
+    "text": "Delete Schedule"
+   }
+  ],
+  "needs": "a paid account with at least one scheduled task (Scheduled tasks need Basic)",
+  "note": "The destructive style is variant=\"destructive\" in apps/mobile/components/ui/button.tsx (text colour agentError); other destructive buttons also exist, e.g. apps/mobile/src/features/sites/SiteDetailScreen.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open an existing scheduled task (the Schedules screen is opened from \"Create schedule\" or the schedule list; how Schedules is opened from the main menu was not traced).",
+   "Open the edit form of that schedule.",
+   "Scroll to the bottom and find the red \"Delete Schedule\" button.",
+   "Look at the label colour (danger colour) and check it is readable.",
+   "Compare with Expected: the irreversible action uses the distinct destructive style."
+  ],
+  "where": "Schedule form for an existing schedule > Delete Schedule button"
+ },
+ "S8.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Open menu"
+   }
+  ],
+  "needs": "a chat with messages; a phone-width layout (not the wide persistent drawer)",
+  "note": "The button is not shown when the wide persistent drawer is used (usesPersistentDrawer), so a Mac window that is wide may show a different header.",
+  "reachable": "yes",
+  "steps": [
+   "Open any chat from the chat list.",
+   "Find the icon-only button at the top left of the chat header (a menu icon, no words).",
+   "Tap it: the side drawer should open.",
+   "Check that the button has an accessible name \"Open menu\" (for example with VoiceOver, if the tester uses it).",
+   "Compare with Expected: the icon-only button has an accessible name."
+  ],
+  "where": "Chat screen (phone width) > Open menu icon at the top left of the chat header"
+ },
+ "S8.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Camera"
+   }
+  ],
+  "needs": "a phone with a back camera and a torch; camera permission (not possible on a Mac without a camera)",
+  "note": "The torch label \"Turn torch on\" / \"Turn torch off\" is in apps/mobile/app/(app)/camera.tsx and the selected state is set with accessibilityState; a Mac tester may not be able to run it.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap the \"Add to chat\" button next to the message box.",
+   "Tap \"Camera\" in the sheet and allow camera access.",
+   "On the camera screen, tap the torch button (only shown on the back camera); its label is \"Turn torch on\".",
+   "Tap it again: the label should change to \"Turn torch off\" and the torch should toggle.",
+   "Compare with Expected: a button that shows an on or off pressed state."
+  ],
+  "where": "Add to chat (plus button under the composer) > Camera > camera screen > torch icon at the bottom"
+ },
+ "S8.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx",
+    "text": "Sent to the agent with Allow or Deny"
+   }
+  ],
+  "needs": "a cloud account and a request that needs tool approval",
+  "note": "Known unfinished: the approve and deny row is not exposed as a labelled button group. The visible words Allow and Deny come from TOOL_APPROVAL_ACTION_LABELS, whose source file was not found; the label text is only visible in the code as a hint.",
+  "reachable": "yes",
+  "steps": [
+   "Start a cloud chat whose agent asks to use a tool (the tool approval card appears).",
+   "Look at the row of buttons for the decision (Allow and Deny).",
+   "Check whether the row is announced as one labelled group (it is not, per the code).",
+   "Compare with Expected: related buttons are grouped under one label."
+  ],
+  "where": "Chat reply that asks for tool approval > Allow / Deny buttons under the request"
+ },
+ "S8.08": {
+  "labels": [],
+  "needs": "a cloud or local chat that returns links",
+  "note": "MessageContentRenderer.tsx is the renderer for message text, but no link-open call was found in it; the opening behaviour may live in another file, so it was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and ask for an answer that includes a web address or link (for example, a question that needs sources).",
+   "Look at the reply: links should be styled as links (coloured text).",
+   "Tap a link and check that its destination opens.",
+   "Compare with Expected: the link is styled as a link and opens its destination."
+  ],
+  "where": "Chat > ask a question whose answer contains a web link > tap the link in the reply"
+ },
+ "S8.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "Search projects"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Full Name"
+   }
+  ],
+  "needs": "none for the Projects search; the Personalization field needs a signed-in account",
+  "note": "The Personalization row is labelled \"Personalization\" in apps/mobile/src/features/settings/index.tsx (the Settings screen entry from the menu was not traced).",
+  "reachable": "yes",
+  "steps": [
+   "Tap the Projects tab at the bottom.",
+   "Tap the search field with the text \"Search projects\" and type a word.",
+   "Check the list filters as you type, and that the field has a clear button.",
+   "Alternatively open Personalization and tap the \"Full Name\" field, then type a name.",
+   "Compare with Expected: a single-line field with a visible label or accessible name."
+  ],
+  "where": "Projects tab > Search projects field; or Settings > Personalization > Full Name field"
+ },
+ "S8.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Type or hold to talk"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Message input"
+   }
+  ],
+  "needs": "none; the placeholder may differ when offline",
+  "note": "The composer's accessible name is \"Message input\" (ChatInput.tsx); the placeholder depends on state (line 1657), so the exact visible word may change.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab and tap the message box at the bottom.",
+   "Type one line, then press the Return key on the keyboard.",
+   "Check that the cursor moves to a new line inside the same box and the text is not sent.",
+   "Compare with Expected: a multi-line text area that accepts new lines is used."
+  ],
+  "where": "Chat tab > message box at the bottom (placeholder \"Type or hold to talk\")"
+ },
+ "S8.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Search"
+   }
+  ],
+  "needs": "a few chats to search",
+  "note": "The search screen is apps/mobile/app/(app)/search.tsx, which renders ChatsListScreen; the drawer search icon's route was inferred and not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side drawer from the menu icon at the top left of the chat screen.",
+   "Tap the search icon in the drawer (its word is a translation key \"search\"; no visible word was found).",
+   "Type text in the field with placeholder \"Search\".",
+   "Check that the list of chats, projects, files and artifacts filters as you type.",
+   "Compare with Expected: a search field that filters the list."
+  ],
+  "where": "Search icon in the drawer (opened from the Open menu icon) > Search field with placeholder \"Search\""
+ },
+ "S8.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Add custom MCP"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx",
+    "text": "Auth token (optional)"
+   }
+  ],
+  "needs": "a signed-in account (cloud connectors)",
+  "note": "The field is secureTextEntry in AddCustomConnectorModal.tsx; the Settings screen entry from the menu was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Connectors from the Settings screen.",
+   "Tap \"Add custom MCP\".",
+   "In the modal, tap the \"Auth token (optional)\" field and type a few characters.",
+   "Check that the characters show as dots (masked), not plain text.",
+   "Compare with Expected: secret entry uses a masked field."
+  ],
+  "where": "Connectors > Add custom MCP > Auth token (optional) field"
+ },
+ "S8.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Use an email code instead"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Verification code"
+   }
+  ],
+  "needs": "an email inbox you can read (the code is sent by an outside email service)",
+  "note": "The code field uses textContentType oneTimeCode in MobileSignIn.tsx; whether the \"Use an email code instead\" link is always shown was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "On the sign-in screen, tap \"Email address\" and type your email.",
+   "Tap \"Continue\".",
+   "Tap \"Use an email code instead\" if it is shown.",
+   "Look for the field labelled \"Verification code\" with the text \"Enter the code sent to\" and your email.",
+   "Type the code from your email (or paste it) and check that it accepts a one-time code."
+  ],
+  "where": "Sign-in screen > type email > Continue > Use an email code instead > Verification code field"
+ },
+ "S8.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/notifications/index.tsx",
+    "text": "Quiet hours"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/TimeFocusScreen.tsx",
+    "text": "Days"
+   }
+  ],
+  "needs": "none",
+  "note": "The day toggles use accessibilityRole checkbox in TimeFocusScreen.tsx; how the Notifications screen is opened from the main menu was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Notifications from Settings and tap \"Quiet hours\".",
+   "Open the time and focus screen and find the \"Days\" row with one letter per day.",
+   "Tap a day letter and check that it toggles on or off.",
+   "Check the day shows as checked (selected).",
+   "Compare with Expected: independent on or off choices with checked state."
+  ],
+  "where": "Settings > Notifications > Quiet hours > Days row (Sunday to Saturday)"
+ },
+ "S8.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/StyleSelector.tsx",
+    "text": "Concise"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/StyleSelector.tsx",
+    "text": "Formal"
+   }
+  ],
+  "needs": "none",
+  "note": "The style row in AddToChatSheet.tsx calls onOpenStyleSelector, but its visible text was not found; the options use accessibilityRole radio.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap the \"Add to chat\" button.",
+   "Find the style entry in the sheet and tap it (its visible label was not found in the code).",
+   "In the style list, tap \"Concise\" and check that the selected row is marked selected.",
+   "Tap \"Formal\" and check that the selection moves.",
+   "Compare with Expected: one choice at a time, all options visible, with checked state."
+  ],
+  "where": "Chat > Add to chat > style row (opens the style selector) > Normal, Concise, Explanatory, Learning, Formal"
+ },
+ "S8.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/integrations/presentation.ts",
+    "text": "Device Integrations"
+   }
+  ],
+  "needs": "a device with calendar access (the switch asks for permission)",
+  "note": "The calendar switch is in apps/mobile/app/(app)/settings/integrations.tsx; the Settings entry from the main menu was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Device Integrations from Settings.",
+   "Find the calendar row with a switch on its right.",
+   "Tap the switch and check it turns on or off immediately.",
+   "Compare with Expected: an immediate on or off setting with switch semantics."
+  ],
+  "where": "Settings > Device Integrations > calendar row switch"
+ },
+ "S8.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Local"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a Cloud-enabled account to change to Cloud (Cloud is disabled otherwise)",
+  "note": "The control is labelled \"Chat execution mode\" (tablist) and is also in Settings (apps/mobile/src/features/settings/index.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open the side drawer from the menu icon.",
+   "Find the two-part control with the segments \"Local\" and \"Cloud\".",
+   "Tap \"Local\" and check it is highlighted; tap \"Cloud\" and check the highlight moves.",
+   "Compare with Expected: a small set of exclusive options shown as joined segments."
+  ],
+  "where": "Open menu (top left of a chat) > drawer > Local | Cloud segmented control"
+ },
+ "S8.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Choose a model"
+   }
+  ],
+  "needs": "none; some models need a paid plan",
+  "note": "The Choose a model control appears in the retired-model notice in the chat; the model list is ModelPickerSheet and the Settings screen entry was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Models row from Settings (the row is labelled \"Models\").",
+   "Tap a model in the list.",
+   "Check the chosen model is marked selected and the row value updates.",
+   "Compare with Expected: one value chosen from a list."
+  ],
+  "where": "Settings > Models (row shows the current model) > model list; or the Choose a model control in the chat"
+ },
+ "S8.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "Search models\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "Models"
+   }
+  ],
+  "needs": "none",
+  "note": "The search field has accessibilityLabel \"Search models\" and a listbox-like list; keyboard arrow navigation was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker (Models row or Choose a model).",
+   "Tap the field with the placeholder \"Search models\u2026\" and type part of a model name.",
+   "Check the list filters as you type.",
+   "Tap a result and check it is chosen.",
+   "Compare with Expected: type to filter, then pick one."
+  ],
+  "where": "Settings > Models, or Choose a model > search field \"Search models\u2026\""
+ },
+ "S8.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Speed"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Voice"
+   }
+  ],
+  "needs": "none",
+  "note": "The slider is VoiceSlider in apps/mobile/src/features/settings/voice/index.tsx, not the personalization file cited in the plan, which has no slider.",
+  "reachable": "yes",
+  "steps": [
+   "Open Voice from Settings.",
+   "Find the row labelled \"Speed\" with a value such as 1.00x.",
+   "Drag the slider or tap near its ends, and check the value changes in steps.",
+   "Compare with Expected: one value set on a scale by dragging."
+  ],
+  "where": "Settings > Voice > Speed slider (also Pitch)"
+ },
+ "S8.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "Create schedule"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Date"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleDateTimeField.tsx",
+    "text": "Choose a date"
+   }
+  ],
+  "needs": "a paid account that allows scheduled tasks (Basic or higher)",
+  "note": "On iOS the calendar is inline; on other platforms the native picker is used, per ScheduleDateTimeField.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the schedules screen and tap the \"Create schedule\" button.",
+   "Choose the once recurrence option (its word was not found in the code).",
+   "Tap the \"Date\" field showing \"Choose a date\".",
+   "Pick a date on the calendar and check the field shows that date.",
+   "Compare with Expected: a date picker is used where a date is entered."
+  ],
+  "where": "Schedules > Create schedule > Repeat set to once > Date field \"Choose a date\""
+ },
+ "S8.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/RecurrencePicker.tsx",
+    "text": "Preferred time"
+   },
+   {
+    "file": "apps/mobile/src/features/schedules/components/ScheduleDateTimeField.tsx",
+    "text": "Choose a time"
+   }
+  ],
+  "needs": "a paid account that allows scheduled tasks",
+  "note": "The spinner display is used only on iOS (Platform.OS === 'ios' in ScheduleDateTimeField.tsx); the recurrence word that shows the time was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Create schedule\" and choose a recurrence that shows a time (the time row appears for supported recurrences).",
+   "Tap the \"Preferred time\" field showing \"Choose a time\" or its value (default 09:00).",
+   "Change the time in the spinner and tap done if shown.",
+   "Check the field shows the new time.",
+   "Compare with Expected: a time control is used where a time is entered."
+  ],
+  "where": "Schedules > Create schedule > recurrence with a time > \"Preferred time\" field \"Choose a time\""
+ },
+ "S8.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/schedules/components/TimezonePickerField.tsx",
+    "text": "Search time zones"
+   }
+  ],
+  "needs": "a paid account that allows scheduled tasks",
+  "note": "The row's accessibility label is \"Time zone: <zone>\"; the default device zone comes from getDeviceTimezone() in ScheduleForm.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Create schedule\" and scroll to the zone row labelled with \"Time zone:\" and the zone name.",
+   "Tap the row to open the time zone list.",
+   "Type part of a zone name in the \"Search time zones\" field.",
+   "Check the list filters, and that the device zone is the default.",
+   "Compare with Expected: a searchable list of zones, defaulting to the device zone."
+  ],
+  "where": "Schedules > Create schedule > Time zone row (shows the current zone) > search field \"Search time zones\""
+ },
+ "S8.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Accent Color"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/accent-color.tsx",
+    "text": "Neutral"
+   }
+  ],
+  "needs": "none",
+  "note": "The swatches are in apps/mobile/src/features/settings/accent-color/index.tsx; the swatch labels are in that file's ACCENTS list.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Accent Color\".",
+   "Tap a swatch such as \"Blue\" and check the swatch is selected.",
+   "Check the accent colour changes in the app (for example, buttons turn blue).",
+   "Compare with Expected: a colour choice from swatches."
+  ],
+  "where": "Settings > Accent Color > colour swatches (Neutral, Blue, Cyan, Green, Lime)"
+ },
+ "S8.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   }
+  ],
+  "needs": "a file to upload on the device",
+  "note": "The picker is DocumentPicker.getDocumentAsync in apps/mobile/app/(app)/chat/[id].tsx; mobile file types depend on the execution mode.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap the \"Add to chat\" button.",
+   "Tap \"File\" in the sheet.",
+   "Pick a file from the device document picker and confirm.",
+   "Check that the file appears as an attachment above the message box.",
+   "Compare with Expected: a file input chooses files from the device."
+  ],
+  "where": "Chat > Add to chat > File"
+ },
+ "S8.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Routines"
+   }
+  ],
+  "needs": "a project (create one first if none exists)",
+  "note": "Tabs use accessibilityRole tab with accessibilityState selected; the visible name of the Projects bottom tab was not found exactly, and \"Work\" appears only when showWork is true.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the Projects tab at the bottom and open any project.",
+   "Look at the row of tabs at the top of the project.",
+   "Tap \"Sources\" and check its panel appears and its tab is marked selected.",
+   "Tap \"Artifacts\" and then \"Routines\", checking each panel changes.",
+   "Compare with Expected: a tab row that switches panels, with the selected tab marked."
+  ],
+  "where": "Projects tab > open a project > tabs \"Chats\", \"Sources\", \"Artifacts\", \"Routines\" (\"Work\" when shown)"
+ },
+ "S8.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Open menu"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "text": "Agent activity"
+   }
+  ],
+  "needs": "a signed-in account that can send chat messages that use tools",
+  "note": "The row's accessible name is built as Show or Hide plus the summary, and it only appears when the reply has tool activity.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu, then tap the new-chat button in the chat header (New chat).",
+   "Send a question that needs a tool, such as a web search.",
+   "Find the Agent activity row under the assistant reply.",
+   "Tap the row; it should expand to show the activity and collapse on a second tap.",
+   "Compare with Expected: the row's expanded state changes on each tap and the header is labelled as a button."
+  ],
+  "where": "Open menu > New chat > send a message that makes the assistant use a tool (for example a web search) > tap the Agent activity row under the reply"
+ },
+ "S8.33": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "View {{count}} sources"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+    "text": "Sources so far"
+   }
+  ],
+  "needs": "a signed-in account and a question that returns web sources",
+  "note": "The number in the row is filled in from the source count, for example View 3 sources.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu, then the new-chat button (New chat).",
+   "Ask a question that returns web sources.",
+   "Under the reply, tap the View N sources row (N is the number of sources).",
+   "Look for the expanded list titled Sources (or Sources so far while the answer is still streaming).",
+   "Compare with Expected: the block shows and hides, and the expanded state changes on each tap."
+  ],
+  "where": "Open menu > New chat > ask a question that returns web sources > tap View N sources under the reply"
+ },
+ "S8.34": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Voice"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/services/audioRoute.ts",
+    "text": "Automatic"
+   }
+  ],
+  "needs": "a microphone and a device that supports switching the audio route",
+  "note": "The picker returns nothing on platforms without audio route switching, so it may not appear on a given device.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Voice.",
+   "Start a voice call from the voice screen (the start control was not confirmed in the code).",
+   "In the live voice bar, tap the audio route button, labelled Audio route followed by the current route.",
+   "See whether a list of routes opens (Automatic, Speaker, Bluetooth, Headset) and choose one.",
+   "Compare with Expected: the list opens, and the button label changes to the chosen route."
+  ],
+  "where": "Settings > Voice > open the voice call screen > tap the audio route button in the live voice bar (Audio route, Automatic)"
+ },
+ "S8.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Archive"
+   }
+  ],
+  "needs": "a chat in the list",
+  "note": "Archive appears only for AGI Cloud chats, and some items depend on the chat's state.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu to open the side list of chats.",
+   "Long-press a chat title.",
+   "Look for the action menu that opens for that chat, listing actions such as Rename.",
+   "Compare with Expected: the menu opens for the chat you pressed and lists its actions; tapping outside closes it."
+  ],
+  "where": "Open menu > long-press a chat in the list > choose from the menu (Rename, Archive, Delete and others)"
+ },
+ "S8.40": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/mobile/services/notifications.ts",
+    "text": "High"
+   }
+  ],
+  "needs": "a notification with High or Critical priority (not every account has one)",
+  "note": "The shared badge component is apps/mobile/components/ui/Badge.tsx; the notifications link may not show in the menu on every build, so confirm it on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu.",
+   "Tap the notifications link (its accessible name reads Open notifications with the unread count).",
+   "Look at the small tag on each notification row, such as High or Critical.",
+   "Compare with Expected: each notification shows a small status or priority marker attached to it.",
+   "Also open Agents, tap an agent, and look for the status badge at the top of the agent screen."
+  ],
+  "where": "Open menu > Notifications, then look at the priority tag on each notification"
+ },
+ "S8.41": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Search"
+   },
+   {
+    "file": "apps/mobile/src/features/search/mobileDestinations.ts",
+    "text": "Artifacts"
+   }
+  ],
+  "needs": "at least one artifact in the account",
+  "note": "No user-editable tag control was found; the only label on a card is the computed kind or language, so the word varies per artifact.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Search (the search icon in the side menu).",
+   "Type Artifacts and tap the Artifacts result under Go to.",
+   "Look at the small label on each non-image artifact card; it shows the artifact's language or kind.",
+   "Compare with Expected: the label names what the item is; it is a type label, not a free tag the user adds."
+  ],
+  "where": "Search > type Artifacts > tap Artifacts > look at the small label on each artifact card"
+ },
+ "S8.42": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "You"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "AGI"
+   }
+  ],
+  "needs": "a signed-in account that can get a reply",
+  "note": "No picture avatar was found; the author marker is a text name in the message's accessible label, and the visible name rendering was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu, then the new-chat button (New chat).",
+   "Send any message and wait for the reply.",
+   "Look at who wrote each message: your message is marked You, the reply uses the model name or AGI.",
+   "Compare with Expected: the two authors are told apart, and a screen reader hears the author label on the message."
+  ],
+  "where": "Open menu > New chat > send any message > look at the author name for your message (You) and for the reply (the model name or AGI)"
+ },
+ "S8.43": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Agents"
+   },
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "Loading projects"
+   }
+  ],
+  "needs": "a running cloud agent",
+  "note": "The Step line only appears when both the completed and total step counts are known.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu; if Agents is not listed, tap More first.",
+   "Tap Agents, then tap an agent whose status is running or waiting.",
+   "Look at the progress bar and the line that reads Step N of M, when both counts are known.",
+   "Compare with Expected: the bar fills as steps complete and the line changes.",
+   "For a spinner, open Projects while cloud projects are syncing and look for Loading projects."
+  ],
+  "where": "Open menu > Agents > tap an agent that is running > look at the bar and the Step N of M line under it"
+ },
+ "S8.44": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Schedules"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "More"
+   }
+  ],
+  "needs": "a signed-in account; a slow connection makes the placeholders easier to see",
+  "note": "The placeholders show only during the first load, so on a fast connection they may pass too quickly to see.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu.",
+   "Tap More if Schedules is folded, then tap Schedules.",
+   "Look during the first load: three grey placeholder cards appear before the list.",
+   "Compare with Expected: the placeholders stand in for schedule cards and are replaced when the data arrives."
+  ],
+  "where": "Open menu > More > Schedules, while the list is loading for the first time"
+ },
+ "S8.45": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Chat archived. Find it in Settings, Archived chats."
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Undo"
+   }
+  ],
+  "needs": "an AGI Cloud chat (signed in)",
+  "note": "Durations come from TOAST_DURATION_MS (5 seconds) and TOAST_ACTION_DURATION_MS (8 seconds) in apps/mobile/src/shared/components/Toast.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu.",
+   "Long-press an AGI Cloud chat, then tap Archive.",
+   "Look for the bar that appears above the bottom edge with the archive message and an Undo button.",
+   "Wait and watch: it should leave by itself after about 5 seconds (about 8 seconds when it has a button).",
+   "Compare with Expected: it does not block the screen and it dismisses itself."
+  ],
+  "where": "Open menu > long-press a chat > Archive > look at the bar at the bottom: Chat archived. Find it in Settings, Archived chats. with Undo"
+ },
+ "S8.46": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/SendErrorBanner.tsx",
+    "text": "Message failed to send:"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendErrorBanner.tsx",
+    "text": "Reply failed"
+   }
+  ],
+  "needs": "a way to make sending fail, such as airplane mode",
+  "note": "The exact wording depends on the error, so the message after the colon varies.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu, then the new-chat button (New chat).",
+   "Turn on airplane mode.",
+   "Type a message and send it.",
+   "Look at the alert above the message box; it has alert semantics and starts with Message failed to send:.",
+   "Compare with Expected: a clear error appears inline with the cause, and the reply can be retried from the banner."
+  ],
+  "where": "Open menu > New chat > turn on airplane mode > send a message > look at the alert above the message box: Message failed to send:"
+ },
+ "S8.47": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ProviderConsentBanner.tsx",
+    "text": "Review"
+   }
+  ],
+  "needs": "an account and a provider that triggers the consent strip",
+  "note": "The strip shows only when consent is missing, and the trigger was not traced end to end; a usage-limit banner is also rendered in the same screen.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu, then the new-chat button (New chat).",
+   "Send a message to a provider whose use is not yet approved.",
+   "Look at the full-width strip above the message box; it has a globe icon, a message and a Review button.",
+   "Tap Review or the dismiss control to confirm they respond.",
+   "Compare with Expected: the strip sits in its own band, does not cover the chat, and can be dismissed."
+  ],
+  "where": "Open menu > New chat > send a message to a provider that needs consent > look at the strip above the message box with the Review button"
+ },
+ "S8.48": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Load older chats"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/archived-chats.tsx",
+    "text": "Load more"
+   }
+  ],
+  "needs": "an AGI Cloud account with more chats than one page",
+  "note": "The Library list loads more by scrolling and has no button, so it is not a pagination control.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu.",
+   "Scroll to the bottom of the chat list.",
+   "Tap Load older chats and wait for the next page.",
+   "Compare with Expected: the next page of chats appears, and the button goes away when no older chats remain.",
+   "Optionally open Settings > Data Controls > Archived chats and tap Load more."
+  ],
+  "where": "Open menu > scroll to the bottom of the chat list > tap Load older chats (also Settings > Data Controls > Archived chats > Load more)"
+ },
+ "S8.49": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "No Schedules"
+   },
+   {
+    "file": "apps/mobile/app/(app)/schedules/index.tsx",
+    "text": "Create Schedule"
+   }
+  ],
+  "needs": "a paid account that can create schedules (a Free account sees the locked title instead)",
+  "note": "A Free account sees the title Scheduled tasks require Basic instead of No Schedules, with a View Plans button when purchases are available.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Open menu, then More if needed, then Schedules.",
+   "Look at the empty state: it shows the title No Schedules and a short description.",
+   "Look for the Try a template section and the Create Schedule button.",
+   "Compare with Expected: the message says what the view is for and gives a next step."
+  ],
+  "where": "Open menu > More > Schedules, with no schedules in the account"
+ },
+ "S8.50": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Retry loading chats"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Retry"
+   }
+  ],
+  "needs": "an AGI Cloud account and a network failure (airplane mode)",
+  "note": "The same pattern exists for projects: Retry loading projects appears on the Projects tab when syncing fails.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on airplane mode, then tap Open menu to open the chat list.",
+   "Look for the red error text and the Retry button in the list.",
+   "Turn off airplane mode, tap Retry, and check that the chats load.",
+   "Compare with Expected: the error sits in the list with a recovery button, and the list fills once Retry works."
+  ],
+  "where": "Open menu > (the chat list fails to load on an AGI Cloud account) > tap Retry under the error text"
+ }
+}

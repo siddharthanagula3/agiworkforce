@@ -1,0 +1,24 @@
+{
+ "S32.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Write the content here instead of printing it."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print an artifact's content, or write it to a file."
+   }
+  ],
+  "needs": "a signed-in account that has an html artifact",
+  "note": "The CLI has no 'design' workspace; export is the artifacts show --out command on html artifacts (file extension comes from apps/cli/src/cloud/artifacts.rs file_extension). The plan's 'Where to find it: not written yet' is stale, since the code exists.",
+  "reachable": "yes",
+  "steps": [
+   "Type `agi artifacts list` and copy the id of an artifact whose type is html.",
+   "Type `agi artifacts show <id> --out ~/Desktop/exported-design.html` with that id.",
+   "Read the printed path, then open that file in a web browser.",
+   "Compare with Expected: the design should be saved as a standalone .html file that displays on its own. Note that the plan says 'design' but the command works on any artifact; an html artifact is the one that becomes .html."
+  ],
+  "where": "agi artifacts list, then agi artifacts show <id> --out <path>"
+ }
+}

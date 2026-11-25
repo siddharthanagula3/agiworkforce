@@ -1,0 +1,458 @@
+{
+ "feature": {
+  "id": "F042-02",
+  "aliases": [
+   "Briefing topics",
+   "Selected connected sources",
+   "Dismiss topic",
+   "Add topic",
+   "What Each Run Can Use",
+   "S42.02",
+   "S42.03",
+   "S42.13",
+   "S42.14"
+  ],
+  "summary": "Topic choice, adding a topic and dismissing a topic are not built on any app. Picking sources is partly built: web and desktop schedule forms have source checkboxes (project, memory, web; recent chats on web only) and a connector list, which is 'coming soon'. The brief lists S42.03 as missing, so code and brief disagree.",
+  "purpose": {
+   "what_it_does": "Target: the person chooses what the briefing covers (topics) and which connected sources it reads, and can add or dismiss topics later. Today only per-schedule source switches exist on web and desktop, and the free-text prompt.",
+   "why_it_exists": "Items S42.02, S42.03, S42.13 and S42.14 in the area brief (doc: knowledge-base/data/area-briefs/042-proactive-assistance-briefings-and-reflection.md). A briefing is more useful if it can be tuned without rewriting a prompt.",
+   "who_uses_it": "People with a Daily briefing schedule who want a different focus.",
+   "problems_solved": [
+    "Editing a long fixed prompt is hard for non-technical users.",
+    "Reading sources the person does not want is a privacy concern.",
+    "A topic that no longer matters keeps appearing."
+   ],
+   "use_cases": [
+    "Turn off 'The web' for a private brief.",
+    "Exclude one connected mailbox from the brief.",
+    "Dismiss 'sports' after it appears.",
+    "Add 'competitor X' to the weekly brief."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: schedule create or edit form, section 'What Each Run Can Use' with 'Sources' and 'Connectors' (apps/web/features/schedules/components/ScheduleAccessFields.tsx:93).",
+    "Desktop (Tauri build): the same section from DesktopScheduleAccessFields (apps/desktop/src/features/schedules/DesktopScheduleAccessFields.tsx).",
+    "Mobile, CLI, VS Code: no source or topic control found (no 'sources' in apps/mobile/src/features/schedules).",
+    "Chrome: no checkbox control; the form sends the template's sources unchanged (schedulesSection.ts:672,773).",
+    "Topics, add topic, dismiss topic: not available anywhere."
+   ],
+   "prerequisites": [
+    "A schedule being created or edited (web, desktop).",
+    "Connectors being released for the connector list to appear; it is 'coming soon' now (connector-release.ts:14)."
+   ],
+   "screens_and_controls": [
+    "Web checkboxes: 'Project instructions and files' (only with a project), 'Saved memories' (read only while memory is on), 'The web', 'Recent chats' (your chats from the last 24 hours, read only while Search past chats is on) (ScheduleAccessFields.tsx:29-52).",
+    "Web connectors: one checkbox per connected connector; unchecked list limits the run; 'Includes every connector, even ones you connect later. Uncheck to choose.' (ScheduleAccessFields.tsx:211).",
+    "Desktop: three source checkboxes (project, memory, web) with no Recent chats (DesktopScheduleAccessFields.tsx:33-38)."
+   ],
+   "journey": [
+    "Open a schedule form on web or desktop.",
+    "Tick or untick sources.",
+    "Save; the choice is stored on the schedule.",
+    "At run time the executor honours the flags.",
+    "Topic add or dismiss: no journey exists."
+   ],
+   "feedback_and_outputs": [
+    "Helper text under each checkbox.",
+    "While connectors load: 'Reading your connectors\u2026'; on error a message and 'Try again'; with none connected 'No connectors are connected.' and a 'Connect one' link."
+   ],
+   "settings": [
+    "Settings > memory and 'Search past chats' decide whether those sources read anything (ScheduleAccessFields.tsx:41-52)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Sources object saved with the schedule and enforced at run time: project, memory, web, recentChats (scheduled-agent-executor.ts:926-1004).",
+    "Web source checkboxes and connector list (ScheduleAccessFields.tsx:93-215).",
+    "Desktop source checkboxes (DesktopScheduleAccessFields.tsx:33-38)."
+   ],
+   "incomplete": [
+    "Desktop omits 'Recent chats' although the Daily briefing template sets it on (DesktopScheduleAccessFields.tsx:33-38; schedules.ts:854).",
+    "Mobile and Chrome cannot change sources (no control found).",
+    "Monitor a topic template holds a placeholder the person must edit by hand: 'Track [replace this with the topic you want followed]...' (schedules.ts:858)."
+   ],
+   "disconnected_or_disabled": [
+    "Connector choices are replaced by 'Connectors for scheduled runs are coming soon.' (ScheduleAccessFields.tsx:136)."
+   ],
+   "not_available": [
+    "Topic picker, add topic, dismiss topic on web, desktop, mobile, CLI, VS Code and Chrome (brief S42.02, S42.13, S42.14 missing; no code found).",
+    "Mail and calendar source toggles by name; only generic connectors exist."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The user chooses the topics the briefing covers (S42.02).",
+     "source": "doc: knowledge-base/data/area-briefs/042-proactive-assistance-briefings-and-reflection.md"
+    },
+    {
+     "statement": "The user picks which connected sources (mail, calendar, apps) the briefing reads (S42.03).",
+     "source": "doc: knowledge-base/data/area-briefs/042-proactive-assistance-briefings-and-reflection.md"
+    },
+    {
+     "statement": "The user can dismiss a topic (S42.13) and add a topic (S42.14).",
+     "source": "doc: knowledge-base/data/area-briefs/042-proactive-assistance-briefings-and-reflection.md"
+    }
+   ],
+   "acceptance_criteria": [
+    "Web form shows four source checkboxes and each saved value changes what the run reads.",
+    "With 'The web' unchecked, the run has no web search tool.",
+    "Desktop form offers the same four sources as web.",
+    "Mobile offers a way to see and change sources, or the brief documents it does not.",
+    "A topic added is included in the next brief; a dismissed topic is not.",
+    "Connector list lets the person exclude a connector from the run."
+   ],
+   "inferred": [
+    "Topics could be stored as structured data rather than prompt text [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Store topics on the schedule and build the prompt from them.",
+    "[proposed] Add the Recent chats checkbox to desktop and a sources screen to mobile.",
+    "[proposed] Replace the Monitor a topic placeholder with a required topic field."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "ScheduleAccessFields",
+    "path": "apps/web/features/schedules/components/ScheduleAccessFields.tsx",
+    "role": "Web source checkboxes and connector list."
+   },
+   {
+    "kind": "component",
+    "name": "DesktopScheduleAccessFields",
+    "path": "apps/desktop/src/features/schedules/DesktopScheduleAccessFields.tsx",
+    "role": "Desktop source checkboxes and connectors."
+   },
+   {
+    "kind": "schema",
+    "name": "ManagedCloudScheduleSourcesSchema",
+    "path": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "role": "Source flags and defaults (lines 93-106)."
+   },
+   {
+    "kind": "schema",
+    "name": "ManagedCloudScheduleConnectorsSchema",
+    "path": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "role": "Connector id list, null means all."
+   },
+   {
+    "kind": "config",
+    "name": "monitor-topic template",
+    "path": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "role": "Prompt with a placeholder topic (line 858)."
+   },
+   {
+    "kind": "service",
+    "name": "scheduled-agent-executor",
+    "path": "apps/web/lib/services/scheduled-agent-executor.ts",
+    "role": "Applies sources and connectors at run time (lines 746-760, 926-1004)."
+   },
+   {
+    "kind": "service",
+    "name": "past-chat-context-service",
+    "path": "apps/web/lib/services/past-chat-context-service.ts",
+    "role": "Loads last 24 hours of chats for the Recent chats source."
+   },
+   {
+    "kind": "config",
+    "name": "connector-release",
+    "path": "packages/contracts/types/src/connector-release.ts",
+    "role": "Release state gating the connector list (line 14)."
+   },
+   {
+    "kind": "component",
+    "name": "ScheduleForm",
+    "path": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "role": "Hosts the access fields (line 731)."
+   },
+   {
+    "kind": "component",
+    "name": "DesktopCloudSchedules",
+    "path": "apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx",
+    "role": "Desktop form state including sources (lines 86, 167, 407, 1828)."
+   },
+   {
+    "kind": "component",
+    "name": "schedulesSection",
+    "path": "apps/extension/src/features/side-panel/schedulesSection.ts",
+    "role": "Chrome form passes template sources only (lines 672, 773)."
+   },
+   {
+    "kind": "service",
+    "name": "mobile schedule templates",
+    "path": "apps/mobile/src/features/schedules/templates.ts",
+    "role": "Drops sources from templates."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST and PUT /api/schedules",
+    "path": "apps/web/app/api/schedules/route.ts",
+    "role": "Accept and store sources and connectors."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person changes source checkboxes in the schedule form.",
+     "runs_on": "device",
+     "evidence": "apps/web/features/schedules/components/ScheduleAccessFields.tsx:104-121"
+    },
+    {
+     "what_happens": "Save sends the sources and connectors with the schedule to the schedules API.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/api/schedules/route.ts:96-139"
+    },
+    {
+     "what_happens": "At run time the executor reads task.sources (default if absent), loads memory and recent chats only when allowed by account policy, and enables web only when sources.web is true.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/services/scheduled-agent-executor.ts:926-1004"
+    },
+    {
+     "what_happens": "If the run could reach Google data, the executor requires a route that keeps inputs out of training.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/services/scheduled-agent-executor.ts:738-800"
+    }
+   ],
+   "data": [
+    {
+     "what": "sources flags and connectors list per schedule",
+     "where_stored": "table:scheduled_tasks",
+     "synced": "Yes, read back by all apps",
+     "retained_or_deleted": "Deleted with the schedule."
+    }
+   ],
+   "models_and_providers": "No topic logic uses a model. Source flags change the context and tools given to the scheduled model call; the route is chosen by admitManagedCloudRoute (scheduled-agent-executor.ts:738-800)."
+  },
+  "access_and_usage": {
+   "account": "Signed-in account; schedules are cloud features.",
+   "permissions": "Memory and recent chats read only when the account's memory and past-chat settings allow (ScheduleAccessFields.tsx:41-52; scheduled-agent-executor.ts:437-439).",
+   "subscription": "Same scheduled-task limit as F042-01; no separate gate for sources found.",
+   "limits_and_metering": "none found in the code for sources.",
+   "flags": "CONNECTOR_RELEASE_STATE 'coming_soon' hides the connector list; selectively released ids exist (connector-release.ts:14-28).",
+   "model_compatibility": "Google data in scope requires a no-training route (scheduled-agent-executor.ts:738-800).",
+   "provider_restrictions": "none found in the code.",
+   "local_mode": "Not available; scheduled runs are server-side."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Connectors loading, error, empty",
+    "behaviour": "Spinner text, error with 'Try again', or 'No connectors are connected.'",
+    "evidence": "ScheduleAccessFields.tsx:155-190"
+   },
+   {
+    "state": "Project source without a project",
+    "behaviour": "The project checkbox is hidden.",
+    "evidence": "ScheduleAccessFields.tsx:73"
+   },
+   {
+    "state": "Recent chats with past-chat search off",
+    "behaviour": "Run gets an 'unavailable' notice instead of chats.",
+    "evidence": "scheduled-agent-executor.ts:488-495"
+   },
+   {
+    "state": "Connector added later",
+    "behaviour": "Included when the list is null; not added when the list is explicit.",
+    "evidence": "ScheduleAccessFields.tsx:209-218"
+   },
+   {
+    "state": "Topics",
+    "behaviour": "not handled in the code",
+    "evidence": "No topic code found in the files searched."
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/schedules/components/ScheduleConnectorGates.test.tsx",
+     "covers": "Connector gating in the schedule form; file matched by name, cases not read."
+    },
+    {
+     "path": "apps/web/features/schedules/lib/schedule-form.test.ts",
+     "covers": "Form draft logic including sources; matched by search for recentChats, cases not read."
+    },
+    {
+     "path": "apps/web/features/schedules/components/ScheduleForm.test.tsx",
+     "covers": "Schedule form; matched by search for recentChats, cases not read."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Turn off web",
+     "steps": [
+      "Edit a schedule on web.",
+      "Untick 'The web'; Save.",
+      "Run it now."
+     ],
+     "expected": "The run's tool list has no web search; output does not cite web pages."
+    },
+    {
+     "name": "Recent chats without permission",
+     "steps": [
+      "Turn off Search past chats in Settings.",
+      "Tick 'Recent chats' on a schedule and run it."
+     ],
+     "expected": "The prompt carries the unavailable notice, not chat excerpts."
+    },
+    {
+     "name": "Connector list gate",
+     "steps": [
+      "Open the form with connectors not released."
+     ],
+     "expected": "Text 'Connectors for scheduled runs are coming soon.'"
+    },
+    {
+     "name": "Desktop parity",
+     "steps": [
+      "Open the desktop (Tauri) schedule form."
+     ],
+     "expected": "Three sources only; record the missing Recent chats."
+    }
+   ],
+   "diagnostics": [
+    "Executor log lines for context resolution in scheduled-agent-executor.ts.",
+    "Column sources and connectors in scheduled_tasks."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No topic model, add topic or dismiss topic.",
+    "affects": "All six apps.",
+    "evidence": "Brief S42.02, S42.13, S42.14 missing; no code found.",
+    "work_needed": "Design a topic list on the schedule and UI on each app."
+   },
+   {
+    "gap": "Brief says S42.03 is missing but web and desktop have source switches.",
+    "affects": "Documentation; web and desktop.",
+    "evidence": "ScheduleAccessFields.tsx:93; DesktopScheduleAccessFields.tsx:33-38",
+    "work_needed": "Mark S42.03 partial on web and desktop."
+   },
+   {
+    "gap": "Desktop lacks Recent chats; mobile and Chrome lack source controls.",
+    "affects": "Desktop, mobile, Chrome.",
+    "evidence": "DesktopScheduleAccessFields.tsx:33-38; no sources in apps/mobile/src/features/schedules",
+    "work_needed": "Add the control on each app."
+   },
+   {
+    "gap": "Mail and calendar cannot be selected by name while connectors are 'coming soon'.",
+    "affects": "All apps.",
+    "evidence": "connector-release.ts:14",
+    "work_needed": "Release connectors and name them in the form."
+   },
+   {
+    "gap": "Monitor a topic template needs a manual edit of a placeholder.",
+    "affects": "Web, desktop, mobile, Chrome templates.",
+    "evidence": "schedules.ts:858",
+    "work_needed": "Required topic field."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:chrome",
+   "mode:cloud",
+   "F042-01",
+   "SYS-connectors-plugins-and-skills",
+   "SYS-memory-projects-and-context",
+   "SYS-agents-tools-and-automation",
+   "SYS-security-and-privacy",
+   "table:scheduled_tasks",
+   "api:POST /api/schedules"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/schedules/components/ScheduleAccessFields.tsx",
+    "evidence": "Source and connector UI."
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/desktop/src/features/schedules/DesktopScheduleAccessFields.tsx",
+    "evidence": "Desktop source UI."
+   },
+   {
+    "rel": "depends_on",
+    "to": "F042-01",
+    "evidence": "Sources belong to the Daily briefing schedule (schedules.ts:854)."
+   },
+   {
+    "rel": "blocked_by",
+    "to": "SYS-connectors-plugins-and-skills",
+    "evidence": "connector-release.ts:14"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:scheduled_tasks",
+    "evidence": "schedule-service.ts:1009"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/schedules",
+    "evidence": "route.ts:139"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:PUT /api/schedules/{id}",
+    "evidence": "apps/web/app/api/schedules/[id]/route.ts:118"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "Source checkboxes in form."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:desktop",
+    "evidence": "DesktopScheduleAccessFields.tsx"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/schedules/components/ScheduleConnectorGates.test.tsx",
+    "evidence": "Name match; cases not read."
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:free",
+    "evidence": "Scheduled-task limit 0 (billing-catalog.ts:610)."
+   }
+  ],
+  "unknowns": [
+   "Whether any test asserts the desktop source list.",
+   "Whether mobile ever sends sources on a Daily brief update.",
+   "Product intent for the topic model (no spec found)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "6",
+   "claim": "Executor loads memory and recent chats only when allowed by account policy (scheduled-agent-executor.ts:926-1004)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The policy gating is in resolveScheduledContext (about lines 405-500), not 926-1004. Recent chats are gated by memoryPolicy.searchPastChats; memory goes through managedMemoryContextLoader with the policy. The 926-1004 range only passes the flags.",
+   "evidence": "scheduled-agent-executor.ts:432-439, 988-996",
+   "correction": "At run time the executor passes sources.memory and sources.recentChats into resolveScheduledContext (lines ~405-500), which applies the memory policy and the Search past chats setting; web is enabled only when sources.web is true (line 984)."
+  },
+  {
+   "section": "6",
+   "claim": "Save sends sources and connectors to the schedules API (apps/web/app/api/schedules/route.ts:96-139)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "POST create handler is there (lines 96-136) and passes the body to createSchedule, but route.ts exports only GET and POST. PUT/update lives under [id]/. Section 5 'POST and PUT /api/schedules ... route.ts' is wrong for PUT. The handler also applies rate limit, CSRF, plan quota, workspace feature gate.",
+   "evidence": "apps/web/app/api/schedules/route.ts:96-139; apps/web/app/api/schedules/[id]/route.ts",
+   "correction": "POST /api/schedules (route.ts) creates; updates go through apps/web/app/api/schedules/[id]/route.ts."
+  },
+  {
+   "section": "3/10",
+   "claim": "Web form shows four source checkboxes each saved value changes what the run reads (acceptance 1) and defaults",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Project checkbox is hidden without a project, so often three show; default recentChats is false.",
+   "evidence": "ScheduleAccessFields.tsx:73-74; cloud-contracts schedules.ts:101-106",
+   "correction": "Web shows four checkboxes only when the schedule has a project; otherwise three."
+  }
+ ],
+ "missing_facts": [
+  "A schedule made from the Daily briefing template on mobile (and any update without sources) loses recentChats:true, because the mobile template drops sources and the default is recentChats:false: MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES at packages/contracts/cloud-contracts/src/schedules.ts:101-106; apps/mobile/src/features/schedules/templates.ts:26-42. The Daily briefing prompt (schedules.ts:~850) asks for recent chats, so the mobile briefing silently lacks that input.",
+  "The executor resolves context through the shared context engine with organization context policy (loadOrganizationContextPolicy) and per-source budgets, so workspace admin policy can also block memory or project sources, not only the user's settings: apps/web/lib/services/scheduled-agent-executor.ts:405-432.",
+  "Web-search and tools are also limited by an attached agent's config (webSearch, allowed/blocked domains), so unchecking is not the only control: scheduled-agent-executor.ts:984-1000."
+ ]
+}

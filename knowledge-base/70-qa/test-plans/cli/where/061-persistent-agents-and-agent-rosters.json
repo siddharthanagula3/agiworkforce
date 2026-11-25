@@ -1,0 +1,305 @@
+{
+ "S61.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/agents"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/agent_picker.rs",
+    "text": "Agents"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/agent_picker.rs",
+    "text": "No agents found. Create one with: /agents create <name>"
+   }
+  ],
+  "needs": "none (an agent must exist; create one first with S61.02 steps)",
+  "note": "The roster is the list of markdown agent files in .agiworkforce/agents/ (project) and ~/.agiworkforce/agents/ (global). The app's own text says \"Agents\" and \"[project]\"/\"[global]\" scope tags; check the exact scope text in the overlay.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and sign in.",
+   "Type /agents and press Enter.",
+   "Look for the overlay titled Agents with a list of agent names, each showing its color, scope ([project] or [global]) and description.",
+   "Compare with Expected: each persistent agent is listed by name. If you have no agents, the overlay shows \"No agents found. Create one with: /agents create <name>\"."
+  ],
+  "where": "Type /agents in the chat (the TUI opens an overlay titled \"Agents\"). In plain text mode, /agents prints \"Agents (N)\" with a table."
+ },
+ "S61.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents create <name>"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "--global"
+   }
+  ],
+  "needs": "a folder agi can write to",
+  "note": "Creating from a plain-words description needs a model reply; the blank-template path needs no model.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents create reviewer and press Enter.",
+   "Read the reply: it should say Created project agent `reviewer` at a path ending in .agiworkforce/agents/reviewer.md.",
+   "Type /agents and press Enter.",
+   "Compare with Expected: the new agent appears in the roster by name."
+  ],
+  "where": "Type /agents create <name> in the chat (add --global to save it for every project). A description in words instead of a name also works and is drafted by the model."
+ },
+ "S61.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents set <name> <field> <value>"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents show <name>"
+   }
+  ],
+  "needs": "an existing agent named reviewer (create one first)",
+  "note": "Expected says name and avatar. The code has a user-set name and a color, but no avatar; apps/cli was searched for avatar and only a routing regex matched. The avatar part of the item cannot be tested.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents set reviewer color blue and press Enter.",
+   "Type /agents show reviewer and read the color line.",
+   "Type /agents and press Enter, then look at the reviewer name in the overlay.",
+   "Compare with Expected: the name shows in the chosen color. No avatar exists to check."
+  ],
+  "where": "Type /agents set <name> color <color> (colors: red, blue, green, yellow, purple, orange, pink, cyan). There is no avatar or picture setting anywhere in the CLI code."
+ },
+ "S61.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents show <name>"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents set <name> <field> <value>"
+   }
+  ],
+  "needs": "an existing agent named reviewer",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents set reviewer description \"Reviews pull requests for risky changes\" and press Enter.",
+   "Type /agents show reviewer and press Enter.",
+   "Compare with Expected: the description line shows the text you wrote."
+  ],
+  "where": "Type /agents set <name> description <text>, then read it back with /agents show <name>."
+ },
+ "S61.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents show <name>"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Agent `{}` activated"
+   }
+  ],
+  "needs": "an existing agent named reviewer",
+  "note": "The prompt field replaces the markdown body, which becomes the system prompt. The effect on behaviour is model-driven and only visible in replies.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents set reviewer prompt \"Check every change for missing tests\" and press Enter.",
+   "Type /agents show reviewer and press Enter.",
+   "Look for the prompt body in the output.",
+   "Compare with Expected: the agent's own instructions are the text shown. To see the effect, run the agent with /agents reviewer and ask it for a review."
+  ],
+  "where": "Type /agents set <name> prompt <text> to replace the agent's instructions, then read them with /agents show <name>."
+ },
+ "S61.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "No account-level sharing of tools or connectors per agent was found. Agents have their own tools and disallowedTools lists and per-agent maxTurns and maxBudgetUsd (src/agents.rs). A separate /connectors command exists (apps/cli/src/claude_parity.rs) but it is session-level, not per agent. Searched apps/cli for connector and agents.rs for account-level sharing.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S61.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/skills"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents show <name>"
+   }
+  ],
+  "needs": "at least one installed skill",
+  "note": "Skills are preloaded per agent (skills field), not shared at account level in the code; the agent shows what it preloads.",
+  "reachable": "yes",
+  "steps": [
+   "Type /skills and press Enter and note the installed skill names.",
+   "Type /agents set reviewer skills <name> (a comma-separated list of installed skills) and press Enter.",
+   "Type /agents show reviewer and read the skills line.",
+   "Compare with Expected: the agent shows the skills it can use, and they match the installed skills from /skills."
+  ],
+  "where": "Type /agents show <name> to see the skills line for an agent; type /skills to list the installed skills."
+ },
+ "S61.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Agent `{}` activated"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/agents"
+   }
+  ],
+  "needs": "at least one agent",
+  "note": "Activation applies the agent's model, budget and instructions to the current session. Whether the reply sounds like the agent is model-driven.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents and press Enter.",
+   "Choose an agent and press Enter.",
+   "Look for the reply Agent `<name>` activated (with the model name if the agent sets one).",
+   "Send a message and compare with Expected: the reply follows that agent's instructions and role."
+  ],
+  "where": "Type /agents in the chat, move to an agent with the arrow keys, and press Enter. Or type /agents <name> directly."
+ },
+ "S61.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Enable agent teams mode"
+   },
+   {
+    "file": "apps/cli/src/teams.rs",
+    "text": "Message a teammate with /team <name> <message>"
+   }
+  ],
+  "needs": "none",
+  "note": "Without --team the app says \"Agent teams are off in this session\"; teammates are created by the lead agent, so the exact team depends on the model.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi --team in a terminal.",
+   "Ask the lead in plain words to bring in two teammates for a task.",
+   "Type /team and press Enter to see the team messages and status.",
+   "Compare with Expected: several agents post messages in one shared conversation, each message shown with its sender."
+  ],
+  "where": "Start with agi --team (or set AGI_TEAM=1), ask the lead to bring in teammates, then type /team to see the team."
+ },
+ "S61.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Enable agent teams mode"
+   }
+  ],
+  "needs": "none",
+  "note": "The coordinator behaviour is set by the lead's brief in the code and decided by the model, so it is not a menu. Teammates are named by the lead.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi --team in a terminal.",
+   "Ask the lead for a task that needs two specialists, for example a review and a summary.",
+   "Watch the team lines and the lead's final reply.",
+   "Compare with Expected: the lead hands parts of the work to the other agents and then reports to you."
+  ],
+  "where": "Start agi --team, then ask the lead (named lead in the code) for a task that needs several specialists. The lead routes the work and reports back."
+ },
+ "S61.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/agents"
+   }
+  ],
+  "needs": "at least one installed agent",
+  "note": "Delegation is a model tool call (agent tool, action run) in apps/cli/src/agent/chat.rs. There is no button; whether the model chooses to delegate is model-driven.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents and press Enter and note an agent name.",
+   "Ask the main agent in plain words to have that agent do one part of a task.",
+   "Watch the tool line in the transcript that names the agent.",
+   "Compare with Expected: the specialist's result appears and the main agent uses it in its answer."
+  ],
+  "where": "Type /agents to see the installed agents, then ask the main agent in plain words to hand part of a task to one of them by name. The main agent calls its agent tool."
+ },
+ "S61.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/teams.rs",
+    "text": "Message a teammate with /team <name> <message>"
+   }
+  ],
+  "needs": "none",
+  "note": "Messages go through the send_message tool (apps/cli/src/agent/tools.rs). Whether an agent sends one is model-driven.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi --team and ask the lead to have two teammates work together on a task.",
+   "Type /team and press Enter.",
+   "Look for lines of the form sender to receiver with the message text.",
+   "Compare with Expected: the receiving agent acts on the message and the exchange is visible to you."
+  ],
+  "where": "Start agi --team, have the lead or a teammate send a message to another teammate, then type /team to read the message history."
+ },
+ "S61.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/teams.rs",
+    "text": "Answer with /team"
+   }
+  ],
+  "needs": "none",
+  "note": "The escalation text is produced by the teammate's send_message to the user; whether it happens is model-driven.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi --team and ask the lead to have a teammate check with you before a decision.",
+   "Watch for a line saying the teammate asks you, followed by a line Answer with /team <name> <your answer>.",
+   "Type /team <name> followed by your answer and press Enter.",
+   "Compare with Expected: the teammate receives your answer and continues the work."
+  ],
+  "where": "Start agi --team, ask a teammate to make a decision that needs you, then answer with /team <name> <your answer>."
+ },
+ "S61.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "spend cap per run"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents set <name> <field> <value>"
+   }
+  ],
+  "needs": "an existing agent named reviewer; a model account to run it",
+  "note": "Enforcement is in code (agent cap_spend and session max_turns in apps/cli/src/agents.rs) but is visible only during a run.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents set reviewer maxBudgetUsd 0.50 and press Enter.",
+   "Type /agents set reviewer maxTurns 5 and press Enter.",
+   "Type /agents show reviewer and look for the spend cap per run line and the max_turns line.",
+   "Compare with Expected: the limits show for the agent. To check enforcement, run the agent with /agents reviewer on a task that would go over the limit and see that it stops."
+  ],
+  "where": "Type /agents set <name> maxBudgetUsd <dollars> and /agents set <name> maxTurns <number>, then read them with /agents show <name>."
+ },
+ "S61.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents history [name]"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "No recorded agent runs yet."
+   }
+  ],
+  "needs": "at least one completed agent run",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run an agent first with /agents <name> and send one request.",
+   "Type /agents history and press Enter.",
+   "Look for the runs with outcome, files and spend.",
+   "Compare with Expected: each agent's past runs are listed. If nothing ran yet, the text No recorded agent runs yet. appears."
+  ],
+  "where": "Type /agents history to see all agents' runs, or /agents history <name> for one agent."
+ }
+}

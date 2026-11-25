@@ -1,0 +1,579 @@
+{
+ "feature": {
+  "id": "F082-11",
+  "aliases": [
+   "Monthly spend limit",
+   "Spending cap",
+   "Workspace spend limit",
+   "Organization spend cap",
+   "over_cap",
+   "organization_spend_cap_reached",
+   "S82.31"
+  ],
+  "summary": "A workspace owner or admin can set a monthly credit limit with a mode of Off, Notify or Block. Only Block refuses members' Cloud turns once the month's spend reaches the limit. Decisions are cached for 60 seconds. A separate policy cap and a personal spend limit also exist.",
+  "purpose": {
+   "what_it_does": "Caps managed spend for a workspace per calendar month and optionally alerts at a percentage threshold.",
+   "why_it_exists": "Finance owners need a budget ceiling (S82.31). Notify lets them watch before enforcing.",
+   "who_uses_it": "Workspace owners and admins who hold the policy.manage permission; members feel the refusals.",
+   "problems_solved": [
+    "Uncontrolled team spend",
+    "No early warning before a budget is hit"
+   ],
+   "use_cases": [
+    "Owner sets a cap, 80 percent alert and Notify to observe first.",
+    "Owner switches to Block; members' new Cloud turns stop at the cap.",
+    "Owner raises the cap and members are freed at once.",
+    "Owner removes the limit."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web and hosted desktop: workspace console usage page /workspace/usage, card 'Monthly spend limit' (apps/web/app/workspace/usage/page.tsx; apps/web/features/workspace-console/components/WorkspaceUsageAnalytics.tsx:377; WorkspaceSpendLimit.tsx:186-198).",
+    "Second control: Settings > workspace policy, 'Monthly spend cap' (apps/web/features/settings/sections/WorkspacePolicySection.tsx:630).",
+    "Personal limit (a different thing): Settings > Usage card 'Monthly spend limit' with 'Manage' (UsageSection.tsx:707-720)."
+   ],
+   "prerequisites": [
+    "Workspace membership and the policy.manage permission to change (apps/web/app/api/settings/organization/spend-limit/route.ts:69).",
+    "The component renders nothing for a caller who cannot administer the limit (WorkspaceSpendLimit.test.tsx:133)."
+   ],
+   "screens_and_controls": [
+    "Usage bar and text '<spent> of <cap> used this month', '\u00b7 over the limit' or '\u00b7 past the N% alert' (WorkspaceSpendLimit.tsx:196-222).",
+    "Fields 'Cap (credits)', 'Alert at' %, select 'Spend limit enforcement' with Off, Notify, Block (lines 228-270).",
+    "Help text per mode: Off 'Recorded only. Nothing acts on the cap.'; Notify 'Crossing the cap is reported, but no turn is refused.'; Block 'Managed turns stop at the cap, up to about a minute of spend late.' (lines 76-80).",
+    "Buttons 'Set limit' or 'Update limit', and 'Remove limit' (lines 291-322)."
+   ],
+   "journey": [
+    "Open the workspace usage page.",
+    "Enter a cap in credits, an alert percent and a mode.",
+    "If choosing Block when it was not Block, read the inline notice that new turns will be declined (line 278-289).",
+    "Click 'Set limit' or 'Update limit'.",
+    "To remove, click 'Remove limit' and confirm the dialog 'Remove the workspace spend limit?'.",
+    "A member over the cap sees the refusal message."
+   ],
+   "feedback_and_outputs": [
+    "Refusal text: 'This workspace has reached its monthly spend limit. An owner or admin can raise it, or wait until the limit resets at the start of next month.' (apps/web/lib/services/spend-limit-service.ts:187-190).",
+    "Policy-cap refusal uses the policy's reason with code organization_spend_cap_reached and status 402 (managed-usage-request-service.ts:399).",
+    "Save errors appear as an alert next to the buttons (WorkspaceSpendLimit.tsx:325-335)."
+   ],
+   "settings": [
+    "Monthly cap (credits), enforcement (off/notify/block), alert threshold percent (spend-limit route PutSchema, lines 40-46)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Limit CRUD: GET (state), PUT (upsert) and DELETE with CSRF, rate limits, permission check and audit event admin_policy_changed, critical severity when switching to block (apps/web/app/api/settings/organization/spend-limit/route.ts:50-175).",
+    "Enforcement: evaluateSpendLimit allows unless configured, mode block and spend >= cap; decision cached 60 seconds; unreadable state is treated as allowed (apps/web/lib/services/spend-limit-service.ts:53-60, 161-206). A raised cap or delete clears the cache for this server process (lines 212-214, 245-275).",
+    "Gate applied before managed work in chat completions, embeddings, audio transcription, voice live sessions, image and video generation and resume routes (callers of buildSpendLimitGateResponse in apps/web/app/api/...); the gate answers 402 with type insufficient_quota (apps/web/lib/managed-compute-gate.ts:511-545).",
+    "Crossing announcements via dispatchSpendAlertIfDue (spend-limit-service.ts:205-210).",
+    "Separate policy cap in the managed request path: refusal writes audit event spend_cap_exceeded and throws organization_spend_cap_reached (managed-usage-request-service.ts:338-399, 779).",
+    "Web UI with confirm dialog for removal."
+   ],
+   "incomplete": [
+    "The confirmation dialog covers only removing the limit. Saving a change to Block shows an inline warning note, not a dialog (WorkspaceSpendLimit.tsx:278-322). The brief says the change is confirmed by the dialog.",
+    "Only the policy-cap path writes an audit event per refused request. The Block path writes a warning log line only (managed-compute-gate.ts:527-530). The brief's line 'each refused request writes an audit event' is true only for the policy cap.",
+    "The 60-second cache is per server process (Map in memory, spend-limit-service.ts:67); across several instances enforcement lag can differ. This is read from the code, not tested [inferred]."
+   ],
+   "disconnected_or_disabled": [],
+   "not_available": [
+    "Mobile, CLI, VS Code and Chrome have no controls (brief n/a). They show the refusal text only. Mobile treats organization_spend_cap_reached as no model switch (apps/mobile/services/apiErrors.ts:109); how other apps treat code over_cap was not established."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "An owner can set a spending cap that stops managed usage once reached.",
+     "source": "S82.31 (brief)"
+    },
+    {
+     "statement": "Modes are off, notify and block; only block refuses.",
+     "source": "apps/web/lib/services/spend-limit-service.ts:150-154, 183"
+    },
+    {
+     "statement": "Decisions are cached 60 seconds, so enforcement is eventual and may overshoot by about one window of spend.",
+     "source": "apps/web/lib/services/spend-limit-service.ts:53-60"
+    },
+    {
+     "statement": "If spend cannot be read, the request is allowed.",
+     "source": "apps/web/lib/services/spend-limit-service.ts:171-181"
+    },
+    {
+     "statement": "Product requirement: Usage settings must include a monthly spend limit.",
+     "source": "doc: docs/product/requirements.md section 16.5 (lines 1322-1336)"
+    },
+    {
+     "statement": "An action a user cannot undo asks first, naming the consequence.",
+     "source": "doc: AGENTS.md section 9"
+    }
+   ],
+   "acceptance_criteria": [
+    "With mode Block and spend at or above the cap, a member's next Cloud turn is refused with status 402 and the monthly spend limit message.",
+    "With mode Notify or Off, turns continue even above the cap.",
+    "Raising the cap frees members immediately on that server.",
+    "A member cannot see the set or remove controls.",
+    "Removing the limit shows a confirmation naming the consequence and then removes it.",
+    "Changing to Block records a critical audit event.",
+    "If the spend lookup fails, the turn is allowed and an error is logged."
+   ],
+   "inferred": [
+    "Overshoot of about a minute of spend is acceptable and is stated to the admin in the UI copy [inferred from WorkspaceSpendLimit.tsx:79]."
+   ],
+   "proposed": [
+    "[proposed] Put switching to Block behind the confirmation dialog, since it starts refusing work.",
+    "[proposed] Merge the two cap mechanisms (limit table and policy cap) or document which wins.",
+    "[proposed] Write an audit event on each Block refusal."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "WorkspaceSpendLimit",
+    "path": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "role": "Admin UI: cap, alert, mode, set, remove"
+   },
+   {
+    "kind": "component",
+    "name": "WorkspaceUsageAnalytics",
+    "path": "apps/web/features/workspace-console/components/WorkspaceUsageAnalytics.tsx",
+    "role": "Hosts the spend limit card"
+   },
+   {
+    "kind": "screen",
+    "name": "/workspace/usage page",
+    "path": "apps/web/app/workspace/usage/page.tsx",
+    "role": "Route that renders workspace usage"
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET PUT DELETE /api/settings/organization/spend-limit",
+    "path": "apps/web/app/api/settings/organization/spend-limit/route.ts",
+    "role": "Read, save and delete the limit"
+   },
+   {
+    "kind": "service",
+    "name": "spend-limit-service",
+    "path": "apps/web/lib/services/spend-limit-service.ts",
+    "role": "State, decision, cache, upsert, delete, personal limit"
+   },
+   {
+    "kind": "service",
+    "name": "buildSpendLimitGateResponse",
+    "path": "apps/web/lib/managed-compute-gate.ts",
+    "role": "Returns the 402 refusal for managed routes"
+   },
+   {
+    "kind": "service",
+    "name": "managed-compute-access",
+    "path": "apps/web/lib/services/managed-compute-access.ts",
+    "role": "Also evaluates spend limit per organization (line 141)"
+   },
+   {
+    "kind": "service",
+    "name": "spend-alert-service",
+    "path": "apps/web/lib/services/spend-alert-service.ts",
+    "role": "Sends alert when a threshold or cap is crossed"
+   },
+   {
+    "kind": "service",
+    "name": "assertOrganizationSpendCap",
+    "path": "apps/web/lib/services/managed-usage-request-service.ts",
+    "role": "Policy cap check and audit event (line 338)"
+   },
+   {
+    "kind": "service",
+    "name": "organization-policy-evaluator",
+    "path": "apps/web/lib/services/organization-policy-evaluator.ts",
+    "role": "spend_cap decision (line 418)"
+   },
+   {
+    "kind": "component",
+    "name": "WorkspacePolicySection",
+    "path": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "role": "Monthly spend cap policy field"
+   },
+   {
+    "kind": "endpoint",
+    "name": "policy route",
+    "path": "apps/web/app/api/settings/organization/policy/route.ts",
+    "role": "Saves monthlySpendCapCents"
+   },
+   {
+    "kind": "table",
+    "name": "organization_spend_limits",
+    "path": "apps/web/lib/services/spend-limit-service.ts:119",
+    "role": "Cap, mode, threshold per organization"
+   },
+   {
+    "kind": "table",
+    "name": "personal_spend_limits",
+    "path": "apps/web/lib/services/spend-limit-service.ts:316",
+    "role": "Personal monthly overage limit"
+   },
+   {
+    "kind": "event",
+    "name": "admin_policy_changed / spend_cap_exceeded",
+    "path": "apps/web/app/api/settings/organization/spend-limit/route.ts:116",
+    "role": "Audit events"
+   },
+   {
+    "kind": "test",
+    "name": "spend-limit-service tests",
+    "path": "apps/web/lib/services/__tests__/spend-limit-service.test.ts",
+    "role": "Decision logic"
+   },
+   {
+    "kind": "test",
+    "name": "WorkspaceSpendLimit tests",
+    "path": "apps/web/features/workspace-console/components/__tests__/WorkspaceSpendLimit.test.tsx",
+    "role": "UI behaviour"
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Admin saves the limit; browser PUTs with bearer token and CSRF header.",
+     "runs_on": "device and our servers",
+     "evidence": "WorkspaceSpendLimit.tsx:56-64"
+    },
+    {
+     "what_happens": "Server checks membership and policy.manage, upserts the row, clears the cache, writes an audit event, returns the new state.",
+     "runs_on": "our servers",
+     "evidence": "spend-limit/route.ts:98-139; spend-limit-service.ts:245-276"
+    },
+    {
+     "what_happens": "A member sends a managed request; the route calls the gate which resolves the funding organization and evaluates the limit (cache 60 s).",
+     "runs_on": "our servers",
+     "evidence": "managed-compute-gate.ts:511-523; spend-limit-service.ts:161-206"
+    },
+    {
+     "what_happens": "The month-to-date sum of completed requests for the whole organization is read with the privileged database adapter.",
+     "runs_on": "our servers",
+     "evidence": "spend-limit-service.ts:98-135"
+    },
+    {
+     "what_happens": "If blocked, the route answers 402 with the message; the client shows the refusal.",
+     "runs_on": "our servers",
+     "evidence": "managed-compute-gate.ts:532-545"
+    }
+   ],
+   "data": [
+    {
+     "what": "Cap, mode, alert threshold, updated by, updated at",
+     "where_stored": "table:organization_spend_limits",
+     "synced": "Server",
+     "retained_or_deleted": "Deleted by the Remove limit action"
+    },
+    {
+     "what": "Decision cache",
+     "where_stored": "In-memory map in the server process",
+     "synced": "No",
+     "retained_or_deleted": "60 seconds"
+    },
+    {
+     "what": "Audit events",
+     "where_stored": "Security audit log",
+     "synced": "Server",
+     "retained_or_deleted": "unknown"
+    }
+   ],
+   "models_and_providers": "Not model specific. The sum uses actual cost of completed managed requests, whatever model or provider served them. Only managed (Cloud) turns are gated; own-key and Local turns are not."
+  },
+  "access_and_usage": {
+   "account": "Signed in with workspace membership.",
+   "permissions": "policy.manage to change; GET passes requireOrgMember and requireTeamAdminAccess (spend-limit/route.ts:50-63). Whether non-admins can read is unclear (see unknowns).",
+   "subscription": "Workspace (team or enterprise) feature; plan names for access are not read in this review.",
+   "limits_and_metering": "Cap bounds MIN_MONTHLY_CAP_CREDITS to MAX_MONTHLY_CAP_CREDITS and alert percent bounds (apps/web/lib/spend-limit-bounds.ts). Cache 60 s.",
+   "flags": "none found in the code",
+   "model_compatibility": "none found in the code",
+   "provider_restrictions": "none found in the code",
+   "local_mode": "Local and own-key turns are not managed spend and are not gated by this cap."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Load error",
+    "behaviour": "Retryable error without raw HTTP status.",
+    "evidence": "WorkspaceSpendLimit.test.tsx:57"
+   },
+   {
+    "state": "Save error",
+    "behaviour": "Alert text, no transport details.",
+    "evidence": "WorkspaceSpendLimit.test.tsx:70; WorkspaceSpendLimit.tsx:325"
+   },
+   {
+    "state": "Cap input invalid",
+    "behaviour": "Set limit stays disabled.",
+    "evidence": "WorkspaceSpendLimit.test.tsx:109"
+   },
+   {
+    "state": "No permission",
+    "behaviour": "Card renders nothing.",
+    "evidence": "WorkspaceSpendLimit.test.tsx:133"
+   },
+   {
+    "state": "Spend read fails",
+    "behaviour": "Request allowed; logged '[spend-limit] state unavailable; request treated as ungoverned'.",
+    "evidence": "spend-limit-service.ts:171-181"
+   },
+   {
+    "state": "Policy cap lookup fails",
+    "behaviour": "Refuses with 503 billing_unavailable (fails closed) on the policy path.",
+    "evidence": "managed-usage-request-service.ts:344-373"
+   },
+   {
+    "state": "Over cap in Block",
+    "behaviour": "402 with code over_cap.",
+    "evidence": "spend-limit-service.ts:183-191; managed-compute-gate.ts:532-545"
+   },
+   {
+    "state": "Month rollover",
+    "behaviour": "Spend sum starts at the calendar month start; the refusal says it resets next month.",
+    "evidence": "spend-limit-service.ts:116; line 189"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Usage bar has role img and aria-label with percent; enforcement select has aria-label.",
+    "evidence": "WorkspaceSpendLimit.tsx:201-205, 264"
+   },
+   {
+    "state": "Offline / timeout",
+    "behaviour": "not handled in the code beyond generic errors",
+    "evidence": "none found"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/lib/services/__tests__/spend-limit-service.test.ts",
+     "covers": "Spend limit decisions"
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/spend-limit-coverage.test.ts",
+     "covers": "Coverage of gated routes"
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/spend-alert-service.test.ts",
+     "covers": "Alerts"
+    },
+    {
+     "path": "apps/web/app/api/settings/organization/spend-limit/route.test.ts",
+     "covers": "Limit route"
+    },
+    {
+     "path": "apps/web/features/workspace-console/components/__tests__/WorkspaceSpendLimit.test.tsx",
+     "covers": "UI"
+    },
+    {
+     "path": "apps/web/features/workspace-console/components/__tests__/WorkspaceSpendLimit.draft.test.tsx",
+     "covers": "Draft state of the form"
+    },
+    {
+     "path": "apps/web/lib/__tests__/managed-compute-gate.workspace-policy.test.ts",
+     "covers": "Gate with workspace policy"
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/organization-policy-evaluator.test.ts",
+     "covers": "Policy evaluation incl. spend cap"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Block mode refuses",
+     "steps": [
+      "As owner set a small cap with Block.",
+      "As a member spend past it.",
+      "Send another Cloud turn."
+     ],
+     "expected": "402 and the monthly spend limit message; within about a minute of crossing."
+    },
+    {
+     "name": "Notify mode",
+     "steps": [
+      "Set Notify and exceed the cap."
+     ],
+     "expected": "Turns continue; an alert is sent once at the crossing."
+    },
+    {
+     "name": "Raise the cap",
+     "steps": [
+      "While blocked, raise the cap."
+     ],
+     "expected": "Next turn succeeds without waiting a minute (same server)."
+    },
+    {
+     "name": "Member view",
+     "steps": [
+      "Open the usage page as a plain member."
+     ],
+     "expected": "No controls."
+    },
+    {
+     "name": "Remove",
+     "steps": [
+      "Click Remove limit."
+     ],
+     "expected": "Dialog names the consequence; confirm deletes; audit event written."
+    },
+    {
+     "name": "Spend read failure",
+     "steps": [
+      "Simulate a database error in the spend sum."
+     ],
+     "expected": "Turn allowed; error logged."
+    }
+   ],
+   "diagnostics": [
+    "Log '[spend-limit] request refused by workspace budget' and '[spend-limit] state unavailable'.",
+    "Audit events spend_cap_exceeded, admin_policy_changed.",
+    "Tables organization_spend_limits and managed_usage_requests (organization_id, status, actual_cost_microusd)."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Blocked turns on the limit-table path are not audited per request.",
+    "affects": "Admins investigating refusals",
+    "evidence": "apps/web/lib/managed-compute-gate.ts:527-530",
+    "work_needed": "Record an audit event or metric."
+   },
+   {
+    "gap": "Two caps exist (organization_spend_limits via gate, policy monthlySpendCapCents via reservation) with different codes and UI.",
+    "affects": "Admins and support",
+    "evidence": "WorkspaceSpendLimit.tsx and WorkspacePolicySection.tsx:630; managed-usage-request-service.ts:399",
+    "work_needed": "Decide one owner and copy."
+   },
+   {
+    "gap": "Refusal codes over_cap and organization_spend_cap_reached are not in the shared quota classifier, so apps show no reset or recovery card.",
+    "affects": "All apps",
+    "evidence": "No match in packages/contracts/types/src",
+    "work_needed": "Add to the classifier."
+   },
+   {
+    "gap": "Switching to Block has no confirmation dialog.",
+    "affects": "Admins",
+    "evidence": "WorkspaceSpendLimit.tsx:278-322",
+    "work_needed": "Use useConfirmAction (AGENTS.md section 9)."
+   },
+   {
+    "gap": "Brief cites 'confirms through the confirmation dialog' and per-request audit event; both only partly true.",
+    "affects": "Documentation",
+    "evidence": "Same lines",
+    "work_needed": "Correct the brief."
+   }
+  ],
+  "depends_on": [
+   "SYS-authorization-and-workspaces",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-security-and-privacy",
+   "SYS-data-model-and-migrations",
+   "SYS-observability-and-operations",
+   "surface:web",
+   "surface:desktop",
+   "mode:cloud",
+   "table:organization_spend_limits",
+   "table:personal_spend_limits",
+   "table:managed_usage_requests",
+   "api:GET /api/settings/organization/spend-limit",
+   "api:PUT /api/settings/organization/spend-limit",
+   "api:DELETE /api/settings/organization/spend-limit",
+   "F082-09"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/spend-limit-service.ts",
+    "evidence": "evaluateSpendLimit line 161"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "evidence": "Component line 82"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:PUT /api/settings/organization/spend-limit",
+    "evidence": "spend-limit/route.ts:155"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:organization_spend_limits",
+    "evidence": "spend-limit-service.ts:119, 255"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:personal_spend_limits",
+    "evidence": "spend-limit-service.ts:316"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-authorization-and-workspaces",
+    "evidence": "policy.manage check: spend-limit/route.ts:69"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:team",
+    "evidence": "Workspace feature; plan gating not read in this review [inferred]"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "WorkspaceUsageAnalytics.tsx:377"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/services/__tests__/spend-limit-service.test.ts",
+    "evidence": "File exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/workspace-console/components/__tests__/WorkspaceSpendLimit.test.tsx",
+    "evidence": "File exists"
+   },
+   {
+    "rel": "depends_on",
+    "to": "mode:cloud",
+    "evidence": "Only managed turns are gated"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "F082-09",
+    "evidence": "Spend-cap refusals need the shared blocked state: classifier lacks the codes"
+   }
+  ],
+  "unknowns": [
+   "Which plan tiers can reach the workspace console and spend limit.",
+   "Whether a plain member can read GET spend-limit (the code comment says any member; the handler also calls requireTeamAdminAccess).",
+   "How the web chat renders code over_cap and organization_spend_cap_reached.",
+   "Behaviour across several server instances for the 60-second cache.",
+   "Whether desktop (Electron) shows the workspace console unchanged."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Limit CRUD: GET, PUT, DELETE with CSRF, rate limits, permission check and audit event admin_policy_changed, critical severity when switching to block (route.ts:50-175)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "PUT and DELETE check CSRF and rate limit. GET (route.ts:57-77) has no CSRF check, which is normal for a read. Audit is critical only on PUT when the saved mode is block (route.ts:116-130). Any PUT that saves mode block records critical, not only a switch to block. DELETE records a warning audit event, and only if a row was removed (route.ts:144-156). GET writes no audit event.",
+   "evidence": "apps/web/app/api/settings/organization/spend-limit/route.ts:98-156",
+   "correction": "PUT and DELETE check CSRF, rate limit and policy.manage. PUT audits admin_policy_changed with severity critical whenever the saved mode is block, otherwise warning. DELETE audits a warning only when a row existed. GET is rate limited and membership checked only."
+  },
+  {
+   "section": "7",
+   "claim": "Permissions: policy.manage to change; GET passes requireOrgMember and requireTeamAdminAccess. Whether non-admins can read is unclear. Subscription: plan names for access are not read in this review. Unknown: which plan tiers can reach it.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "requireTeamAdminAccess asserts active membership. It then throws SUBSCRIPTION_REQUIRED 403 unless the organization's plan allows the team_admin capability, with the message 'Team administration requires an active Team or Enterprise subscription' and requiredPlans team and enterprise. GET and PUT/DELETE both run it. GET does not need policy.manage, so any active member of a team or enterprise workspace can read the state; canManageLimit tells the UI whether to show controls. The limit is not readable or settable on other plans.",
+   "evidence": "apps/web/app/api/settings/team/team-admin-access.ts:70-90; spend-limit/route.ts:57-63, 80-91",
+   "correction": "Subscription: Team or Enterprise only (403 SUBSCRIPTION_REQUIRED otherwise). Read: any active member of such a workspace. Write: also needs policy.manage. This also means the 'Unknown' entries about plan tiers and member read can be resolved from code."
+  },
+  {
+   "section": "8/3",
+   "claim": "Cap decisions only for Cloud turns; Local and own-key turns are not gated; how other apps treat over_cap was not established",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The gate sits on the managed llm/v1 routes only, so Local and own-key traffic that does not use them is not gated. That part holds. The web chat does handle these codes: voice-input-store.ts, live-voice-session.ts and the useDictation test reference over_cap or organization_spend_cap_reached. Mobile apiErrors.ts lists organization_spend_cap_reached as no-model-switch, but not over_cap.",
+   "evidence": "apps/web/features/chat/stores/voice-input-store.ts; apps/web/features/chat/lib/live-voice-session.ts; apps/mobile/services/apiErrors.ts:109",
+   "correction": "Web voice code handles both codes. Mobile's no-model-switch list has organization_spend_cap_reached but not over_cap, so over_cap would offer a model switch on mobile."
+  }
+ ],
+ "missing_facts": [
+  "Access needs a Team or Enterprise plan. requireTeamAdminAccess throws 403 SUBSCRIPTION_REQUIRED for any other plan, on GET as well as PUT and DELETE (apps/web/app/api/settings/team/team-admin-access.ts:70-90; spend-limit/route.ts:63, 79). The page lists this as unknown.",
+  "The budget is resolved from the user's first governing organization and ignores the x-agi-organization-id header, so a member cannot escape the cap by sending 'personal' (apps/web/lib/managed-compute-gate.ts:507-525; apps/web/lib/services/enterprise-funding-organization.ts:15-23). The page does not say this.",
+  "Web chat has client handling for the over_cap and organization_spend_cap_reached codes in voice code (apps/web/features/chat/lib/live-voice-session.ts, apps/web/features/chat/stores/voice-input-store.ts), which the page lists as unknown. Mobile's no-model-switch list omits over_cap (apps/mobile/services/apiErrors.ts:99-109)."
+ ]
+}

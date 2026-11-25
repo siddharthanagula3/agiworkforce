@@ -1,0 +1,415 @@
+{
+ "S22.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Sources {{indices}}: {{sites}}"
+   }
+  ],
+  "needs": "a Free or paid account; a question that makes the assistant search the web",
+  "note": "The chip text is the site name, not a fixed word, so the fixed label to look for is the \"Sources\" button under the answer. Whether a search happens depends on the model's choice.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and start a new chat.",
+   "Type a question about a current topic that needs web search, for example \"What is the latest news about <topic>? Include sources.\" and send it.",
+   "When the answer finishes, look inside the answer text for small rounded chips that show a site name (with \"+N\" if there are more sources).",
+   "Click a chip; it opens the source in a new tab.",
+   "Compare: the chip names the site, and the chip opens the linked source."
+  ],
+  "where": "Ask a question that needs a web search, then look under the answer for the \"Sources\" button, and look for small source chips inside the answer text"
+ },
+ "S22.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a Free or paid account; a desktop browser with a mouse for hover (on a phone, tap behaviour was not verified)",
+  "note": "The preview card has no fixed heading; the card is a hover tooltip built in CitationChip.tsx. Tap behaviour on a phone is not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Get an answer with source chips (see S22.01).",
+   "Move the mouse over a source chip and wait a moment.",
+   "Read the card that appears: title, site name, date and snippet.",
+   "Move the mouse away; the card closes. Click the chip only if you want to open the source."
+  ],
+  "where": "In an answer with source chips, hover a chip (desktop) to see its preview card; the card shows the source title, site, date and snippet"
+ },
+ "S22.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Citations"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "More"
+   }
+  ],
+  "needs": "a Free or paid account; an answer that used web search",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Get an answer that used web search (see S22.01).",
+   "Click the \"Sources\" button under the answer.",
+   "In the panel, check the tab \"Sources\" is selected, and read the \"Citations\" and \"More\" sections.",
+   "Each row shows a title, site, date and snippet; click a row to open it in a new tab."
+  ],
+  "where": "Under the answer, click the \"Sources\" button; the Research panel opens with the Sources tab listing Citations and More"
+ },
+ "S22.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched for carousel and image-result rendering. The only carousel found is PlacePhotoCarousel (apps/web/features/chat/components/messages/cards/map/PlacePhotoCarousel.tsx), which is for place photos, not web image results. The owner note says the image-search provider is not yet chosen (apps/web/lib/web-search/web-search-providers.json).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S22.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCard.tsx",
+    "text": "Open artifact"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx",
+    "text": "View chart data"
+   }
+  ],
+  "needs": "a Free or paid account; a prompt that makes the assistant create a chart",
+  "note": "The hover behaviour itself is in ChartCanvas.tsx; the code audit's quoted line was not found in the file now, so this was checked by reading the chart components directly.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Make a bar chart of <numbers you choose>\" and send.",
+   "When the chart card appears, click \"Open artifact\" (or the chart in the answer).",
+   "In the Artifacts panel, look at the chart: move the mouse over bars or points to see values, and check the legend.",
+   "Compare with Expected: values show on hover and the legend lists the series."
+  ],
+  "where": "Ask the assistant for a chart; the chart appears in the answer, and \"Open artifact\" opens it in the Artifacts panel"
+ },
+ "S22.09": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx",
+    "text": "View chart data"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "a Free or paid account; a chart with more than a few points (for the truncation note)",
+  "note": "The truncation note mentions downloading the JSON for full data, but no JSON download control was found in ChartArtifact.tsx. Use the \"Download artifact\" control of the Artifacts panel (apps/web/features/chat/components/artifacts/ArtifactPreview.tsx) to check whether it gives the JSON.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chart artifact (see S22.08).",
+   "Click \"View chart data\" below the chart.",
+   "Read the table: column headers are series names, rows are the data points.",
+   "Click the download control whose label is \"Download <chart name> as PNG\" to save the image, and compare with the table."
+  ],
+  "where": "In a chart artifact, click \"View chart data\" under the chart to see the table of values; use \"Download\" to save the chart as PNG"
+ },
+ "S22.10": {
+  "labels": [
+   {
+    "file": "apps/web/lib/services/map-search-tool-service.ts",
+    "text": "Open in Google Maps"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/PlacesMapCard.tsx",
+    "text": "Places for {{scope}}"
+   }
+  ],
+  "needs": "production-state: a map tile URL (AGI_MAP_TILE_URL_TEMPLATE) must be set, and the place search needs its provider key",
+  "note": "The owner notes say the tile provider is not chosen yet (apps/web/lib/maps/map-tile-provider.ts:93). The map may not render tiles until it is set.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Find <type of place> near <place name>\" and send.",
+   "When the map card appears, look for markers on the map.",
+   "Click \"Open in Google Maps\" to check the link opens the search in Google Maps in a new tab.",
+   "Compare: the map shows markers for the places found."
+  ],
+  "where": "Ask the assistant for a place or map search (for example \"Find coffee shops near <place>\"); the result shows a map card with markers and an \"Open in Google Maps\" button"
+ },
+ "S22.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/PlacesMapCard.tsx",
+    "text": "Places for {{scope}}"
+   }
+  ],
+  "needs": "production-state: a Google Places key (GOOGLE_PLACES_API_KEY) with billing; a paid or Free account depending on the plan",
+  "note": "The card's detail fields (rating, hours) were not all confirmed in the source read; the \"Directions\" link name is only seen in PlacesMapCard.test.tsx, not in the component. Owner must set the key before a live check.",
+  "reachable": "yes",
+  "steps": [
+   "Type a question about a specific place or business and send.",
+   "Look for a place card in the answer with the place name and marker on the map.",
+   "Click a marker or the place name to see its details.",
+   "Compare: the card shows name, rating, address, hours and links."
+  ],
+  "where": "Ask for a place or business (for example \"Find <business name> and its hours\"); the place card appears in the answer"
+ },
+ "S22.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/cards/MessageFormatCard.tsx",
+    "text": "View as"
+   },
+   {
+    "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+    "text": "Winner"
+   }
+  ],
+  "needs": "a Free or paid account; the assistant must choose the comparison format",
+  "note": "The button text is built from the template \"View as {{label}}\" with the word \"comparison\" (MessageFormatCard.tsx:55 and :18); the visible text is \"View as comparison\".",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Compare <product A> and <product B>\" and send.",
+   "When the answer finishes, click the \"View as comparison\" button under it.",
+   "Read the card: heading \"<A> vs <B>\" and a table of the two items.",
+   "Compare: the items sit side by side and the better one is marked \"Winner\"."
+  ],
+  "where": "Ask to compare two products (for example \"Compare <product A> and <product B>\"); the answer shows a \"View as comparison\" button that opens a side-by-side card"
+ },
+ "S22.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCard.tsx",
+    "text": "Open artifact"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/EmailArtifact.tsx",
+    "text": "Copy"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/EmailArtifact.tsx",
+    "text": "Copied"
+   }
+  ],
+  "needs": "a Free or paid account",
+  "note": "The code shows Copy but no send action was found in EmailArtifact.tsx; the \"Send\" and \"Open\" parts of Expected are unconfirmed. Search in the file for mailto was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Draft an email to <person> about <topic>\" and send.",
+   "Click \"Open artifact\" on the email card.",
+   "Check the header shows the subject line, and the body below it.",
+   "Click \"Copy\" and check the button changes to \"Copied\"."
+  ],
+  "where": "Ask for an email draft (for example \"Draft an email to <person> about <topic>\"); the email card appears in the Artifacts panel"
+ },
+ "S22.28": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow for this chat"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/McpAppCard.tsx",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a Free or paid account; a tool that the app asks permission for",
+  "note": "The generic approval card's deny label was not found in the constants read; \"Deny\" is confirmed only for the MCP app card. Tool names differ by kind.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant to do something that needs a tool (for example \"Run a command that lists files in a folder\").",
+   "When the approval card appears, read its title and the details (name, value pairs) and the risk label.",
+   "Check the buttons: \"Allow once\" and \"Allow for this chat\" (and a deny control if shown).",
+   "Click \"Allow once\" and check the card shows the decision and the tool runs."
+  ],
+  "where": "A tool that needs permission (for example a shell command or a connector action) shows an approval card in the chat; the buttons are \"Allow once\" and \"Allow for this chat\""
+ },
+ "S22.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx",
+    "text": "Send answers"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx",
+    "text": "Skipped"
+   }
+  ],
+  "needs": "none beyond a Free or paid account; the assistant decides when to ask",
+  "note": "A dismiss control also exists in ClarifyCard.tsx; its exact visible text was not read.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a vague request so the assistant asks clarifying questions (for example \"Plan a trip for me\").",
+   "Pick an option for each question, or type into the \"Other\" field if shown.",
+   "Check that \"Send answers\" is enabled only after the required questions are answered.",
+   "Click \"Send answers\" and check the card shows the sending state, then the assistant continues."
+  ],
+  "where": "The assistant asks clarifying questions in a card; fill the options or the \"Other answer for <question>\" field and click \"Send answers\""
+ },
+ "S22.30": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Expand table"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Copy table"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Table copied"
+   }
+  ],
+  "needs": "a Free or paid account; the assistant must answer with a table",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Compare <A> and <B> in a table\" and send.",
+   "When the table appears in the answer, read the header row and rows.",
+   "Click \"Expand table\" to open it larger.",
+   "Click \"Copy table\" and check the button shows \"Table copied\"."
+  ],
+  "where": "Ask for a comparison table (for example \"Compare <A> and <B> in a table\"); the table appears in the answer with \"Expand table\" and \"Copy table\""
+ },
+ "S22.31": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Show source"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Expand diagram"
+   }
+  ],
+  "needs": "a Free or paid account; the assistant must write a diagram block",
+  "note": "No separate mind-map control was found; the drawing is the generic Mermaid diagram renderer (MarkdownContent.tsx routes language \"mermaid\"). Whether the model draws a mind map depends on its output.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Draw a mind map of <topic>\" and send.",
+   "When the diagram appears in the answer, read the drawn nodes and branches.",
+   "Click \"Show source\" to see the diagram text, then click it again to hide it.",
+   "Click \"Expand diagram\" and check the enlarged diagram opens."
+  ],
+  "where": "Ask for a mind map (for example \"Draw a mind map of <topic>\"); the diagram appears in the answer with \"Show source\" and \"Expand diagram\""
+ },
+ "S22.32": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Show source"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Expand diagram"
+   }
+  ],
+  "needs": "a Free or paid account; the assistant must write a diagram block",
+  "note": "Same renderer as S22.31; no flowchart-specific control was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Draw a flowchart of <process>\" and send.",
+   "When the diagram appears, read the boxes and arrows.",
+   "Click \"Show source\" to check the diagram text.",
+   "Click \"Expand diagram\" and check it opens larger."
+  ],
+  "where": "Ask for a flowchart (for example \"Draw a flowchart of <process>\"); the diagram appears in the answer with \"Show source\" and \"Expand diagram\""
+ },
+ "S22.33": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Show source"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "Expand diagram"
+   }
+  ],
+  "needs": "a Free or paid account; the assistant must write a diagram block",
+  "note": "Same renderer as S22.31; no timeline-specific control was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Draw a timeline of <events>\" and send.",
+   "When the diagram appears, read the dated events in order.",
+   "Click \"Show source\" to check the diagram text.",
+   "Click \"Expand diagram\" and check it opens larger."
+  ],
+  "where": "Ask for a timeline (for example \"Draw a timeline of <events>\"); the diagram appears in the answer with \"Show source\" and \"Expand diagram\""
+ },
+ "S22.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Open in new tab"
+   }
+  ],
+  "needs": "a Free or paid account; the assistant must produce an HTML or React artifact",
+  "note": "Live running of the artifact depends on its type (html or react) and the liveRuntime setting in ArtifactPreview.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Build an interactive HTML demo of <idea>\" and send.",
+   "Click \"Open artifact\" on the card.",
+   "In the Artifacts panel, make sure the \"Preview\" tab is selected, and use the demo (click buttons, type in fields).",
+   "Click \"Open in new tab\" if you want the demo in its own tab, and compare with Expected."
+  ],
+  "where": "Ask for an interactive demo (for example \"Build an interactive HTML demo of <idea>\"); open the artifact and use the \"Preview\" tab"
+ },
+ "S22.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/McpAppCard.tsx",
+    "text": "Allow once"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/McpAppCard.tsx",
+    "text": "Deny"
+   }
+  ],
+  "needs": "an MCP app connected to the account; a device or permission the app asks for",
+  "note": "Where the MCP app is connected in Settings was not found; search apps/web/features/settings for the MCP section before the test.",
+  "reachable": "yes",
+  "steps": [
+   "Connect an MCP app (its setup location was not confirmed in the code read).",
+   "Ask the assistant to use that app's feature.",
+   "When the app card asks for access, read the request, then click \"Allow once\" (or \"Deny\").",
+   "After allowing, check the embedded panel appears in the answer and responds to clicks."
+  ],
+  "where": "An MCP app that the chat can use shows a card in the answer; when it asks for access, click \"Allow once\" or \"Deny\" and then use the embedded panel"
+ },
+ "S22.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Open in new tab"
+   }
+  ],
+  "needs": "a Free or paid account; the assistant must produce an HTML or React artifact",
+  "note": "The expand (fullscreen) control's visible label was not confirmed; it is handled by handleFullscreen in ArtifactPreview.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"Build a small web page for <idea>\" and send.",
+   "Click \"Open artifact\" on the card.",
+   "Check the \"Preview\" tab shows the running page; click something on it.",
+   "Use \"Open in new tab\" to open it in its own tab, or use the expand control, and compare with Expected."
+  ],
+  "where": "Ask for a generated app or site (for example \"Build a small website for <idea>\"); open the artifact, then the \"Preview\" tab shows the live app"
+ }
+}

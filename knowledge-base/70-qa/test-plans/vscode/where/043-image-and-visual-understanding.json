@@ -1,0 +1,258 @@
+{
+ "S43.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "an image file; a signed-in account",
+  "note": "The \"+\" menu item \"Attach workspace files\" and the \"/\" menu item \"Attach file\u2026\" both use a text-only picker that rejects images, so only paste and drag work for images.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette (Cmd+Shift+P) to open the chat panel.",
+   "Copy a PNG or JPG image, or drag an image file from Finder onto the composer at the bottom.",
+   "Look for an attachment chip that shows the file name and a thumbnail.",
+   "Type \"What is in this image?\" in \"Describe a task\u2026\" and send.",
+   "Compare: the reply should describe the image you attached."
+  ],
+  "where": "Code: Open Chat > click \"Describe a task\u2026\" and paste (Cmd+V) an image, or drag an image file onto the composer"
+ },
+ "S43.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "two or more image files; a signed-in account",
+  "note": "A single drop or paste takes at most 8 files and silently ignores the rest (slice in webviewContent.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Select 2 or 3 image files in Finder and drag them together onto the composer, or copy several images and press Cmd+V in \"Describe a task\u2026\".",
+   "Check that one chip appears for each image.",
+   "Type \"Compare these images and list the differences\" and send.",
+   "Compare: the reply should refer to every attached image, not just one."
+  ],
+  "where": "Code: Open Chat > drag several image files onto the composer, or paste several images into \"Describe a task\u2026\""
+ },
+ "S43.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a screenshot on the clipboard; a signed-in account",
+  "note": "The extension has no capture button of its own; the code comment on the paste handler names grim and the Snipping Tool as sources, and the macOS capture step comes from the OS, not this code.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Take a screenshot with the macOS screenshot tool so it is copied to the clipboard.",
+   "Click in \"Describe a task\u2026\" and press Cmd+V.",
+   "Check that an attachment chip with a thumbnail appears.",
+   "Type \"Explain what this screenshot shows\" and send; compare the reply with what is on the screenshot."
+  ],
+  "where": "Code: Open Chat > click \"Describe a task\u2026\" and paste (Cmd+V) a screenshot"
+ },
+ "S43.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a photo or scan saved as JPG or PNG; a signed-in account",
+  "note": "A scanned PDF cannot be attached: non-image binary files are skipped with reason 'unsupported binary attachment' (ChatStateManager.ts), so only image files work; a PDF is not tested here.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Drag a photo of a printed page (JPG or PNG) onto the composer, or copy it and press Cmd+V in \"Describe a task\u2026\".",
+   "Check that the attachment chip appears.",
+   "Type \"Read this document and summarize it\" and send.",
+   "Compare: the reply should read the text on the page and summarize it."
+  ],
+  "where": "Code: Open Chat > click \"Describe a task\u2026\" and paste (Cmd+V) a photo, or drag a photo file onto the composer"
+ },
+ "S43.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a chart image file; a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Save a chart as a PNG and drag it onto the composer, or copy it and press Cmd+V in \"Describe a task\u2026\".",
+   "Check that the attachment chip appears.",
+   "Type \"What trends does this chart show? Give the main values\" and send.",
+   "Compare: the reply should describe the trend and values shown in the chart."
+  ],
+  "where": "Code: Open Chat > drag a chart image onto the composer, or paste it into \"Describe a task\u2026\""
+ },
+ "S43.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a diagram image file; a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Save a diagram as a PNG and drag it onto the composer, or copy it and press Cmd+V in \"Describe a task\u2026\".",
+   "Check that the attachment chip appears.",
+   "Type \"Explain the structure of this diagram\" and send.",
+   "Compare: the reply should name the parts of the diagram and how they connect."
+  ],
+  "where": "Code: Open Chat > drag a diagram image onto the composer, or paste it into \"Describe a task\u2026\""
+ },
+ "S43.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a photo of handwriting saved as JPG or PNG; a signed-in account",
+  "note": "Handwriting is not a separate control; it uses the same image attachment path as the other image items.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Take a photo of the handwritten notes, save it as JPG or PNG, and drag it onto the composer.",
+   "Check that the attachment chip appears.",
+   "Type \"Transcribe these handwritten notes\" and send.",
+   "Compare: the reply should give the written text of the notes."
+  ],
+  "where": "Code: Open Chat > drag a photo of handwritten notes onto the composer, or paste it into \"Describe a task\u2026\""
+ },
+ "S43.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Copy"
+   }
+  ],
+  "needs": "an image with readable text; a signed-in account",
+  "note": "No separate OCR control exists in the code; text extraction is a chat request, and the \"Copy\" button in the code only appears on code blocks, so plain reply text is copied by selection.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Drag an image containing text onto the composer, or paste it into \"Describe a task\u2026\".",
+   "Type \"Transcribe all the text in this image exactly\" and send.",
+   "When the reply arrives, select the text and press Cmd+C, or use the \"Copy\" button on a code block in the reply.",
+   "Compare: the copied text should match the text in the image and can be pasted elsewhere."
+  ],
+  "where": "Code: Open Chat > attach an image, ask for its text, then copy the text from the reply"
+ },
+ "S43.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a photo with countable objects; a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Drag a photo with several countable objects onto the composer, or paste it into \"Describe a task\u2026\".",
+   "Type \"How many apples are in this image? Count each one\" (use your own object) and send.",
+   "Compare: the reply should give a count and the count should match the objects you can see."
+  ],
+  "where": "Code: Open Chat > attach an image, then ask how many items appear in it"
+ },
+ "S43.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "two scene photos as image files; a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Select two photos of different scenes in Finder and drag both onto the composer, or copy each and paste into \"Describe a task\u2026\".",
+   "Check that two attachment chips appear.",
+   "Type \"Describe the differences between these two scenes\" and send.",
+   "Compare: the reply should describe differences from both photos."
+  ],
+  "where": "Code: Open Chat > drag two scene images onto the composer, or paste them into \"Describe a task\u2026\""
+ },
+ "S43.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a screenshot or photo of a problem as an image file; a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Chat\" from the Command Palette to open the chat panel.",
+   "Take a screenshot of the error or a photo of the device, save it as PNG or JPG, and drag it onto the composer.",
+   "Check that the attachment chip appears.",
+   "Type \"What is wrong here and what steps should I try?\" and send.",
+   "Compare: the reply should name the problem shown and give troubleshooting steps."
+  ],
+  "where": "Code: Open Chat > drag a screenshot or photo of the problem onto the composer, or paste it into \"Describe a task\u2026\""
+ }
+}

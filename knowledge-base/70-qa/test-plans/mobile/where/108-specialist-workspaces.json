@@ -1,0 +1,242 @@
+{
+ "S108.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Deep research"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Reports"
+   }
+  ],
+  "needs": "a Cloud account on a plan that grants Deep research",
+  "note": "No separate financial workspace exists on mobile. The FMP connector is listed only in the web vendor directory, and I did not confirm that the mobile Connectors row shows it. The + button's label is an accessibility label, not visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Chat tab, in Cloud mode with a model that supports research and search.",
+   "Tap the + button (Add to chat) next to Message input.",
+   "Look for the Deep research row and switch it on. If the row is missing, the plan or model does not allow it.",
+   "Type a financial question, for example about a stock, an ETF or a company's filings, and send.",
+   "Open the Reports list from the drawer and open the report.",
+   "Compare with Expected: a research answer for markets, instruments or filings, with sources cited."
+  ],
+  "where": "Chat > Message input > Add to chat (+) > Deep research; results appear in Reports (drawer)"
+ },
+ "S108.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Deep research"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Reports"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a Cloud account on a plan that grants Deep research",
+  "note": "No company-profile screen or card exists on mobile; the profile depends on the generic Deep research output and the FMP connector in the web vendor directory.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Chat tab in Cloud mode.",
+   "Tap the + button (Add to chat), then switch on Deep research.",
+   "Type a request for a company profile, for example business, financials, news and competitors, and send.",
+   "Open Reports in the drawer and open the new report.",
+   "Compare with Expected: a sourced profile of the company covering business, financials, news and competitors."
+  ],
+  "where": "Chat > Message input > Add to chat (+) > Deep research; results appear in Reports (drawer)"
+ },
+ "S108.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/vendor-directory.json",
+    "text": "CourtListener"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Deep research"
+   }
+  ],
+  "needs": "a Cloud account; a legal connector may need its own sign-in",
+  "note": "No legal workspace screen exists on mobile. The legal connector names are in the web vendor directory, and I did not confirm that the mobile Connectors list shows them.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Chat tab in Cloud mode.",
+   "Tap the + button (Add to chat) and then Connectors.",
+   "Turn on a legal connector such as CourtListener.",
+   "Back in the chat, type a legal question, for example a case-law search on a point of law, and send.",
+   "Compare with Expected: case law and statutes returned with cited authorities."
+  ],
+  "where": "Chat > Message input > Add to chat (+) > Connectors (for CourtListener, Descrybe, Midpage) or Deep research"
+ },
+ "S108.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Customize"
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Use in chat"
+   },
+   {
+    "file": ".agents/skills/review-contract/SKILL.md",
+    "text": "review-contract"
+   }
+  ],
+  "needs": "a Cloud account, and a contract file to upload",
+  "note": "The skill is in the repo as review-contract (triage-nda is a related skill). Mobile shows only the skills the Cloud catalog returns, so I did not confirm that this one is listed. Skills can also be picked from Add to chat > Skills.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Customize (Cloud section).",
+   "Tap Skills and find review-contract, or search for it.",
+   "Tap Install, then tap Use in chat.",
+   "In the chat, send a contract to review and ask for clauses, risks and redlines against a playbook.",
+   "Compare with Expected: clauses are extracted, risks flagged and redlines suggested against a playbook."
+  ],
+  "where": "Settings > Customize > Skills > find review-contract > Install > Use in chat"
+ },
+ "S108.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/vendor-directory.json",
+    "text": "Consensus"
+   },
+   {
+    "file": "apps/web/lib/connectors/directory/sources/vendor-directory.json",
+    "text": "alphaXiv"
+   }
+  ],
+  "needs": "a Cloud account",
+  "note": "No scientific workspace screen exists on mobile. The connector names are in the web vendor directory, and I did not confirm that the mobile Connectors list shows them.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Chat tab in Cloud mode.",
+   "Tap the + button (Add to chat) and then Connectors.",
+   "Turn on Consensus or alphaXiv.",
+   "Ask a science question, for example for a literature review on a topic, and send.",
+   "Compare with Expected: papers are searched and a cited synthesis is returned."
+  ],
+  "where": "Chat > Message input > Add to chat (+) > Connectors (Consensus, alphaXiv) or Deep research"
+ },
+ "S108.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Customize"
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Use in chat"
+   },
+   {
+    "file": ".agents/skills/pipeline-review/SKILL.md",
+    "text": "pipeline-review"
+   }
+  ],
+  "needs": "a Cloud account; a CRM connector turned on for live data",
+  "note": "Updating CRM records is not described by these skill files on mobile; I did not find a CRM-specific screen in apps/mobile.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Customize.",
+   "Tap Skills, find pipeline-review or deal-review, and tap Install.",
+   "Tap Use in chat, or pick the skill from Add to chat > Skills.",
+   "Ask for a pipeline review or a deal review of a named opportunity, and send.",
+   "Compare with Expected: pipeline or deal health, risks and next actions from CRM data, if a CRM connector is on."
+  ],
+  "where": "Settings > Customize > Skills > find pipeline-review or deal-review > Install > Use in chat"
+ },
+ "S108.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Customize"
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Use in chat"
+   },
+   {
+    "file": ".agents/skills/ticket-triage/SKILL.md",
+    "text": "ticket-triage"
+   }
+  ],
+  "needs": "a Cloud account; a sample support ticket text",
+  "note": "The Support screen reached from About is AGI's own support tickets, not these customer-support workflows. Ticket updates in a helpdesk are not shown in mobile code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Customize.",
+   "Tap Skills, find ticket-triage, draft-response or customer-escalation, and tap Install.",
+   "Tap Use in chat, or pick the skill from Add to chat > Skills.",
+   "Paste a support ticket and ask for triage, a reply or an escalation package, and send.",
+   "Compare with Expected: the ticket is triaged, a reply is drafted, or an escalation is packaged."
+  ],
+  "where": "Settings > Customize > Skills > find ticket-triage, draft-response or customer-escalation > Install > Use in chat"
+ },
+ "S108.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Customize"
+   },
+   {
+    "file": "apps/mobile/src/features/skills/SkillsScreen.tsx",
+    "text": "Use in chat"
+   },
+   {
+    "file": ".agents/skills/interview-prep/SKILL.md",
+    "text": "interview-prep"
+   }
+  ],
+  "needs": "a Cloud account",
+  "note": "Job posts and candidate records are not shown as separate mobile screens in the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap Customize.",
+   "Tap Skills, find recruiting-pipeline or interview-prep, and tap Install.",
+   "Tap Use in chat, or pick the skill from Add to chat > Skills.",
+   "Ask for an interview plan with a scorecard, or a recruiting pipeline update, and send.",
+   "Compare with Expected: structured interview questions and a scorecard, or pipeline stage status."
+  ],
+  "where": "Settings > Customize > Skills > find recruiting-pipeline or interview-prep > Install > Use in chat"
+ },
+ "S108.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx",
+    "text": "Walking directions in Google Maps"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Message input"
+   }
+  ],
+  "needs": "a Cloud account; the card appears only when the assistant returns one",
+  "note": "No reservation or booking code was found in apps/mobile (searched for reserv, booking, book). The clarifyCard.ts quote is gone, but the itinerary.v1 capability is still listed there.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Chat tab in Cloud mode.",
+   "Type a trip request with stops and a route, for example a day in a city, and send.",
+   "Look for the itinerary card in the reply with a title, a region and a map.",
+   "Tap the route link to open Google Maps directions.",
+   "Compare with Expected: an itinerary with places and routes. Reservations are not in the code I read."
+  ],
+  "where": "Chat > Message input: ask for a trip plan; the itinerary card appears in the reply, with Walking directions in Google Maps as a route link"
+ }
+}

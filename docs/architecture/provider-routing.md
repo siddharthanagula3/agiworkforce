@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Provider/platform
-Last updated: 2026-10-23
+Last updated: 2026-11-24
 
 This matrix is the product contract for routing and UI labels. It records what AGI may claim in Local/BYOK/Managed modes. Provider SDK details can change; surfaces must read capability metadata instead of hardcoding provider assumptions.
 
@@ -62,7 +62,7 @@ policy prices its routes at list minus the guaranteed minimum, a promotional
 allocation is a quota pool with an expiry in `apps/web/config/free-pools.json`,
 and an exhausted allocation is a routing event (`quota_exhausted`), never a
 credential failure. The operator Routes tab renders all of it; the chat picker
-shows the model, its developer and the routes that can serve it now.
+shows each model with its guidance, capability icons, price band and plan lock.
 
 Billing follows the model, cost follows the route. A managed settlement debits
 the model's official price, the sheet on its own developer's route

@@ -1,0 +1,421 @@
+{
+ "S66.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Select repository"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Use this repository"
+   }
+  ],
+  "needs": "a GitHub App installation or a public GitHub repository URL; a cloud sandbox may not start until the deployment gate in the plan is switched on",
+  "note": "The picker only lists repositories when a GitHub App is configured; otherwise only a public URL works (copy in code-surface.ts). Whether a session then runs is not judged here.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Code (the /code page).",
+   "In the new-session composer, click the \"Select repository\" chip.",
+   "Pick a repository from the list, or click \"Use a repository URL instead\" and type an owner/repository URL.",
+   "Click \"Use this repository\".",
+   "Look for the chosen repository name on the composer chip and compare with Expected (the repository is chosen before the session starts)."
+  ],
+  "where": "Code > new session composer > \"Select repository\" chip > \"Repository URL\" or the list, then \"Use this repository\""
+ },
+ "S66.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Branch"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Use this branch"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change the branch"
+   }
+  ],
+  "needs": "a repository already chosen (see S66.01)",
+  "note": "A cloud branch field is shown with the repository; the desktop local folder shows branch names through its own chip. Branch switching copy says the branch is checked out in place.",
+  "reachable": "yes",
+  "steps": [
+   "Open Code and choose a repository as in S66.01.",
+   "Read the \"Branch\" field, or click the branch chip and choose a branch from the \"Branches\" list.",
+   "Type a branch name in \"Search or type a branch name\" if needed, then click \"Use this branch\".",
+   "Compare the branch shown on the chip with Expected (the session starts from that git branch)."
+  ],
+  "where": "Code > new session composer > \"Select repository\" > \"Branch\" field, or \"Change the branch\" > \"Use this branch\""
+ },
+ "S66.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Local"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a Desktop folder for the Local option; a signed-in account for Cloud",
+  "note": "The Local option appears in the desktop composer menu (CodeComposer.tsx) only; the web Cloud path is the default. Environment labels are in code-surface.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Code and look at the new-session composer.",
+   "Click the environment chip (it shows \"Cloud\" or \"Local\" with the network mode).",
+   "In the menu, choose \"Local\" (runs in a chosen folder on this computer) or \"Cloud\" (runs in an isolated cloud sandbox).",
+   "Check that the chip now shows the choice, and compare with Expected (chosen before the session starts)."
+  ],
+  "where": "Code > new session composer > environment chip > \"Local\" or \"Cloud\""
+ },
+ "S66.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Cloud sessions"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "No cloud sessions yet."
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Search sessions"
+   }
+  ],
+  "needs": "at least one earlier cloud session (empty state shows \"No cloud sessions yet.\")",
+  "note": "On the desktop app a second list, \"On this device\", shows local sessions (LOCAL_CODE_COPY in apps/web/features/code/local-code.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open Code.",
+   "Look at the session list on the left under \"Cloud sessions\".",
+   "Use the \"Filter sessions\" menu or \"Search sessions\" to narrow the list if needed.",
+   "Click a session title to open it.",
+   "Compare the list and the opened session with Expected (a list of the user's sessions that can be opened)."
+  ],
+  "where": "Code > left list \"Cloud sessions\" (sessions group) > click a session title"
+ },
+ "S66.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Rename the session"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Session title"
+   }
+  ],
+  "needs": "a cloud session you can open",
+  "note": "The \"Session actions\" button is icon-only, so testers must find it by position at the top of the session. Desktop renaming is a separate title control (LocalSessionTitleInput.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session from the session list.",
+   "Click the session actions button at the top of the session (it has no visible text; its accessible name is \"Session actions\").",
+   "Click \"Rename\".",
+   "Type a new title in the \"Session title\" field and click \"Rename the session\" (or \"Keep the current title\" to cancel).",
+   "Compare the title shown in the list and header with Expected (a readable title that can be renamed)."
+  ],
+  "where": "Code > open a session > \"Session actions\" icon menu > \"Rename\" > type title > \"Rename the session\""
+ },
+ "S66.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Running"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Ready"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Idle"
+   }
+  ],
+  "needs": "sessions in different states (a running one is hard to set up on demand)",
+  "note": "Only part of the status set is shown: Running, Ready and Idle groups and the closed banner. Failed sessions are grouped as Idle, and no separate \"Waiting for approval\" session label was found in code-surface.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Code and look at the session list.",
+   "Find sessions under the group heading \"Ready\" or \"Idle\", and any running dot labelled \"Running\".",
+   "Open a session and read its status line or banner.",
+   "Compare with Expected (running, waiting for approval, idle, failed or closed)."
+  ],
+  "where": "Code > left list (\"Cloud sessions\") > group headings \"Running\", \"Ready\", \"Idle\", and the \"Open\" badge; closed sessions show the banner \"This session is closed.\""
+ },
+ "S66.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Terminal"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Run"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a cloud session with its environment running",
+  "note": "The cloud Terminal is in CodeChangesPanel.tsx. The desktop version is a bottom panel with terminal tabs (LocalTerminal.tsx). The \"Changes\" button that opens this panel in cloud sessions was not traced to its trigger.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session.",
+   "Open the \"Changes\" panel.",
+   "Scroll to the \"Terminal\" section.",
+   "Type a short command (for example ls) in the \"Command\" field and click \"Run\".",
+   "Compare the output that appears in the Terminal with Expected (the command output is shown in the session)."
+  ],
+  "where": "Code > open a cloud session > \"Changes\" panel > \"Terminal\" section > \"Command\" field > \"Run\""
+ },
+ "S66.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Terminal"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Show exit codes"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "No commands have run in this session."
+   }
+  ],
+  "needs": "a session where commands have already run",
+  "note": "The desktop equivalent is the \"Running in this folder\" block (LocalRunningCommands.tsx), which lists running commands rather than full history.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session that has run a command (the Terminal section says \"No commands have run in this session.\" when empty).",
+   "Open the \"Changes\" panel and go to \"Terminal\".",
+   "Turn on \"Show exit codes\" if you want exit status shown.",
+   "Compare the commands, their output and the exit status with Expected."
+  ],
+  "where": "Code > open a cloud session > \"Changes\" panel > \"Terminal\" section (list of commands) and the \"Show exit codes\" toggle"
+ },
+ "S66.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Compared with HEAD"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "The diff is too large to show in full."
+   }
+  ],
+  "needs": "a session where the agent changed files",
+  "note": "The diff body is rendered by DiffBody in CodeDiffFile (imported in LocalChangesPanel.tsx). Whether a click expands the diff in place was not confirmed from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session that has changed files.",
+   "Open the \"Changes\" panel and click a file in the list.",
+   "Read the line-by-line diff shown for that file (added and removed lines).",
+   "Compare with Expected (a line-level diff of the agent's changes)."
+  ],
+  "where": "Code > open a cloud session > \"Changes\" panel > click a changed file"
+ },
+ "S66.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Added"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Modified"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Deleted"
+   }
+  ],
+  "needs": "a session where files were created, modified and deleted",
+  "note": "Labels come from CHANGE_STATE_LABELS in code-surface.ts; the file rows are rendered in LocalChangesPanel.tsx and CodeChangesPanel.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session that has changed files.",
+   "Open the \"Changes\" panel.",
+   "Read the count line \"N added, M removed\" and the state word on each file row (Added, Modified, Deleted, Renamed, Untracked or Conflicted).",
+   "Compare which files are shown and their state with Expected (created, modified or deleted files)."
+  ],
+  "where": "Code > open a cloud session > \"Changes\" panel (heading \"Changes\", count \"N added, M removed\", then a row per file with its state)"
+ },
+ "S66.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Mode"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Ask before every action"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Skip approvals"
+   }
+  ],
+  "needs": "none for reading the options; a running session is needed to see the effect",
+  "note": "There is no option called \"edit mode\" or \"agent mode\"; the closest control is this approval-policy menu plus the Plan option. Options and labels come from TOOL_APPROVAL_POLICY_OPTIONS.",
+  "reachable": "yes",
+  "steps": [
+   "Open Code and look at the composer below the message box.",
+   "Click the approval/mode control (accessible name \"Approval mode\"; it shows \"Plan\" or the short label Ask, Auto or Skip).",
+   "Under the heading \"Mode\", read the options and their hints.",
+   "Pick one, then compare the choice and its hint with Expected (agent may act on its own, or asks first)."
+  ],
+  "where": "Code > new session or open session > composer \"Mode\" control (the approval control, labelled \"Approval mode\") > choose one of \"Ask before every action\", \"Run read-only actions without asking\", \"Skip approvals\" or \"Plan\""
+ },
+ "S66.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Approval mode"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Run read-only actions without asking"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Isolated"
+   }
+  ],
+  "needs": "a running cloud or local session; a task that uses tools",
+  "note": "Enforcement of the chosen mode at runtime was not verified from the code, only the choice labels. Network labels come from the networkAccess list in code-surface.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the composer approval control and pick one option, for example \"Ask before every action\".",
+   "Start a task that needs a tool or a write, and see whether the agent waits for an approval card.",
+   "Change the option to \"Skip approvals\" and start another task.",
+   "Compare what the agent does with Expected (the chosen mode is honoured while the session runs)."
+  ],
+  "where": "Code > composer \"Approval mode\" control > \"Ask before every action\" / \"Run read-only actions without asking\" / \"Skip approvals\"; network choice \"Isolated\", \"Trusted hosts\", \"Full internet\" in the environment settings"
+ },
+ "S66.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Context window"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Usage"
+   }
+  ],
+  "needs": "a session with some messages so a context figure exists",
+  "note": "The ring is UsageRing in CodeComposer.tsx (rendered near line 2162). Whether it shows before any message was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a session in Code and type in the composer.",
+   "Look for the small ring icon near the composer (its accessible name is \"Usage\").",
+   "Click it and read the \"Context window\" value.",
+   "Compare the used amount with Expected (how much of the model context is used)."
+  ],
+  "where": "Code > composer > the small usage ring (button named \"Usage\") > popover \"Context window\""
+ },
+ "S66.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Plan usage limits"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Five hour limit"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "See detailed breakdown"
+   }
+  ],
+  "needs": "a signed-in account on a paid plan (the popover hides plan usage heading for free plans)",
+  "note": "Marked done in the audit. The popover is in CodeComposer.tsx (around lines 1562 and 1620), backed by useManagedUsageSummary.",
+  "reachable": "yes",
+  "steps": [
+   "Open Code and find the \"Usage\" button in the composer.",
+   "Click it to open the popover.",
+   "Read \"Plan usage limits\" and the \"Five hour limit\" and \"Weekly, all models\" figures.",
+   "Click \"See detailed breakdown\" if you want more detail.",
+   "Compare the figures with Expected (plan usage or money spent is shown)."
+  ],
+  "where": "Code > composer \"Usage\" button > popover \"Plan usage limits\" (\"Five hour limit\", \"Weekly, all models\", \"Weekly, top model\"); also the Usage settings page"
+ },
+ "S66.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Create pull request"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Checks passing"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Merged"
+   }
+  ],
+  "needs": "a repository, a working branch and a GitHub connection; the feature is gated by the deployment (see the plan's switch-on note)",
+  "note": "On the desktop, the pull request form is in LocalPullRequest.tsx with \"Push and open a pull request\" and \"Create branch and open pull request\" (local-code.ts). The pull request number/link display was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a session that has a repository and a working branch.",
+   "Open the \"Changes\" panel and click \"Create pull request\".",
+   "Wait for \"Opening the pull request\" to finish, then look for the pull request state (Merged, Closed without merging, Checks passing, Checks failing, Checks running).",
+   "Compare the number, link and state with Expected (session's pull request is shown)."
+  ],
+  "where": "Code > open a cloud session > \"Changes\" panel > \"Create pull request\"; then the pull-request area shows status"
+ },
+ "S66.40": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Share"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Share session"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Who can open this session"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Session link"
+   }
+  ],
+  "needs": "a second account in the same workspace for Team, or any second signed-in account for Public",
+  "note": "The share dialog is CodeShareDialog.tsx and the shared view is SharedCodeSessionPage.tsx; the shared-page route is apps/web/app/code/shared/[token]/page.tsx. Shared viewers see a snapshot, as copy in code-surface.ts says.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session.",
+   "Click the session actions button (accessible name \"Session actions\"), then click \"Share\".",
+   "In the \"Share session\" dialog, pick \"Team\" or \"Public\" under \"Who can open this session\".",
+   "Copy the link from the \"Session link\" field (copy button under the link).",
+   "Open the link in a private window signed in as another account and check that the session opens (the shared page is at /code/shared/[token]).",
+   "Compare with Expected (the other person can open it)."
+  ],
+  "where": "Code > open a cloud session > \"Session actions\" icon menu > \"Share\" > dialog \"Share session\" > \"Who can open this session\" (Private, Team, Public) > \"Done\""
+ }
+}

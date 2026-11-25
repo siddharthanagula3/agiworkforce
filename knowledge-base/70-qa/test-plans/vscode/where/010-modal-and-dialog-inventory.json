@@ -1,0 +1,318 @@
+{
+ "S10.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: New Project"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The name box is titled with \"New Project\" built from a constant, so its exact wording was not copied. The project list location was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: New Project\" and press Enter.",
+   "In the box titled \"Code, New Project\", type a name and confirm.",
+   "Watch for the progress notice \"creating project\u2026\".",
+   "Check for the message that the project is on your account, on every client, and that the new project appears in the projects list."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > \"Code: New Project\""
+ },
+ "S10.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Fork Conversation"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Name for the forked session"
+   }
+  ],
+  "needs": "an existing developer session to copy",
+  "note": "The code has no word \"Duplicate\"; the action is called Fork. The copy is opened directly, and no message naming where the copy is was found.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P and type \"Code: Fork Conversation\".",
+   "Pick a session from the list, or run it on an open chat.",
+   "In the box \"Name for the forked session\", keep the suggested name or change it, then confirm.",
+   "Check that the new copy opens as its own session, and compare with the Expected line."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > \"Code: Fork Conversation\""
+ },
+ "S10.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Archive developer session"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Archived Sessions"
+   }
+  ],
+  "needs": "an existing developer session",
+  "note": "The archive dialog does not itself say where archived sessions are; the Archived Sessions view does. No undo message was found, but the Restore button in that view is the way back.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P and type \"Code: Archive Conversation\".",
+   "Pick a developer session.",
+   "In the dialog that names the session, check it says Archive developer session with the session title, then click Archive or Cancel.",
+   "Run \"Code: Archived Sessions\" from the palette and check the session is listed there, with a Restore button."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > \"Code: Archive Conversation\""
+ },
+ "S10.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Archive Conversation"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Archive developer session"
+   }
+  ],
+  "needs": "an existing developer session",
+  "note": "No command titled plain \"Delete\" was found for sessions. Archiving is the confirmed removal from the list; the permanent delete is covered by S10.07.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P and type \"Code: Archive Conversation\".",
+   "Pick a developer session.",
+   "Check the dialog names the session in quotes before anything changes.",
+   "Click Cancel and check the session is still in the list."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > \"Code: Archive Conversation\""
+ },
+ "S10.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Permanently Delete Conversation"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Delete Permanently"
+   }
+  ],
+  "needs": "an existing developer session you can afford to lose in a test",
+  "note": "A second route exists in the archived sessions view under the button \"Delete permanently\" (packages/ui/i18n/locales/en/vscode.json). The dialog is a single modal confirm, not a typed second confirmation.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P and type \"Code: Permanently Delete Conversation\".",
+   "Pick a developer session.",
+   "Read the dialog: it names the session, says the transcript and file changes are removed, and says this cannot be undone.",
+   "Check that nothing is removed until you click \"Delete Permanently\"; Cancel should leave it in place."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > \"Code: Permanently Delete Conversation\""
+ },
+ "S10.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach workspace files"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Attach Workspace Files to Chat"
+   }
+  ],
+  "needs": "a file to upload and a trusted workspace (the picker does nothing in an untrusted one)",
+  "note": "The chooser opens at the workspace folder but is a standard file dialog. The + button's visible label was not confirmed. The control menu has a separate \"Attach file\u2026\" item that is not this path.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat in the sidebar and click the + button beside the message box.",
+   "Click \"Attach workspace files\" in the menu.",
+   "In the file chooser titled \"Attach Workspace Files to Chat\", pick one or more files and click Attach.",
+   "Check that the picked files appear as attachments on the message before you send."
+  ],
+  "where": "Chat: the + button in the message box > \"Attach workspace files\""
+ },
+ "S10.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Switch anyway"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
+    "text": "cannot use tools, so it cannot read or edit files or run commands"
+   }
+  ],
+  "needs": "a conversation that uses tools or images, and a model without those capabilities in the list",
+  "note": "Only the tools and vision losses were read in the code; the context-limit case was not confirmed. The sidebar model picker was not checked for the same warning.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P and type \"Code: Select Model\", then Enter.",
+   "In a chat that uses a model with tools or images, pick a model that cannot do those things.",
+   "Check the dialog \"Switch to <model>?\" with the detail \"Unlike <model>, it cannot use tools...\" appears before the switch.",
+   "Click Cancel and check the model is unchanged; or click \"Switch anyway\" and check the new model is used."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > \"Code: Select Model\""
+ },
+ "S10.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "start a new chat to keep full context."
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Summarize Session to Free Context"
+   }
+  ],
+  "needs": "a long conversation that reaches the warning threshold",
+  "note": "The warning has no button; trimming or summarizing is only in the palette command. The exact on-screen position was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a long chat in the AGI sidebar, or send many long messages until the context counter nears the model's window.",
+   "Watch the context counter turn to the warning colour.",
+   "Read the notice above the message box: \"This chat has used N% of the model's context... start a new chat to keep full context.\"",
+   "Compare with Expected: the notice names a new chat but does not mention trimming, and the summarize command is \"Code: Summarize Session to Free Context\" in the palette."
+  ],
+  "where": "Chat: the context counter (\"x / y\") near the message box; an inline notice appears above the message box at the warning level"
+ },
+ "S10.28": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "You have reached a usage limit on your account."
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Managed Cloud quota exhausted"
+   }
+  ],
+  "needs": "an account that has hit a usage limit (hard to reach in a test; a Free or near-limit account)",
+  "note": "The reset wording depends on whether the server gives a reset time; the exact banner placement was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account that has reached its usage limit (or wait until a limit is hit during a chat).",
+   "Send a message and read the error or the usage banner at the top of the chat.",
+   "Check that it names the limit, says when it resets (\"It resets <time>\" or \"Check your usage\"), and offers an action such as Upgrade.",
+   "Compare with Expected: the banner shows \"\u00b7 <reset>\" when the reset time is known."
+  ],
+  "where": "Chat: the usage banner or the error message in the chat when a usage limit is hit (\"Managed Cloud quota exhausted\" or \"You have reached a usage limit on your account.\")"
+ },
+ "S10.37": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Manage trust"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Trust this workspace before AGI can use project files or tools."
+   }
+  ],
+  "needs": "an untrusted folder (a folder not yet trusted in VS Code)",
+  "note": "The code gates on VS Code workspace trust for the whole folder, not a separate per-read grant. No per-folder prompt was found; the closest is the trust approval kind 'directory trust' in approvalScope.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder that VS Code has not trusted (untrusted workspace).",
+   "Open the AGI chat in the sidebar.",
+   "Read the line \"Trust this workspace before AGI can use project files or tools.\" and the button \"Manage trust\".",
+   "Click \"Manage trust\" and check that VS Code asks you to trust the folder before the assistant can read or write it."
+  ],
+  "where": "Sidebar AGI chat in an untrusted workspace > \"Manage trust\""
+ },
+ "S10.38": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Abort turn"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a trusted workspace and a model that can use tools",
+  "note": "The card buttons are built from the label constants: \"Approve once\", \"Approve for session\", \"Deny\", \"Abort turn\". \"Approve for session\" remembers the tool, not one call, so it does not match 'that one call' in Expected.",
+  "reachable": "yes",
+  "steps": [
+   "In a trusted workspace, ask the chat to run a shell command or edit a file (for example, \"create a file named test.txt\").",
+   "Read the approval card that shows the action.",
+   "Click \"Approve once\" or \"Deny\" for that call only; compare with Expected.",
+   "Optionally click \"Approve for session\" on a second request and check that the next call of the same tool runs without asking."
+  ],
+  "where": "Chat: send a request that makes the agent run a shell command or edit a file; an approval card appears in the chat"
+ },
+ "S10.40": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Remote Control"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Pair with Desktop"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Cancel pairing"
+   }
+  ],
+  "needs": "a phone with the Mobile app signed in to the same account, and a signed-in desktop account",
+  "note": "The code shows a confirmation with the pairing code before the phone can take control, but no explicit line that pairing is bound to the signed-in account was found.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Remote Control\", then Enter.",
+   "Read the panel titled \"Remote Control\" with its QR code and the words \"Pair with Desktop\".",
+   "On the phone, open the Mobile app, choose \"Pair with Desktop\", and scan the code.",
+   "Check that the phone appears as paired on this computer and that the code expires; \"Cancel pairing\" stops the pairing."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > \"Code: Remote Control\""
+ },
+ "S10.45": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Send Feedback"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Report a Bug"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Describe your feedback"
+   }
+  ],
+  "needs": "a signed-in account (feedback is refused when signed out)",
+  "note": "Reachable from the VS Code command palette only; a product-wide dialog on other surfaces was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P and type \"Code: Send Feedback\", then Enter.",
+   "Pick \"Report a Bug\", \"Feature Request\" or \"General Feedback\".",
+   "Type a message in the box \"Describe your feedback\" (placeholder \"Your feedback here\u2026\") and press Enter.",
+   "Check the confirmation that the feedback was sent."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > \"Code: Send Feedback\""
+ },
+ "S10.46": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Export Diagnostics"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Share usage events"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No consent dialog before the server export call was found. The code says diagnostics are redacted on the server. The 'Share usage events' toggle covers usage events, not diagnostics, and its Settings location was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI account in VS Code.",
+   "Press Cmd+Shift+P, type \"Code: Export Diagnostics\", then Enter.",
+   "Watch for a save dialog; the file is written only after you choose a location.",
+   "Compare with Expected: no text before the send says what is included; the only other choice in Settings is the \"Share usage events\" toggle."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > \"Code: Export Diagnostics\""
+ }
+}

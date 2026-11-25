@@ -2,13 +2,13 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-11-17
+Last updated: 2026-11-24
 
 The canonical, tool-neutral operating contract for every coding agent in this
 repository. `CLAUDE.md` is a thin adapter and may not weaken it. Path-scoped
 rules live in `.claude/rules/`; machine-readable ownership lives in
 `docs/agent-context/lanes.json`. This file states rules; every mutable value
-points to the thing that enforces it.
+points to its enforcer. How to work: `docs/standards/working-method.md`.
 
 ## 1. Verification
 
@@ -85,10 +85,10 @@ Enforced by: `check:model-id-literals`, `check:model-catalog`, `sync:models:chec
 
 Polyglot monorepo: pnpm workspaces (`apps/*`, `packages/*/*`,
 `packages/ai/providers/*`, `services/*`, `infrastructure/*`) under Turborepo,
-plus a Cargo workspace (`apps/desktop/src-tauri`, `apps/cli`, `crates/*`). Seven
-application implementations map to six product surfaces because Electron is
-the public Desktop and Tauri is retained internal code. All share one contract
-layer; see `ARCHITECTURE.md`.
+plus a Cargo workspace (`apps/desktop/src-tauri`, `apps/desktop/gpui`,
+`apps/cli`, `crates/*`). Six product surfaces: `apps/desktop` holds Electron
+(the public Desktop), retained internal Tauri code and the `gpui` replacement
+in progress. All share one contract layer; see `ARCHITECTURE.md`.
 
 What you cannot infer from one file:
 
@@ -107,7 +107,7 @@ What you cannot infer from one file:
   renamed it; do not restore `middleware.ts`. `next dev` writes
   `apps/web/AGENTS.md` and `apps/web/CLAUDE.md`; commit them rather than
   reverting a diff that only regenerates.
-- **`packages/ui/unified-chat` is shared by desktop, web, Chrome, and VS Code**,
+- **`packages/ui/unified-chat` is shared by desktop, web, mobile, Chrome, and VS Code**,
   so nothing in it may assume one surface's routing, billing, or account model.
 - **iOS project output is generated** by prebuild and gitignored. Native changes
   go through config plugins, never hand-edits to generated output.
@@ -128,7 +128,7 @@ egress funnels through `apps/desktop/src/lib/egressGuard.ts`; Rust transports
 use the host-owned egress policy.
 
 Enforced by: `check:trust-boundaries`, `check:rust-egress-boundary`, `check:db-isolation`,
-`check:rls-boundary`, `check:secrets`, and a per-surface `trust-boundary.test.ts`.
+`check:rls-boundary`, `check:secrets`, and `trust-boundary.test.ts` in four apps.
 
 ## 7. Models, routing, and cost
 
@@ -209,6 +209,7 @@ contradictory copies. Git carries history; the live tree does not.
 | Machine-readable agent context  | `docs/agent-context/`                 |
 | Temporary operational work      | `docs/work/`                          |
 | Audits, gaps, open product work | `audit/` only; read `audit/README.md` |
+| Product and feature reference   | `knowledge-base/`; read its README    |
 | Released user-facing change     | `CHANGELOG.md`                        |
 | Historical detail               | Git                                   |
 

@@ -1,0 +1,347 @@
+{
+ "S110.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "none",
+  "note": "The rich document editor opens only when the document round-trips as Markdown (ArtifactDocumentEditor.tsx:53-60); I did not find a visible save-as-new-version label, so the version step is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant in chat to write a document, for example a short memo.",
+   "Click the document card under the reply so it opens in the artifact panel.",
+   "Click into the document text and change a sentence.",
+   "Open the artifact's menu and click Restore only if you need to compare versions; otherwise look for the edited text remaining after you close and reopen the panel, and check that a new version was recorded."
+  ],
+  "where": "Chat > open a document artifact from a reply (it opens in the artifact panel) > edit the text in the panel"
+ },
+ "S110.02": {
+  "labels": [],
+  "needs": "a file to upload",
+  "note": "Searched apps/web/features/chat and apps/web/lib for a document-to-presentation control and found none; presentation artifacts exist (ArtifactPreview.tsx, title fallback 'Presentation') but no convert button. Production uploads also need UPLOAD_SCAN_WEBHOOK_URL (apps/web/lib/security/upload-scan.ts:264-282).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as Word (.docx)"
+   }
+  ],
+  "needs": "a file to upload (an .xlsx); the sandbox path must be switched on by the owner (AGI_E2B_EXECUTION)",
+  "note": "Code audit says the chart path needs the E2B switch-on and the upload scanner; the attach control's visible word was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Attach a spreadsheet (.xlsx) to a new chat message using the attach control in the composer.",
+   "Ask for an analysis with a chart, and a Word report that contains the chart.",
+   "When the report appears, open it in the artifact panel.",
+   "Open the artifact menu and click Download as Word (.docx); open the file and check that the chart is inside the report."
+  ],
+  "where": "Chat > attach an .xlsx file > ask for a chart inside a Word report > open the result in the artifact panel and choose Download as Word (.docx)"
+ },
+ "S110.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/visual-intent.ts",
+    "text": "interactive page"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   }
+  ],
+  "needs": "none",
+  "note": "The conversion is triggered by request wording (visual-intent.ts keywords); I found no dedicated one-step button.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a research report on a topic and wait for it to finish.",
+   "In the next message, ask for the report as an interactive page with charts and navigation.",
+   "Open the page in the artifact panel and check that it has charts, navigation and controls.",
+   "Open the artifact's menu and click Publish; check that a link is produced."
+  ],
+  "where": "Chat > ask for a research report > ask for an interactive page from it > open the page in the artifact panel > Publish"
+ },
+ "S110.07": {
+  "labels": [
+   {
+    "file": "apps/web/lib/voice/live-voice-tools.ts",
+    "text": "Starting a task"
+   },
+   {
+    "file": "apps/web/features/chat/components/ChatsAndTasksList.tsx",
+    "text": "Tasks"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The voice-mode entry control's visible words were not confirmed in VoiceModeSurface.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode from the chat.",
+   "Say a task that needs a longer piece of work, for example a research summary.",
+   "Wait for the voice assistant to confirm it is starting a task.",
+   "Open Tasks in the sidebar and check that the task is listed and running in the background without you retyping it."
+  ],
+  "where": "Chat > voice mode > say a longer task out loud > Tasks in the sidebar"
+ },
+ "S110.08": {
+  "labels": [],
+  "needs": "a microphone",
+  "note": "Tool definition is in apps/web/lib/voice/live-voice-tools.ts:135; the voice entry control's visible words were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode from the chat.",
+   "Say a request for a document, for example a Word file about a topic.",
+   "Wait until the document card appears in the voice session.",
+   "Open the document card and check that it opens as an artifact and can be downloaded."
+  ],
+  "where": "Chat > voice mode > ask for a document out loud > open the document from the voice session"
+ },
+ "S110.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Gmail"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Triggers for "
+   }
+  ],
+  "needs": "an outside account (Google) with Gmail connected in Connectors",
+  "note": "Forwarded-email and address-based thread selection were not found in the code; the 'Schedules' entry word was not confirmed in the sidebar.",
+  "reachable": "yes",
+  "steps": [
+   "Open the scheduled task page and open an existing scheduled task (or create one).",
+   "Find the trigger panel for the task and choose Gmail as the trigger type.",
+   "Read the note that says it runs for each new email and uses the Gmail address connected in Connectors.",
+   "Send a test email to the connected address and check that a tracked task run appears."
+  ],
+  "where": "Schedules > open a scheduled task > Triggers for <task name> > Gmail"
+ },
+ "S110.11": {
+  "labels": [],
+  "needs": "a Slack workspace; the owner must switch the sandbox on (AGI_E2B_EXECUTION) before the coding session can run",
+  "note": "Slack settings exist in apps/web/features/settings/sections/SlackSection.tsx, but I found no visible path from a team mention to a coding session in /code; the feature depends on an owner switch-on.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Save as skill"
+   },
+   {
+    "file": "apps/web/features/chat/components/PluginDraftCard.tsx",
+    "text": "Save as a skill"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Skills"
+   }
+  ],
+  "needs": "none",
+  "note": "The Skills entry is in the shared settings navigation; the parent group heading was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Finish a task in chat (for example a repeated process with clear steps).",
+   "Under the final reply, click Save as skill (or on a draft card, click Save as a skill).",
+   "Open Settings and choose Skills.",
+   "Find the new skill in the list and invoke it in a new chat to check that it runs."
+  ],
+  "where": "Chat > finish a task > under the reply click Save as skill, or on a plugin draft card click Save as a skill > Settings > Skills"
+ },
+ "S110.18": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Chat history"
+   }
+  ],
+  "needs": "a phone with the AGI mobile app signed in to the same account",
+  "note": "I checked the web sync route (apps/web/app/api/chat/sync/route.ts) and the sidebar item, not the phone app code.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On web or desktop, start a new chat and get one reply.",
+   "Open the AGI phone app with the same account and find the same chat in Chat history, with its full history.",
+   "On the phone, send a follow-up message.",
+   "Back on web, reload the chat and check that the phone's follow-up and its reply appear."
+  ],
+  "where": "Visible on the phone app's chat list and in the same chat on web; the phone side is outside this folder"
+ },
+ "S110.19": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Allow running commands"
+   }
+  ],
+  "needs": "the AGI command-line tool installed and a folder used in both places",
+  "note": "The terminal command name was not confirmed; the session list is in apps/web/features/code/components/LocalSessionsSection.tsx and its visible heading was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Start a coding session in a folder from the terminal with the AGI command-line tool.",
+   "Open the desktop app and click Code in the sidebar.",
+   "Choose the same folder; if asked, click Allow running commands.",
+   "Open the session listed for that folder and send a follow-up; check that it continues the terminal session."
+  ],
+  "where": "Code > choose the folder the CLI session used > open the CLI session from the list"
+ },
+ "S110.20": {
+  "labels": [],
+  "needs": "VS Code installed; a folder with a desktop-app coding session",
+  "note": "Searched LocalSessionsSection.tsx, apps/cli and apps/desktop/electron for a visible VS Code or open-in-IDE control and found none by visible text.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Remote Control"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Linked devices"
+   }
+  ],
+  "needs": "a paired computer and a phone with the AGI app signed in to the same account",
+  "note": "I did not check whether a flag hides Remote Control in this build.",
+  "reachable": "yes",
+  "steps": [
+   "On the computer, open Settings and choose Capabilities, then Remote Control, and pair the phone if it is not paired.",
+   "On the phone, send a new request to the paired computer.",
+   "On the computer, approve the request if an approval appears, and let the run finish.",
+   "On the phone, check that the result appears in the chat."
+  ],
+  "where": "Settings > Capabilities > Remote Control (pairing a phone); Linked devices lists paired computers"
+ },
+ "S110.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Project"
+   }
+  ],
+  "needs": "a project with sources and instructions",
+  "note": "The picker's visible words were not confirmed; the label above is the picker's project label in the code.",
+  "reachable": "yes",
+  "steps": [
+   "In a new chat, open the project picker in the composer.",
+   "Choose the project that holds the notebook's instructions and sources.",
+   "Ask a question that the project's sources cover.",
+   "Check that the answer uses the project's sources and instructions."
+  ],
+  "where": "Chat > composer > Project picker > choose a project > ask a question in that chat"
+ },
+ "S110.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Save to project"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSourcesPanel.tsx",
+    "text": "Project sources"
+   }
+  ],
+  "needs": "a project to save into",
+  "note": "The answer menu's trigger word was not confirmed; the save label is in MessageBubble.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with an answer you want to keep.",
+   "On the answer, open its menu and click Save to project.",
+   "Pick the project name in the list.",
+   "Open the project and check Project sources; then start a chat in that project and ask about the saved answer."
+  ],
+  "where": "Chat > an answer's menu > Save to project > choose the project; then open the project and check Project sources"
+ },
+ "S110.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "text": "Buy credits"
+   },
+   {
+    "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "text": "Switch to "
+   },
+   {
+    "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+    "text": "Try later"
+   }
+  ],
+  "needs": "an account whose usage is used up (for example a Free account)",
+  "note": "The labels are built from code templates, and the usage-block switch is in apps/web/features/chat/pages/WebChatPage.tsx; how to reach the limit was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Send messages until a usage limit blocks a send.",
+   "Read the card under the composer and check which options it offers.",
+   "Click Switch to <model name> if it is offered (or Buy credits or Upgrade to).",
+   "Check that the chat continues and the reply comes from the new model."
+  ],
+  "where": "Chat > send a message after usage is used up > the paywall card under the composer > Switch to <model name>, Buy credits or Upgrade to <plan>"
+ },
+ "S110.28": {
+  "labels": [],
+  "needs": "a published artifact on the account",
+  "note": "PublishedArtifactsSection.tsx has a Published artifacts heading and a live-again message, but no settings nav entry for it was found in packages/ui/ui/src/settings-nav.ts or apps/web/features/settings/components/web-settings-navigation.ts; the republish control is Publish in ArtifactPreview.tsx.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S110.29": {
+  "labels": [
+   {
+    "file": "apps/web/app/shared-artifact/[token]/PublishedArtifactView.tsx",
+    "text": "Save a copy to my chats"
+   }
+  ],
+  "needs": "a second account and a shared link from the first account",
+  "note": "The label is a fallback string in a translation call; the shared-conversation path (apps/web/app/chat/from-share/[token]/page.tsx) was not walked through.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a second account (not the owner).",
+   "Open a public or shared artifact link created by the first account.",
+   "Click Save a copy to my chats.",
+   "Open My chats and check that the copy opens with the same content and can be continued."
+  ],
+  "where": "Open a shared artifact link from another account > Save a copy to my chats"
+ },
+ "S110.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/OrganizationSharingSection.tsx",
+    "text": "Share project with organization"
+   },
+   {
+    "file": "apps/web/features/settings/sections/OrganizationSharingSection.tsx",
+    "text": "Shared with your organization"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Workspace"
+   }
+  ],
+  "needs": "a workspace with a second member in the same workspace; sharing rights depend on the member's role",
+  "note": "The link from Settings to /workspace/sharing was not confirmed; the sharing section is mounted by apps/web/app/workspace/sharing/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Workspace.",
+   "Find the sharing section and click Share project with organization on one of your projects, with an access level if asked.",
+   "Sign in as a second member of the same workspace and find the shared item under Shared with your organization.",
+   "Open it and check that it opens with the access level you chose."
+  ],
+  "where": "Settings > Workspace > Share project with organization (sharing page at /workspace/sharing)"
+ }
+}

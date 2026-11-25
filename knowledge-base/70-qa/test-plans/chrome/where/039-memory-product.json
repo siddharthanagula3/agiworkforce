@@ -1,0 +1,316 @@
+{
+ "S39.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AGI has not saved anything about you yet."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Signed-out users see \"Sign in to see your memory.\" instead of the list.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI Chrome side panel with an account.",
+   "Click the More button (\u22ee) at the top right of the side panel.",
+   "Click Memory in the menu.",
+   "Look for the sheet titled Memory listing every saved memory. With none saved, it shows \"AGI has not saved anything about you yet.\""
+  ],
+  "where": "More (\u22ee) > Memory"
+ },
+ "S39.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add something for AGI to remember"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory saved."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The field is limited to the maximum memory length in the shared types.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (\u22ee) and then Memory.",
+   "Click the field \"Add something for AGI to remember\" and type a fact, for example \"I prefer short answers\".",
+   "Click Add.",
+   "Look for the status \"Memory saved.\" and the new item in the list. Then open a new chat and ask something the fact should affect."
+  ],
+  "where": "More (\u22ee) > Memory > Add something for AGI to remember"
+ },
+ "S39.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory did not answer, so nothing was changed."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The confirmation words come from the server, not from the extension text, so the exact success wording is not in the code; the failure text is shown in the same notice.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in the side panel.",
+   "Type \"Remember that I prefer short answers\" in the message box and send it.",
+   "Look for the notice above the message box. It shows the reply from memory.",
+   "Click More (\u22ee) > Memory and check the fact is in the list."
+  ],
+  "where": "Chat composer > type \"Remember that ...\" and send"
+ },
+ "S39.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Save memories from chats"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The toggle lives on the web, not in the side panel; how soon an automatic save appears is server-driven and not fixed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (\u22ee) > Settings. The web settings open in a browser tab.",
+   "Click Personalization in the settings menu.",
+   "Find the toggle \"Save memories from chats\" and check it is on. Persistent memory must also be on.",
+   "Chat normally about a lasting detail without saying \"remember\", wait, then click More (\u22ee) > Memory in the side panel and check whether a new item appeared."
+  ],
+  "where": "Settings (web) > Personalization > Save memories from chats"
+ },
+ "S39.13": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Edit"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Save"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory updated."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click More (\u22ee) > Memory.",
+   "Click Edit beside a saved memory, change its text in the box, then click Save.",
+   "Look for the status \"Memory updated.\" and the new text in the row.",
+   "Open a new chat and ask something the corrected text should answer."
+  ],
+  "where": "More (\u22ee) > Memory > Edit"
+ },
+ "S39.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete this memory? AGI stops using it in every app, and it cannot be recovered."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory deleted."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click More (\u22ee) > Memory.",
+   "Click Delete beside a saved memory.",
+   "Read the question \"Delete this memory? AGI stops using it in every app, and it cannot be recovered.\" and click the Delete button in it.",
+   "Look for \"Memory deleted.\" and the row gone from the list. Then ask a chat something only that memory answered."
+  ],
+  "where": "More (\u22ee) > Memory > Delete > Delete"
+ },
+ "S39.17": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "From a chat: $TITLE$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Saved in Chrome"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The code shows no line for typed-on-web or imported memories, and there is no separate imported label in the side panel. Expected lists three sources; the side panel shows only chat and Chrome.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (\u22ee) > Memory.",
+   "Read the small line under each memory.",
+   "A memory saved from a chat shows \"From a chat: <chat title>\"; one saved in Chrome shows \"Saved in Chrome\".",
+   "Compare with a memory you added on the web, which shows no source line here."
+  ],
+  "where": "More (\u22ee) > Memory"
+ },
+ "S39.18": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The side panel memory sheet does not show a date. The client maps updatedAt at apps/extension/src/features/cloud-bridge/memoryClient.ts line 69, but apps/extension/src/features/side-panel/memorySheet.ts never displays it. Searched apps/extension/src/features/side-panel/memorySheet.ts and apps/web/features/settings (MemorySection, MemoryExclusions, MemoryConflicts) for updatedAt, Updated and last-updated text; none rendered.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S39.19": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The override is applied on the server; the extension has no control for it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click More (\u22ee) > Memory and add \"My favourite colour is blue\".",
+   "Open a chat and say \"Actually my favourite colour is green\".",
+   "Open a new chat and ask \"What is my favourite colour?\".",
+   "Look for the answer green, not blue, with no manual edit in the Memory list."
+  ],
+  "where": "Effect is seen in a later chat after a newer fact is stated; the check is in More (\u22ee) > Memory"
+ },
+ "S39.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/MemoryConflicts.tsx",
+    "text": "Pinned wins, then ones you added, then the newest. Replaced memories stay here."
+   },
+   {
+    "file": "apps/web/features/settings/components/MemoryConflicts.tsx",
+    "text": "Use the replaced one instead"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The area appears only when the server has replaced a memory; whether two added facts trigger it depends on the server.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (\u22ee) > Memory and add two facts that disagree, for example \"I live in Boston\" and then \"I live in Denver\".",
+   "Click More (\u22ee) > Settings, then Personalization in the web settings.",
+   "Scroll to the replaced memories area and read \"Pinned wins, then ones you added, then the newest. Replaced memories stay here.\"",
+   "Click \"Use the replaced one instead\" to settle the conflict, then check the chosen fact in a new chat."
+  ],
+  "where": "Settings (web) > Personalization > Replaced memories"
+ },
+ "S39.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Stays in that workspace. Work and personal memories never mix."
+   },
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Workspace"
+   }
+  ],
+  "needs": "a workspace account and a personal account",
+  "note": "The side panel memory sheet shows no workspace label, so the separation is checked by comparison only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a workspace account.",
+   "Click More (\u22ee) > Settings, then Personalization.",
+   "Read the scope descriptions \"Stays in that workspace. Work and personal memories never mix.\" under Workspace.",
+   "Click More (\u22ee) > Memory in the side panel and check whether any workspace memory appears alongside personal ones."
+  ],
+  "where": "Settings (web) > Personalization > Memory scope text: Account, Workspace, Project"
+ },
+ "S39.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Include sensitive topics in memory"
+   },
+   {
+    "file": "apps/web/features/settings/components/MemoryExclusions.tsx",
+    "text": "e.g. my home address"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Automatic refusal of credentials has no visible control; the field and toggle are the only user controls.",
+  "reachable": "yes",
+  "steps": [
+   "Click More (\u22ee) > Settings, then Personalization.",
+   "Click the field with the placeholder \"e.g. my home address\" and type a term, then press Enter.",
+   "Turn the toggle \"Include sensitive topics in memory\" off.",
+   "In a chat, type \"Remember that my home address is 12 Oak St\", then check More (\u22ee) > Memory and confirm nothing about it was saved."
+  ],
+  "where": "Settings (web) > Personalization > Term to never remember; Include sensitive topics in memory"
+ },
+ "S39.31": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory"
+   }
+  ],
+  "needs": "a signed-in account and two models",
+  "note": "The model menu label is not a fixed string in the side panel code, so the tester has to find it on screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click More (\u22ee) > Memory and add \"My name is Sam\".",
+   "Open a chat, choose one model from the model menu, and ask \"What is my name?\".",
+   "Choose a different model in the same menu and ask again.",
+   "Look for \"Sam\" in both answers."
+  ],
+  "where": "Effect is seen in chat when the model is changed; the saved memory is in More (\u22ee) > Memory"
+ },
+ "S39.32": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Memory settings on the web"
+   }
+  ],
+  "needs": "a second client signed in to the same account (web or phone)",
+  "note": "Cross-client sync is server-side; the side panel does not show the other clients.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In the side panel, click More (\u22ee) > Memory and add \"I work in tax law\" with Add.",
+   "Open the web app with the same account, click Settings then Personalization, and look for the memory.",
+   "Or use the web link \"Memory settings on the web\" from the Memory sheet to confirm it is listed.",
+   "Open a chat on the other client and check the fact is used."
+  ],
+  "where": "Effect is seen on another signed-in client; the save is in More (\u22ee) > Memory"
+ }
+}

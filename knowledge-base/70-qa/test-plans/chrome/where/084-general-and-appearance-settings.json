@@ -1,0 +1,151 @@
+{
+ "S84.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Options"
+   },
+   {
+    "file": "apps/extension/src/features/options/appearance-section.ts",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none",
+  "note": "The Expected line matches the code. The side panel's More item is labelled Extension settings but opens the permissions destination, so the tester must click Options in the left navigation to reach Theme. The Theme label and status text are hard-coded in appearance-section.ts, not in messages.json.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel and click the \u22ee button in its header (named More).",
+   "Click Extension settings. The options page opens.",
+   "In the left navigation click Options, then scroll to the Appearance section.",
+   "Open the Theme drop-down and choose Dark. Check that the options page and the side panel turn dark and the status line reads Always dark.",
+   "Choose Light, then System. Check the colours follow the choice, then close and reopen the options page and check the choice is still selected."
+  ],
+  "where": "More (\u22ee) > Extension settings, then the Options item in the left navigation > Appearance > Theme (System, Light, Dark)"
+ },
+ "S84.07": {
+  "labels": [],
+  "needs": "a Mac with the Reduce motion setting available",
+  "note": "The repository has no in-app reduce-motion control. The rule is a CSS media query in apps/extension/src/side_panel.ts and apps/extension/src/options.ts, and the Expected line's in-app option is not present. The Mac settings path is not confirmed in the repo.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on Reduce motion in the operating system's display accessibility settings.",
+   "Open the AGI side panel and send a message so that the typing dots or a spinner appears.",
+   "Look at the loading dots and spinners: they should stop or hold still instead of looping, while the reply still appears."
+  ],
+  "where": "No control in AGI. It follows the operating system Reduce motion setting (on a Mac: System Settings > Accessibility > Display > Reduce motion, from general macOS knowledge, not from the repo). Effect seen in the side panel: loading dots and spinners"
+ },
+ "S84.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "a Free account or a paid account (the model list depends on the plan)",
+  "note": "The code stores the choice in local storage and uses it for new chats (applyModelSelection and clearStoredMessages in apps/extension/src/side_panel.ts). The cited line numbers 6055 and 6168 no longer hold this code, so the path was found by search and the model button's visible words were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel and click the model button in the composer.",
+   "Pick a model other than Auto from the list.",
+   "Click New chat in the side panel header.",
+   "Look at the composer model button: it should show the model you picked, not Auto."
+  ],
+  "where": "Side panel > model button in the composer (shows the model name) > choose a model, then New chat (button named New chat in the header)"
+ },
+ "S84.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Effort"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Default"
+   }
+  ],
+  "needs": "a model that offers effort levels (Auto does not; some levels need a higher plan)",
+  "note": "The level names (Direct, Brief, Quick, and others) come from packages/contracts/types/src/design-system/effort.ts. The Default badge marks the model's built-in effort, not the user's choice. Choosing Auto clears the effort.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel and click the model button in the composer. Pick a model other than Auto.",
+   "In the menu, under the Effort heading, click one level, for example Quick.",
+   "Close the menu and click New chat in the side panel header.",
+   "Open the model menu again and check that the Effort level you chose is still selected."
+  ],
+  "where": "Side panel > model button in the composer > Effort section (heading Effort) > choose a level such as Quick, then New chat"
+ },
+ "S84.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Ask first"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How should AGI act in your browser?"
+   }
+  ],
+  "needs": "none",
+  "note": "Ask vs auto is stored as a permission mode (ASK_BEFORE_ACTING_KEY) and is not reset by New chat in the code read. The chat vs AGI Work switch is in the model menu as AGI Work, but New chat always resets it to chat (side_panel.ts), so new conversations never start in AGI Work. Where the chip sits in the composer was not visually confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel and click the permission chip in the composer.",
+   "Choose Ask first, then close the menu.",
+   "Click New chat in the side panel header.",
+   "Open the permission chip again and check that Ask first is still selected."
+  ],
+  "where": "Side panel > composer permission chip > choose Ask first or Auto or Full access under the heading How should AGI act in your browser?"
+ },
+ "S84.15": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Keyboard shortcuts"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Configure"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open side panel"
+   }
+  ],
+  "needs": "none",
+  "note": "AGI only lists the shortcuts and links to Chrome's chrome://extensions/shortcuts page, where rebinding happens. The code shows no control to disable a shortcut inside AGI, so the disable part of Expected is unconfirmed. The cited lines 1724 and 1778 in options.ts no longer hold this code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel, click the \u22ee button (More), then click Extension settings.",
+   "In the left navigation click Options and scroll to Keyboard shortcuts.",
+   "Look at the list: Open side panel and Send page screenshot to Desktop, with their keys.",
+   "Click Configure. Chrome's shortcut page opens. Change one key, return to the options page and check the row shows the new key."
+  ],
+  "where": "More (\u22ee) > Extension settings, then Options in the left navigation > Keyboard shortcuts > Configure (opens Chrome's shortcut page)"
+ },
+ "S84.22": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Page assistant overlay"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Options"
+   }
+  ],
+  "needs": "a site already approved for AGI",
+  "note": "The toggle is the only setting found for the companion overlay; no separate shortcut or window-position setting was found in the options. The overlay launcher is in apps/extension/src/features/content/in-page-panel/launcher.ts. The cited side_panel.ts lines 7386 and 7392 no longer hold this code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel, click the \u22ee button (More), then click Extension settings.",
+   "In the left navigation click Options and find the row Page assistant overlay.",
+   "Read the hint: One prompt and response at a time. Turn the toggle off, read the status Page assistant disabled., then turn it on and read Page assistant enabled. It now shows on your approved sites.",
+   "Open a site you have approved for AGI and check whether the compact assistant appears (or disappears when off)."
+  ],
+  "where": "More (\u22ee) > Extension settings, then Options in the left navigation > Page assistant overlay (toggle)"
+ }
+}

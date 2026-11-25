@@ -1,0 +1,477 @@
+{
+ "S10.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "agi projects create <name>"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Command line only; no dialog found.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi projects create \"QA Test Project\" in a terminal.",
+   "Read the output: it should say the project was created in your account, with an id.",
+   "Run agi projects list and check the new project is listed.",
+   "Compare with Expected: there is a command that creates the project in the account. There is no dialog; the name is typed on the command line."
+  ],
+  "where": "Terminal: agi projects create <name>"
+ },
+ "S10.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "/rename <id> <new title>"
+   }
+  ],
+  "needs": "a saved conversation",
+  "note": "There is no edit field or prompt; the id and the new title are typed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that has some messages, then type /history to find its id.",
+   "Type /rename <id> Test renamed (use the real id and your own test title).",
+   "Read the reply: it should say the session was renamed to the new title.",
+   "Type /history again and check the new title is shown. Compare with Expected: an edit field is not used; the id and new title are typed."
+  ],
+  "where": "Chat prompt: /rename <id> <new title>"
+ },
+ "S10.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Branched conversation"
+   }
+  ],
+  "needs": "a conversation with messages and session saving turned on",
+  "note": "Only conversations are duplicated; no project duplicate command was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that already has messages.",
+   "Type /branch My copy test.",
+   "Read the reply: it should say the conversation was branched as a new managed session, with its id and a resume command.",
+   "Run the resume command shown and check the copy has the same messages. Compare with Expected: the reply names the copy's id, but does not name a folder or list."
+  ],
+  "where": "Chat prompt: /branch [name] (or /fork)"
+ },
+ "S10.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Unarchive with:"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "agi session archive <id>"
+   }
+  ],
+  "needs": "a test session",
+  "note": "Archiving asks for no confirmation and gives an undo command. Projects work the same way with agi projects archive <project> and --undo.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi session list and pick a test session id.",
+   "Run agi session archive <id>. Note that no question is asked.",
+   "Read the reply: it should say the session was archived and show the command to unarchive it.",
+   "Run agi session list --archived and check the session is listed there. Compare with Expected: the archive is not confirmed first, and the reply gives the undo command."
+  ],
+  "where": "Terminal: agi session archive <session id>"
+ },
+ "S10.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Permanently delete session"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Aborted. Session"
+   }
+  ],
+  "needs": "a throwaway test session",
+  "note": "Account conversations are deleted with agi history delete <id>, and projects with agi projects delete <project>; both also ask first.",
+  "reachable": "yes",
+  "steps": [
+   "Use a throwaway test session only. Run agi session list to get its id.",
+   "Run agi session delete <id>.",
+   "Read the question: it should name the session id and say the delete cannot be undone.",
+   "Answer n and check the reply says the session was not deleted. Compare with Expected: the question names the item before anything is removed."
+  ],
+  "where": "Terminal: agi session delete <session id>"
+ },
+ "S10.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Permanently delete session"
+   }
+  ],
+  "needs": "a throwaway test session",
+  "note": "Only one yes/no question is asked; no second confirmation was found.",
+  "reachable": "yes",
+  "steps": [
+   "Use a throwaway test session only. Run agi session delete <id>.",
+   "Read the question: it should say the delete cannot be undone.",
+   "Answer y only if the session is a test one, and check it is removed.",
+   "Compare with Expected: the code asks one yes or no question, not a second explicit confirmation."
+  ],
+  "where": "Terminal: agi session delete <session id>"
+ },
+ "S10.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Publish an artifact to a shareable URL."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Unpublish artifact"
+   }
+  ],
+  "needs": "a signed-in account with a generated artifact",
+  "note": "The audience is chosen with --audience or agi artifacts audience <id> <public|workspace>; the link is printed, not copied.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi artifacts list and pick an artifact id (an HTML, markdown or code artifact).",
+   "Run agi artifacts publish <id> --audience workspace (or leave the default public).",
+   "Read the reply: it should show a share link and who can open it.",
+   "Run agi artifacts published to see the link and audience, then agi artifacts unpublish <id> and answer the question. Check the reply says the link no longer works. Compare with Expected: audience is set with a flag and the link is printed; there is no copy button or dialog."
+  ],
+  "where": "Terminal: agi artifacts publish <id> --audience workspace"
+ },
+ "S10.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Publish an artifact to a shareable URL."
+   }
+  ],
+  "needs": "a signed-in account with a generated page or app",
+  "note": "Other artifact types are refused with a message that the account does not publish them.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi artifacts list and pick an id for a generated page or app (html, react, svg, mermaid, markdown, text or code).",
+   "Run agi artifacts publish <id>.",
+   "Read the reply: it should give a live link and say who can open it.",
+   "Open the link in a browser and check the page shows. Compare with Expected: a link is handed back in the terminal."
+  ],
+  "where": "Terminal: agi artifacts publish <id>"
+ },
+ "S10.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Ways to add context to your next message:"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach an image, PDF or Office file"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/attach remove to drop"
+   }
+  ],
+  "needs": "a test image or PDF file on this computer",
+  "note": "No device file chooser was found; files are attached by typed path, Ctrl+V or paste.",
+  "reachable": "yes",
+  "steps": [
+   "Type /attach and press Enter. Read the menu titled Ways to add context to your next message.",
+   "Type /attach followed by the full path of a test image or PDF, and press Enter.",
+   "Read the chip above the prompt: it should show the file name with /attach remove to drop.",
+   "Compare with Expected: no device file chooser opens; the path is typed or pasted instead."
+  ],
+  "where": "Chat prompt: /attach, then /attach <file>"
+ },
+ "S10.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Authorize a remote MCP server over OAuth and store the token."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Authorized MCP server"
+   }
+  ],
+  "needs": "a remote MCP server that supports OAuth, and an account on that service",
+  "note": "Only OAuth login for remote servers was found; the Connectors page is on the AGI website.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi mcp add <name> --url <address of a remote MCP server>.",
+   "Run agi mcp login <name>. Follow the authorization it starts.",
+   "Read the reply: it should say the server was authorized and the token is stored in the OS credential store.",
+   "Run agi mcp list and check the server is connected. Compare with Expected: the login ends with the service connected."
+  ],
+  "where": "Terminal: agi mcp add <name> --url <server address>, then agi mcp login <name>"
+ },
+ "S10.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/mcp restart reconnects"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "agi mcp login <name> signs in to a remote server"
+   }
+  ],
+  "needs": "a remote MCP server whose login has expired",
+  "note": "No reconnect dialog was found; reconnecting is a command.",
+  "reachable": "yes",
+  "steps": [
+   "After the connection expires, run agi mcp login <name> again.",
+   "Follow the authorization it starts.",
+   "Read the reply: it should say the server was authorized again.",
+   "Run agi mcp list and check the server keeps its settings. Compare with Expected: a reconnect dialog is expected; none was found, only the command."
+  ],
+  "where": "Terminal: agi mcp login <name> (or /mcp restart in chat)"
+ },
+ "S10.20": {
+  "labels": [],
+  "needs": "a service with two or more connected accounts",
+  "note": "Searched apps/cli for default account, primary account, connected account and pick an account; no picker was found. agi connectors lists connectors but no selection was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Install a plugin."
+   }
+  ],
+  "needs": "a test plugin folder or git URL",
+  "note": "Plugins install straight from the command; no preview dialog was found. Marketplace plugins use agi marketplace install.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi plugin install <local folder or git URL of a test plugin>.",
+   "Read the reply: it should say the plugin was installed.",
+   "Run agi plugin list and check the plugin is listed.",
+   "Run agi plugin info <name> to see its publisher and signature. Compare with Expected: there is no preview dialog before install; the info command is the only detail view."
+  ],
+  "where": "Terminal: agi plugin install <local path or git URL>"
+ },
+ "S10.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Update a plugin installed from git to its latest commit."
+   }
+  ],
+  "needs": "a plugin installed from git that has a newer commit",
+  "note": "Only git-installed plugins update; no change summary is shown before applying.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi plugin list and pick a plugin installed from git.",
+   "Run agi plugin update <name>.",
+   "Read the reply for what was applied.",
+   "Compare with Expected: the update applies directly; no dialog shows what changes first."
+  ],
+  "where": "Terminal: agi plugin update <name>"
+ },
+ "S10.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/skills import <path to SKILL.md or its folder>"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Imported the skill to"
+   }
+  ],
+  "needs": "a skill folder with a SKILL.md file",
+  "note": "No import dialog was found; the path is typed.",
+  "reachable": "yes",
+  "steps": [
+   "Prepare a folder that contains a SKILL.md file.",
+   "Type /skills import <path to that folder> and press Enter.",
+   "Read the reply: it should say the skill was imported to a location.",
+   "Type /skills and check the skill is listed. Compare with Expected: the path is typed; no import dialog appears."
+  ],
+  "where": "Chat prompt: /skills import <path to SKILL.md or its folder>"
+ },
+ "S10.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Context is"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/compact summarizes earlier turns"
+   }
+  ],
+  "needs": "a long conversation near the model's context limit",
+  "note": "The warning appears once, at 85 percent, and only suggests /compact.",
+  "reachable": "yes",
+  "steps": [
+   "Keep adding turns to one long conversation until it nears the model's context window.",
+   "Watch the reply after the turn that passes 85 percent.",
+   "Read the system line: it should say the context is full and what to do.",
+   "Type /compact and check the earlier turns are summarized. Compare with Expected: the warning names /compact only; it does not mention trimming or a new chat."
+  ],
+  "where": "Chat, in a long conversation that nears the context limit"
+ },
+ "S10.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Run `agi usage` to see when it resets."
+   }
+  ],
+  "needs": "an account at a usage limit",
+  "note": "The notice only appears when a real limit is reached, so it cannot be triggered on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi usage to see the current limit state.",
+   "When a message is refused for a usage limit, read the notice.",
+   "Check the notice names the limit and when it resets, or says to run agi usage.",
+   "Compare with Expected: the notice shows the reset time and the options. It cannot be forced on demand."
+  ],
+  "where": "Chat: send a message after the account reaches a usage limit"
+ },
+ "S10.37": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Do you trust the contents of this directory?"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Yes, trust this directory"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Open restricted, no shell, network, secrets or MCP auto-start"
+   }
+  ],
+  "needs": "a new folder that has not been trusted",
+  "note": "The folder question appears at launch, not before each read or write; /trust in chat changes it.",
+  "reachable": "yes",
+  "steps": [
+   "Create an empty folder in Terminal, cd into it, and run agi.",
+   "At the question about trusting the directory, read the choices.",
+   "Pick Open restricted to see the restricted mode, or Yes to trust it.",
+   "Ask the assistant to read a file in the folder and check what happens. Compare with Expected: access is asked at launch for the whole folder, not before each read or write."
+  ],
+  "where": "Terminal: run agi in a new folder that is not trusted yet"
+ },
+ "S10.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Allow Session"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Always allow"
+   }
+  ],
+  "needs": "a test folder in a trusted workspace",
+  "note": "The box also offers Allow Session, Deny All and Allow All, which go beyond one call.",
+  "reachable": "yes",
+  "steps": [
+   "In a trusted test folder, ask agi to run ls in this folder.",
+   "Read the approval box: it should show the exact command.",
+   "Choose Yes to run it once, and check only that call ran.",
+   "Compare with Expected: the box offers more than one call answer, such as Allow Session and Always allow; use Always allow only on a test folder."
+  ],
+  "where": "Chat: ask for a tool action, such as running a shell command"
+ },
+ "S10.42": {
+  "labels": [],
+  "needs": "a cloud conversation changed in two places at once",
+  "note": "Only a warning was found in apps/cli/src/cloud/mod.rs ('cloud sync has unresolved conflicts', pointing to /export). No side-by-side chooser or merge dialog was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.43": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Exported the conversation to"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Export to a new file name."
+   }
+  ],
+  "needs": "a conversation with messages and a writable workspace folder",
+  "note": "No export dialog was found; format and path are typed.",
+  "reachable": "yes",
+  "steps": [
+   "Type /export to read the formats: markdown, json, answer.",
+   "Type /export markdown ./export-test.md (a new file name in the workspace).",
+   "Read the reply: it should say the conversation was exported to that path.",
+   "Open the file, then repeat the same command and check the refusal to overwrite. Compare with Expected: formats are typed, not picked in a dialog."
+  ],
+  "where": "Chat prompt: /export markdown <path> or /export json <path>"
+ },
+ "S10.45": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/feedback.rs",
+    "text": "Feedback sent to the AGI Workforce team. Thank you."
+   },
+   {
+    "file": "apps/cli/src/cloud/feedback.rs",
+    "text": "/feedback I would like a dark theme"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The tester sends a real message to the team; use test text only.",
+  "reachable": "yes",
+  "steps": [
+   "Type /feedback I would like a dark theme (test text only, it is sent to the team).",
+   "Read the reply: it should say the feedback was sent to the team.",
+   "Compare with Expected: the message goes to the team's feedback store; the message is typed, not entered in a dialog."
+  ],
+  "where": "Chat prompt: /feedback <message> (or /bug <message>)"
+ },
+ "S10.46": {
+  "labels": [
+   {
+    "file": "apps/cli/src/config.rs",
+    "text": "crash-reports"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Write a redacted diagnostics file to review and attach to a support request."
+   }
+  ],
+  "needs": "none",
+  "note": "No pre-send disclosure dialog was found; consent is the crash-reports setting, default off.",
+  "reachable": "yes",
+  "steps": [
+   "Type /config show and read the crash-reports value (default is off).",
+   "Type /config set crash-reports true and read the reply: it should say the value was saved.",
+   "Run agi doctor --export and open the redacted file it writes to read what is included.",
+   "Set it back with /config set crash-reports false. Compare with Expected: there is no notice before diagnostics leave the device; the setting is the only consent point."
+  ],
+  "where": "Chat prompt: /config show, then /config set crash-reports true"
+ },
+ "S10.47": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Export your account data: request an export, or download the one that is ready."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Your account export is being prepared."
+   }
+  ],
+  "needs": "a signed-in account and time for the export to finish",
+  "note": "No confirmation dialog; the export is requested on the first run.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi export-data. It requests the export.",
+   "Read the reply: it should say the export is being prepared and to run the command again later.",
+   "Run agi export-data again after it is ready and check files are saved to the current folder (or a folder given with --out).",
+   "Compare with Expected: the export is delivered as files saved to a folder, not a browser download."
+  ],
+  "where": "Terminal: agi export-data"
+ }
+}

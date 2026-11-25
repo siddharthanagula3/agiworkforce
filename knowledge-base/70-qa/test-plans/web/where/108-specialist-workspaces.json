@@ -1,0 +1,368 @@
+{
+ "S108.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/finance/components/FinanceDashboard.tsx",
+    "text": "Finances"
+   },
+   {
+    "file": "apps/web/features/finance/components/FinanceDashboard.tsx",
+    "text": "Accounts"
+   }
+  ],
+  "needs": "a signed-in account; a linked bank to see balances (bank stays off per owner)",
+  "note": "The Finances page has no sidebar or menu entry in the code; it is opened by URL or by the See your finances action after a bank link. Plaid is not live, so balances may not appear.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in.",
+   "Type /chat/finance in the browser address bar and press Enter.",
+   "Look for the heading Finances, then the Accounts section.",
+   "Compare the accounts and the total under Spending with the Expected line: accounts, balances and spending in one view."
+  ],
+  "where": "Address bar > /chat/finance, then the heading Finances (no sidebar entry)"
+ },
+ "S108.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/finance/components/FinanceDashboard.tsx",
+    "text": "Connect a bank account"
+   },
+   {
+    "file": "apps/web/features/finance/components/LinkedBanks.tsx",
+    "text": "Linked banks"
+   },
+   {
+    "file": "apps/web/features/finance/components/LinkedBanks.tsx",
+    "text": "Remove bank"
+   }
+  ],
+  "needs": "a signed-in account; a bank login only if Plaid is live (owner says bank stays off)",
+  "note": "Plaid client settings are unfinished per the plan; the bank-accounts connector entry is in apps/web/features/connectors/data/connectors.ts and its visible name was not found, so the full link flow was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open /chat/finance in the address bar.",
+   "Click Connect a bank account (shown when no bank is linked).",
+   "It opens the connections page at /settings/connections.",
+   "If a bank is linked, look for Linked banks with its name and a Remove bank button."
+  ],
+  "where": "Address bar > /chat/finance, then Connect a bank account"
+ },
+ "S108.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/finance/components/FinanceDashboard.tsx",
+    "text": "Last 90 days"
+   }
+  ],
+  "needs": "a signed-in account with a linked bank that has transactions",
+  "note": "Category and month sections are rendered only when the overview status is ready; without a linked bank the page shows a notice instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open /chat/finance in the address bar.",
+   "Click Last 90 days (also Last 30 days and Last 12 months).",
+   "Look at the Spending totals, the Accounts count and the by-month and recent sections.",
+   "Compare with Expected: spending grouped by category and period."
+  ],
+  "where": "Address bar > /chat/finance, then the period button Last 90 days"
+ },
+ "S108.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Chat"
+   }
+  ],
+  "needs": "none (Deep Research may be limited by plan)",
+  "note": "No separate financial research screen was found; it is the chat with Deep Research turned on. The plus button's own visible label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Open the plus menu in the message box.",
+   "Turn on Deep Research.",
+   "Type a financial question (markets, an instrument, or a filing) and send.",
+   "Look for sources or citations in the answer and compare with Expected."
+  ],
+  "where": "Chat > plus button in the message box > Deep Research"
+ },
+ "S108.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Chat"
+   }
+  ],
+  "needs": "none",
+  "note": "No separate company research screen was found; it runs through chat with Deep Research.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Open the plus menu in the message box.",
+   "Turn on Deep Research.",
+   "Type a question about one company (business, financials, news, competitors) and send.",
+   "Look for a profile with sources in the answer and compare with Expected."
+  ],
+  "where": "Chat > plus button in the message box > Deep Research"
+ },
+ "S108.12": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Health"
+   },
+   {
+    "file": "apps/web/features/health/components/HealthSpaceLanding.tsx",
+    "text": "Try again"
+   }
+  ],
+  "needs": "a personal US account with Health enabled; an outside health login for import",
+  "note": "HealthSpaceLanding shows only the status and retry; no record import control was found in it. Owner says Health stays off.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a personal account in a supported region.",
+   "Look for Health in the sidebar and click it.",
+   "Read the Health heading and the status text.",
+   "If Health is unavailable, the page shows the reason text; compare with Expected (import and browse records)."
+  ],
+  "where": "Sidebar > Health (shown only when Health is available for the account)"
+ },
+ "S108.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   }
+  ],
+  "needs": "none",
+  "note": "No dedicated legal research screen was found. Legal sources are listed in apps/web/lib/connectors/directory/sources/vendor-directory.json; their connection flow was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Open the plus menu and turn on Deep Research.",
+   "Type a case-law or statute question and send.",
+   "Look for cited authorities in the answer and compare with Expected."
+  ],
+  "where": "Chat > plus button in the message box > Deep Research"
+ },
+ "S108.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "a contract file to upload",
+  "note": "The skill is an instruction set the assistant loads; no dedicated contract screen was found. The playbook step is not visible in the UI code read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Type / in the message box and find the Skills group.",
+   "Choose review-contract and attach or paste a contract, then send.",
+   "Look for clause extraction, risk flags and suggested redlines; compare with Expected."
+  ],
+  "where": "Chat > type / in the message box > Skills group > review-contract"
+ },
+ "S108.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   }
+  ],
+  "needs": "none",
+  "note": "No dedicated literature search screen was found.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Open the plus menu and turn on Deep Research.",
+   "Type a literature question and send.",
+   "Look for cited papers and a synthesis in the answer; compare with Expected."
+  ],
+  "where": "Chat > plus button in the message box > Deep Research"
+ },
+ "S108.22": {
+  "labels": [
+   {
+    "file": "apps/web/lib/e2b/templates.ts",
+    "text": "Code Interpreter"
+   },
+   {
+    "file": "apps/web/features/notebook/NotebookPanel.tsx",
+    "text": "Run all"
+   }
+  ],
+  "needs": "none",
+  "note": "The /code route is not in the sidebar; the exact control for choosing the template was not confirmed. The environment is not version-pinned in the UI code read.",
+  "reachable": "yes",
+  "steps": [
+   "Open /code in the address bar.",
+   "Start a new session and choose Code Interpreter.",
+   "Click Add cell, type a short Python line, then click Run all.",
+   "Run all again and compare the output with Expected (same result on re-run)."
+  ],
+  "where": "Address bar > /code, then start a new session with Code Interpreter"
+ },
+ "S108.23": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Study"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Start studying"
+   }
+  ],
+  "needs": "none",
+  "note": "No classes or assignments screen was found; Study is topic-based. The CODE line target apps/web/features/study/lib/study-session.ts was not re-read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Study in the sidebar.",
+   "Type a topic in the box, choose the level and mode, then click Start studying.",
+   "Look for guided, one-idea-at-a-time study in the session.",
+   "Compare with Expected: a teacher or learner workspace with classes and assignments."
+  ],
+  "where": "Sidebar > Study"
+ },
+ "S108.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Start studying"
+   }
+  ],
+  "needs": "none",
+  "note": "A study plan request exists in the code; the objectives, activities and materials structure was not confirmed in the UI code read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Study in the sidebar.",
+   "Type a subject and choose a level, then click Start studying.",
+   "Look for a study plan generated for the topic.",
+   "Compare with Expected: objectives, activities and materials."
+  ],
+  "where": "Sidebar > Study, then Start studying"
+ },
+ "S108.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "a CRM connector connected in Settings",
+  "note": "The CRM connection step was not located; updates to contacts were not confirmed in code read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Type / in the message box and find the Skills group.",
+   "Choose pipeline-review (or deal-review) and send a request about your pipeline.",
+   "Compare the answer with Expected: looking up and updating contacts, deals and pipelines."
+  ],
+  "where": "Chat > type / in the message box > Skills group > pipeline-review"
+ },
+ "S108.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "a support ticket text to paste; a support connector for updates",
+  "note": "Ticket updates through a support system were not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Type / in the message box and find the Skills group.",
+   "Choose ticket-triage, paste a ticket, and send.",
+   "Compare the answer with Expected: triage, reply drafting and ticket updates (draft-response and customer-escalation are in the same group)."
+  ],
+  "where": "Chat > type / in the message box > Skills group > ticket-triage"
+ },
+ "S108.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "none",
+  "note": "Job posting publication was not found in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Type / in the message box and find the Skills group.",
+   "Choose recruiting-pipeline or interview-prep and send a request.",
+   "Compare the answer with Expected: job posts, candidate pipeline and interview plans."
+  ],
+  "where": "Chat > type / in the message box > Skills group > recruiting-pipeline"
+ },
+ "S108.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "none; analytics connectors for live data",
+  "note": "Cited vendor-directory lines and skills-lock entries were not all re-read; live analytics connection not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Type / in the message box and find the Skills group.",
+   "Choose marketing-plan (also seo-audit, social, analytics are in .agents/skills) and send a request.",
+   "Compare the answer with Expected: audiences, campaigns, assets and analytics."
+  ],
+  "where": "Chat > type / in the message box > Skills group > marketing-plan"
+ },
+ "S108.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ProductComparisonCard.tsx",
+    "text": "View product"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ProductComparisonCard.tsx",
+    "text": "Price not found"
+   }
+  ],
+  "needs": "none",
+  "note": "No comparison button exists; the card appears when the assistant chooses the comparison tool.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Type a request to compare two or three products by specs and price, and send.",
+   "Look for a product comparison card with specs, prices and merchants.",
+   "Click View product on a row and compare with Expected."
+  ],
+  "where": "Chat: ask the assistant to compare products in the message box"
+ },
+ "S108.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ItineraryCard.tsx",
+    "text": "Walking directions in Google Maps"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ItineraryCard.tsx",
+    "text": "Not found on the map"
+   }
+  ],
+  "needs": "none",
+  "note": "Reservations are not made by the itinerary tool; the code says booking needs a travel or booking connector (apps/web/lib/places/itinerary-tool.ts), not confirmed in UI.",
+  "reachable": "yes",
+  "steps": [
+   "Click Chat in the sidebar.",
+   "Type a trip request (places and a route) and send.",
+   "Look for an itinerary card with stops and a map.",
+   "Open a directions link (for example Walking directions in Google Maps) and compare with Expected."
+  ],
+  "where": "Chat: ask the assistant to plan a trip in the message box"
+ }
+}

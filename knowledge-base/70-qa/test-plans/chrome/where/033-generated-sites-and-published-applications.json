@@ -1,0 +1,98 @@
+{
+ "S33.02": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "No app name or description setting found in apps/extension (searched publish, deploy, published app, site, hosted, visibility, app name).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.04": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "The side panel creates artifacts in chat (for example the locale text \"Creating $TITLE$\"), but no hosting step was found in apps/extension.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.05": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "The side panel shows an artifact's source under the \"Code\" view in apps/extension/src/features/side-panel/artifactPanel.ts, but no workspace or edit control for a site was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.07": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "No preview deployment or shareable preview URL found in apps/extension (searched deploy, preview URL, deployment).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.08": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "No production deployment or separate production URL found in apps/extension.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.10": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "No public URL for a published site found in apps/extension; the locale text \"once this app is published\" is about artifact runtime, not a URL control.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.12": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "No workspace-only access setting for a site found in apps/extension.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.13": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "The only password hits in apps/extension are for sign-in fields, not a site password option.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.19": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "No hosting usage or limit display for published apps found in apps/extension.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.23": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "No rollback control found in apps/extension (searched rollback, roll back, restore version).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.25": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "apps/extension/src/side_panel.ts has forkConversationForHistory for chats, not apps; no app duplicate or fork control found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.26": {
+  "labels": [],
+  "needs": "live-web, as the plan file says",
+  "note": "The nearest control is the artifact \"Download\" button (spAnswerFileDownload, _locales/en/messages.json), which saves one artifact file, not an app's source; no app source download found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

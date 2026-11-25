@@ -1,0 +1,62 @@
+{
+ "S62.09": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   }
+  ],
+  "needs": "a signed-in account with two or more tasks running",
+  "note": "The Tasks sheet lists up to 20 tasks at once, loaded when it opens (no live refresh seen in apps/extension/src/features/side-panel/tasksSheet.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI in the side panel, and start two or more tasks (the cloud tasks AGI runs for you).",
+   "Click the \u22ee button at the top of the side panel.",
+   "Click Tasks.",
+   "Look for several running tasks listed together, each with its state label and time, and compare with Expected (several running tasks or agents in one view)."
+  ],
+  "where": "More (\u22ee) > Tasks"
+ },
+ "S62.10": {
+  "labels": [],
+  "needs": "a signed-in account with one task waiting for input",
+  "note": "No client-side ordering by need for input was found in apps/extension/src/features/side-panel/tasksSheet.ts: the Tasks sheet renders runs in the order the server returns them. The only 'needs your input' wording is in the chat activity line (spActivityNeedsInput in apps/extension/_locales/en/messages.json) and the Chrome notification (notifyTaskInputTitle, 'AGI needs your input'). Searched apps/extension for needs-input, awaiting_input, priorit and sort.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S62.11": {
+  "labels": [],
+  "needs": "a signed-in account with one task waiting for input",
+  "note": "The Tasks sheet row controls are only Open and Stop (apps/extension/src/features/side-panel/tasksSheet.ts); no inline reply or approve control was found there. Approval appears inline only in the chat activity line (spActivityNeedsApproval), outside the overview. Searched apps/extension for unblock, approve and awaiting_input.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S62.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   }
+  ],
+  "needs": "a signed-in account with at least one task",
+  "note": "Open goes to the web chat page (/chat/<id>) rather than showing the transcript inside the extension (apps/extension/src/features/side-panel/tasksSheet.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI in the side panel and have at least one task in your history.",
+   "Click the \u22ee button at the top of the side panel, then click Tasks.",
+   "On a task row, click Open (or open the row named 'Open task: <title>').",
+   "Look at the opened page: it is the web chat for that task, showing its full transcript. Compare with Expected (full transcript drill-down from the overview). Note it opens in a browser tab on the web, not inside the side panel."
+  ],
+  "where": "More (\u22ee) > Tasks > Open"
+ }
+}

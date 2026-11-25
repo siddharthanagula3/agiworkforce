@@ -1,0 +1,20 @@
+{
+ "S87.27": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Access to this site was withdrawn, so the run was stopped."
+   }
+  ],
+  "needs": "An administrator who can deploy Chrome managed policy (MDM or managed policy file) for the extension, plus a Chrome profile enrolled in that policy. Not testable with a normal user account alone.",
+  "note": "The managed key is read from chrome.storage.managed (apps/extension/src/features/site-policy/store.ts:64) and declared in apps/extension/manifest.json:37 via apps/extension/managed-schema.json. The admin policy has no visible screen for the person; the withdrawal message only appears when a run is stopped. The Expected line covers deployment through MDM, which is an IT action outside the app UI, and the Code line names apps/extension/src/background/policy.ts:527 (a page-to-page transfer check) that is inner behaviour, not a visible control. The item's 'Where to find it' field in the plan says 'not written yet'. Searched for the 'AGI site policy' and 'managed' wording across apps/extension/src; no visible admin-policy screen was found.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Have an administrator install the managed policy for the extension, with agi_admin_site_policy set to a blocklist entry for a site (for example https://example.com).",
+   "Sign in to the AGI extension, approve that site for Computer use, and start a Computer use task on it.",
+   "Look for the message that says access was withdrawn and the run was stopped, and check that the blocked site cannot be acted on.",
+   "Remove the managed policy and check that the site works again after a reload."
+  ],
+  "where": "Set by an administrator through Chrome managed policy (managed storage key agi_admin_site_policy, schema title \"AGI site policy\"). No in-app control. Effect can be seen when an administrator blocks a site during a Computer use run: the run stops with a withdrawal message."
+ }
+}

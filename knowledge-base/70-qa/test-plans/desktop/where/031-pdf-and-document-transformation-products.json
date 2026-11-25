@@ -1,0 +1,183 @@
+{
+ "S31.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ArtifactRenderer.tsx",
+    "text": "Export as PDF"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "a text document artifact (create one in chat first, or use an existing one)",
+  "note": "Expected names Word, text and markdown inputs; the code offers PDF only for document artifacts, and the download menu trigger label was not confirmed. The quoted managed-office-file-service code moved and was not found.",
+  "reachable": "yes",
+  "steps": [
+   "From the first screen after sign-in, click Library in the sidebar and open a saved text document (a document-type artifact).",
+   "Open the artifact's download menu in its preview (the menu that holds Download as HTML, Download as Markdown).",
+   "Click Download as PDF. The option appears only for document artifacts that are not Word or PDF files.",
+   "Compare with Expected: a PDF file should download. Also check Export as PDF in the library export menu, which lists PDF when the artifact allows it."
+  ],
+  "where": "Library > open a text document artifact > its download menu > Download as PDF"
+ },
+ "S31.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "No spreadsheet-to-PDF option was found. The PDF options are only for document artifacts and presentations (ArtifactPreview.tsx), and the support page apps/web/content/support/artifacts.md says there is no spreadsheet export on web. Spreadsheet export offers Excel only (ArtifactRenderer.tsx). Searched for the PDF labels and for container-files.ts usage.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S31.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "a presentation artifact (create a slide deck in chat first)",
+  "note": "The audit's partial status refers to the E2B office template build script (apps/web/scripts/build-e2b-office-template.mjs), which is not needed for the deck export path found here. Page-per-slide layout was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "From the first screen after sign-in, click Library in the sidebar and open a saved presentation (slide deck) artifact.",
+   "Open the artifact's download menu in its preview.",
+   "Click Download as PDF. The export runs through the local deck PDF code (presentation/deck-pdf) and shows the toast Preparing the PDF.",
+   "Compare with Expected: the PDF should download with one page per slide. Toast text: PDF downloaded."
+  ],
+  "where": "Library > open a presentation artifact > its download menu > Download as PDF"
+ },
+ "S31.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "File upload"
+   }
+  ],
+  "needs": "a PDF file to upload",
+  "note": "The visible attach button label was not located, so the tester may need to look for the paper-clip or attach icon by eye. The text comes from apps/web/lib/server/pdf-attachment-content.ts.",
+  "reachable": "yes",
+  "steps": [
+   "From the first screen after sign-in, start a new chat.",
+   "Attach a PDF using the attachment control in the message box. The hidden file input is labelled File upload; its visible button label was not found.",
+   "Type a request such as Summarize this PDF, then send the message.",
+   "Compare with Expected: the answer should be a summary of the PDF content. A PDF attachment also opens a preview in the message."
+  ],
+  "where": "New chat > attach a PDF with the attachment control in the message box > type a request for a summary > send"
+ },
+ "S31.05": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Ask about this file"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "a PDF file saved in the Library",
+  "note": "The support page apps/web/content/support/artifacts.md describes this box; the answer logic is in apps/web/lib/server/pdf-attachment-content.ts.",
+  "reachable": "yes",
+  "steps": [
+   "From the first screen after sign-in, click Library in the sidebar and select a PDF file that was saved there.",
+   "In the viewer, click the Ask about this file box at the bottom.",
+   "Type a question about the PDF content and send it. A new chat opens with the file attached and the question written.",
+   "Compare with Expected: the answer should use facts from the PDF."
+  ],
+  "where": "Library > select a PDF file > Ask about this file > type a question > send"
+ },
+ "S31.06": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Ask about this file"
+   }
+  ],
+  "needs": "a multi-page PDF file saved in the Library",
+  "note": "No page picker control was found; page targeting depends on the question text and on the [Page n] markers in apps/web/lib/server/pdf-attachment-content.ts. Very long documents are cut at a text page cap.",
+  "reachable": "yes",
+  "steps": [
+   "From the first screen after sign-in, click Library and select a multi-page PDF.",
+   "In the Ask about this file box, type a question that names a page, for example What does page 3 say?",
+   "Send the question and wait for the new chat to answer.",
+   "Compare with Expected: the answer should match the text of that page. The page content is marked [Page n] in the extracted text."
+  ],
+  "where": "Library > select a PDF file > Ask about this file > type a question naming a page > send"
+ },
+ "S31.07": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Ask about this file"
+   }
+  ],
+  "needs": "a PDF file with selectable text",
+  "note": "No dedicated extract-text button was found. Text comes through chat-attachment-hydration.ts, and a long document may be cut at the text page cap, so the reply can be partial.",
+  "reachable": "yes",
+  "steps": [
+   "From the first screen after sign-in, click Library and select a PDF file.",
+   "In the Ask about this file box, type a request such as Give me the plain text of this PDF, then send it.",
+   "Compare with Expected: the reply should contain the document's text in plain form."
+  ],
+  "where": "Library > select a PDF file > Ask about this file > type a request for the full text > send"
+ },
+ "S31.08": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Ask about this file"
+   }
+  ],
+  "needs": "a scanned image-only PDF file",
+  "note": "There is no OCR button; recognition happens when the model reads the page image, as described at apps/web/lib/server/pdf-attachment-content.ts (scanned page, attached as an image).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click Library, select a scanned PDF (image-only pages), and use the Ask about this file box to ask for its text.",
+   "Compare with Expected: the reply should contain readable text from the scanned pages. A page that is only an image is sent to the model as an image."
+  ],
+  "where": "Shows in the answer when a scanned PDF is asked about (Library > select scanned PDF > Ask about this file)"
+ },
+ "S31.09": {
+  "labels": [],
+  "needs": "a PDF containing a table",
+  "note": "No table-specific control or structured table output was found in the UI. Searched container-files.ts and chat-attachment-hydration.ts for table handling and the UI for table export; the only export options seen are PDF, Word and Excel for artifacts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S31.23": {
+  "labels": [],
+  "needs": "a DocuSign developer app and the DOCUSIGN_* environment variables (owner-only setup, not yet done)",
+  "note": "The docusign entry is in apps/web/lib/connectors/catalog.ts at line 256 (the audit said 248). A connectors area exists in settings (PrivacySection.tsx and ToolApprovalDefaultsPanel.tsx mention Connectors), but the exact menu path to the DocuSign card was not found. Signature sending was not located in the UI.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S31.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   }
+  ],
+  "needs": "a presentation or document artifact",
+  "note": "Office previews for pptx and xlsx come from apps/web/features/chat/lib/office-file-preview.ts. Whether the PDF matches the preview was not checked, and text documents export without a preview first.",
+  "reachable": "yes",
+  "steps": [
+   "From the first screen after sign-in, open a chat that produced a presentation or document artifact and open it in the artifact panel.",
+   "Look at the preview shown before export (presentation slides or document view).",
+   "Open the download menu and click Download as PDF.",
+   "Compare with Expected: the downloaded PDF should match the preview. For documents there is no separate preview step before the file downloads."
+  ],
+  "where": "Chat > open a presentation or Word artifact in the artifact panel > its preview > download menu > Download as PDF"
+ }
+}

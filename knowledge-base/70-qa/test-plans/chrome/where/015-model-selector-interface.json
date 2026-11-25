@@ -1,0 +1,260 @@
+{
+ "S15.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AI Assistant"
+   }
+  ],
+  "needs": "none",
+  "note": "I did not trace how the button labels the model that Auto routes a message to.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and sign in if asked.",
+   "Look at the model button at the right end of the message box bar and read its text.",
+   "Open the model button and pick a model under Recommended or All models ($COUNT$).",
+   "Close the menu and compare the button text with the model you picked: it should show that model's name, the one the next message uses."
+  ],
+  "where": "Side panel > model button at the right end of the message box bar (shows AI Assistant until a model is resolved, then the model name)"
+ },
+ "S15.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All models ($COUNT$)"
+   },
+   {
+    "file": "packages/contracts/types/src/models.json",
+    "text": "Anthropic"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Provider names show only as group headings in All models; the model rows show a logo whose alt text is the raw provider ID, which is not visible.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel with a signed-in account.",
+   "Click the model button and then All models ($COUNT$).",
+   "Read the group headings, which are provider names such as Anthropic or OpenAI.",
+   "Compare: each model should sit under the provider that makes it."
+  ],
+  "where": "Side panel > model button > All models ($COUNT$)"
+ },
+ "S15.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All models ($COUNT$)"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The All models list is grouped by provider, not by family; the family helper in managedModelPicker.ts only feeds the hidden locked-model list, so the grouping in Expected is not what the code shows.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the model button.",
+   "Click All models ($COUNT$).",
+   "Look at the order of the models and the group headings.",
+   "Compare: models of one family (all versions of one model line) should sit side by side."
+  ],
+  "where": "Side panel > model button > All models ($COUNT$)"
+ },
+ "S15.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Signed-out users see the note Sign in for models and no Recommended list.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the model button.",
+   "Look for the Recommended heading and the short list of models under it.",
+   "Click All models ($COUNT$) and check that the Recommended list is replaced by the full list.",
+   "Compare the Recommended list with Expected: a short list highlighted for you."
+  ],
+  "where": "Side panel > model button > Recommended"
+ },
+ "S15.08": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Picks the best model for each message"
+   },
+   {
+    "file": "packages/ai/model-registry/catalog/routing-policies.json",
+    "text": "Auto"
+   }
+  ],
+  "needs": "none",
+  "note": "The Auto row is shown even when signed out, with the Sign in for models note under it.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model button.",
+   "Read the first row, named Auto, with the line Picks the best model for each message.",
+   "Click Auto and close the menu.",
+   "Compare: the button should now show Auto and the next message should be routed automatically."
+  ],
+  "where": "Side panel > model button > Auto (first row)"
+ },
+ "S15.09": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "No separate default-model setting was found; the last model picked is saved and new chats start with it, so compare this with the lasting-default wording in Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model button and pick a model other than Auto.",
+   "Click the New chat icon at the top right of the side panel.",
+   "Read the model button in the new empty chat.",
+   "Compare: the new chat should start with the model you picked. Close and reopen the side panel and check it again."
+  ],
+  "where": "Side panel > model button > pick a model > New chat icon in the side panel header (title New chat)"
+ },
+ "S15.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the model button.",
+   "Click a specific model under Recommended.",
+   "Check that the menu closes and the model button shows that model's name.",
+   "Send a short message and compare: the reply should come from the model you chose, which the app shows on the reply."
+  ],
+  "where": "Side panel > model button > Recommended or All models ($COUNT$) > click a model"
+ },
+ "S15.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Picks the best model for each message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The grey line is joined from the speed word, the model's best-for text or a capability label; models with no such data show a shorter line or none.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the model button.",
+   "Read the grey line under each model name.",
+   "Compare: each model should show a short line on what it is good for, such as its speed word and a best-for description.",
+   "Note any model whose line is empty or shows only a speed word."
+  ],
+  "where": "Side panel > model button > All models ($COUNT$) (or Recommended)"
+ },
+ "S15.16": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Fastest"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Slower"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "A model with no speed data shows no speed word.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the model button.",
+   "Read the speed word at the start of the grey line under each model: Fastest, Fast, Medium speed or Slower.",
+   "Compare: the speed words should show which models are faster or slower.",
+   "Check that the Auto row has no speed word."
+  ],
+  "where": "Side panel > model button > Recommended or All models ($COUNT$)"
+ },
+ "S15.18": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/billing-catalog.ts",
+    "text": "Premium"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All models ($COUNT$)"
+   }
+  ],
+  "needs": "a signed-in account on a lower plan",
+  "note": "Locked rows appear only in All models; the visible text is the plan name, and the full available-on sentence is only in the row's accessible name.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a plan below the top tier.",
+   "Open the model button and click All models ($COUNT$).",
+   "Look for rows with a plan name on the right, such as Premium, and read the plan name.",
+   "Click one locked row and compare: a new tab should open on the pricing page."
+  ],
+  "where": "Side panel > model button > All models ($COUNT$)"
+ },
+ "S15.22": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Effort"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Default"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Some effort rows may be greyed out with a plan name; which models expose Effort was not checked against live data.",
+  "reachable": "yes",
+  "steps": [
+   "Pick a model that has effort options (the Effort heading only appears for those).",
+   "Open the model button and find the Effort heading with its rows (for example Direct, Brief, Quick, Balanced, Deep, Extended, Maximum).",
+   "Click a different effort row and close the menu.",
+   "Compare: the model button should now show that effort word beside the model name, and the Default badge should mark the default row."
+  ],
+  "where": "Side panel > model button > pick a reasoning model > Effort heading"
+ },
+ "S15.29": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "none",
+  "note": "The choice is saved in browser storage on this device; switching to a different account resets it to Auto.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model button and click a model other than Auto.",
+   "Close the side panel completely.",
+   "Reopen the side panel and read the model button.",
+   "Compare: it should show the same model you picked before closing."
+  ],
+  "where": "Side panel > model button > Recommended > pick a model; then close and reopen the side panel"
+ },
+ "S15.30": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "Chats must be saved to appear under Recent chats.",
+  "reachable": "yes",
+  "steps": [
+   "Pick model X in the model button, then send a message in a chat.",
+   "Click the New chat icon, pick model Y, and send a message in the new chat.",
+   "Click the Recent chats clock icon and open the first chat.",
+   "Compare: the model button in the reopened chat should show model X, not model Y."
+  ],
+  "where": "Side panel > Recent chats (clock icon in the header) > open a chat; New chat icon in the header"
+ }
+}

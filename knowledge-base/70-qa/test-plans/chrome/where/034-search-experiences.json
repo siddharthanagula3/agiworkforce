@@ -1,0 +1,180 @@
+{
+ "S34.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Search recent chats"
+   }
+  ],
+  "needs": "a Free or paid account with more than 10 saved chats (the search box is hidden below 10)",
+  "note": "The search box only appears when there are more than 10 chats; the code matches title and message text in filterConversations.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make sure the account has saved chats.",
+   "Click the clock icon in the top header; its label is \"Recent chats\".",
+   "If the account has more than 10 chats, click the search box \"Search recent chats\" and type a word from a chat title.",
+   "Check that only chats with a matching title are listed.",
+   "Clear the box, then type a word that appears only inside a message body (not the title) and check that its chat is listed.",
+   "Click the matching chat and check that it opens."
+  ],
+  "where": "Header clock icon (Recent chats) > Search recent chats"
+ },
+ "S34.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   }
+  ],
+  "needs": "an outside account (Google, Slack or Notion) and a paid or entitled account where connectors are available",
+  "note": "The search itself runs on the server during the chat; the side panel only links to the connectors page. The code at side_panel.ts:8133 has moved, so this path comes from the + menu code near side_panel.ts:14818.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click the + button (its label is \"Add attachment\").",
+   "Click \"Connectors\"; a new tab opens on the web connectors page. If a \"coming soon\" tag shows, the item does nothing.",
+   "On that page, connect Drive, Slack or Notion.",
+   "Return to the side panel, start a new chat and ask a question about content in a connected source.",
+   "Look for an answer that cites the connected source, shown as a \"sources\" line under the answer."
+  ],
+  "where": "Add attachment (+ button) > Connectors"
+ },
+ "S34.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Web search"
+   }
+  ],
+  "needs": "a signed-in account whose routed model supports web search (which plans get it is unknown from the code)",
+  "note": "No web-search toggle was found in the extension; web search is turned on by the routed model's capability (managedChatHandler.ts:781), and the \"Web search\" label is only a model-list filter.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and start a new chat.",
+   "Ask a question that needs current public information, such as today's news.",
+   "Look for an answer that uses web results and shows sources under it (\"N sources\")."
+  ],
+  "where": "An answer in any chat to a question about current events"
+ },
+ "S34.23": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$SITE$ +$COUNT$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ sources"
+   }
+  ],
+  "needs": "a chat answer that has citations (web search or connected sources)",
+  "note": "Previews appear only when the source has a title or snippet; the card is built in sources.ts buildSourceLink.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open an answer that cites sources (a chip shows a site name, such as \"example.com\", or \"site +2\").",
+   "Move the mouse over the chip (or tap it on a phone-width panel).",
+   "Check that a card appears with each source's site, title and, when present, a snippet and date.",
+   "Compare the card with the list under \"N sources\" to confirm the preview lines match."
+  ],
+  "where": "Answer text > source chip (site name with +N) > hover or tap"
+ },
+ "S34.24": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ sources"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sources used for this answer"
+   }
+  ],
+  "needs": "a chat answer that has sources",
+  "note": "The cards in the code are in sources.ts (buildSourceLink and buildCitationChip).",
+  "reachable": "yes",
+  "steps": [
+   "Open an answer that has sources; wait until it finishes streaming, because the footer is hidden while streaming.",
+   "Look for the line \"N sources\" under the answer.",
+   "Click \"N sources\" to open the list, or hover a citation chip to open its card.",
+   "Check that each card or row shows the site, the title and a link."
+  ],
+  "where": "Answer > \"N sources\" (under the answer) > source rows"
+ },
+ "S34.26": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ sources"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Sources used for this answer"
+   }
+  ],
+  "needs": "a chat answer that has sources",
+  "note": "The footer lists the answer's sources; sources consulted during agent steps appear in the step list (bubbles.ts appendActivitySources), which was not checked against \"consulted\" in Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open an answer that has a \"N sources\" line under it.",
+   "Click \"N sources\"; the line is a disclosure and opens the full list.",
+   "Check that the list is labelled \"Sources used for this answer\" and shows each source.",
+   "Click \"N sources\" again and check that the list closes."
+  ],
+  "where": "Answer > \"N sources\" (under the answer)"
+ },
+ "S34.27": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ sources"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$SITE$ +$COUNT$"
+   }
+  ],
+  "needs": "a chat answer that has sources",
+  "note": "Source links open with target _blank in sources.ts; the cited markdown.ts:122 is a sanitizer setting, not a control, and the agent-step source links in bubbles.ts (around line 866) were not checked live.",
+  "reachable": "yes",
+  "steps": [
+   "Open an answer that has sources.",
+   "Click a citation chip, or click \"N sources\" and then a source title.",
+   "Check that a new browser tab opens.",
+   "Compare the new tab's address with the source's site shown on the card."
+  ],
+  "where": "Answer > \"N sources\" > source title, or a citation chip"
+ },
+ "S34.32": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "No matching conversations"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "No saved conversations"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Search recent chats"
+   }
+  ],
+  "needs": "a Free or paid account; the unavailable-source case needs an organisation site policy that cannot be read, which a tester cannot set up",
+  "note": "Empty states for chat history are confirmed; the unavailable-source messages (\"Your organization\u2019s site policy could not be read, so history was not searched.\" in historySearch.ts, and \"Browsing history could not be searched.\" in side_panel.ts) are not checked live and the connector path was not reproduced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with at least one saved chat and click the clock icon labelled \"Recent chats\".",
+   "If the account has more than 10 chats, click \"Search recent chats\" and type text that matches nothing, such as a random word.",
+   "Check that the list shows \"No matching conversations\" instead of an empty area.",
+   "For an account with no saved chats, check that the list shows \"No saved conversations\"."
+  ],
+  "where": "Recent chats (clock icon) > Search recent chats"
+ }
+}

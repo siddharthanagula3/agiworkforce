@@ -1,0 +1,612 @@
+{
+ "page": {
+  "summary": "The cli app is \"agi\", a Rust terminal coding agent (crate agiworkforce-cli, version 0.0.1, proprietary). It runs Local (Ollama, LM Studio), own-key and Managed Cloud modes. Sign-in is a browser device code. Managed Cloud needs Premium or higher; Free and Basic fail closed, while Local and own key need no plan. It also hosts the app-server that VS Code and Desktop use. No signed release is published yet.",
+  "sections": [
+   {
+    "heading": "What it is and who uses it",
+    "markdown": "**What it is.** `agi` is the terminal coding agent of AGI Workforce. It is a Rust program with a full-screen terminal UI (TUI), a plain line mode (REPL), and a non-interactive `agi exec` / `--print` mode for scripts and CI. Its package description says it is a multi-provider agentic CLI. [code] (apps/cli/Cargo.toml:4; apps/cli/README.md:21-28)\n\n**Who uses it.** Developers who work in a repository and want an AI agent in the terminal, including teams that run it in CI/CD. [code] (apps/cli/README.md:21-28). Account features (usage, library, projects, invites) are for signed-in Managed Cloud users only. [code] (apps/cli/README.md:~195-205)\n\n**Role in the product.** The suite doc calls the CLI the \"Developer agent surface and Rust engine proving ground\", scoped to a workspace or session by default. [requirement] (docs/product/suite.md:34). The requirements doc lists it fifth in development order, with local transcripts, resume/branch, approvals, shell tools, MCP/plugins/skills/hooks, subagents and review flows. [requirement] (docs/product/requirements.md:1148-1181)\n\n**Developer domain.** The CLI, Desktop Code and VS Code share one host-owned developer-session runtime. CLI sessions are not merged into Web/Mobile/Desktop Cloud chat without an explicit handoff. [requirement] (docs/architecture/overview.md:49; docs/product/requirements.md:1183). The README repeats this: CLI and VS Code share `~/.agiworkforce/managed_sessions/` and do not join Cloud chat sync. [code-doc] (apps/cli/README.md, Architecture section)\n\n**Commands.** Primary command `agi`; `agiworkforce` is a backward-compatible alias (second binary). [code] (apps/cli/Cargo.toml:15-21)"
+   },
+   {
+    "heading": "How it is built",
+    "markdown": "| Item | Value | Basis and source |\n|---|---|---|\n| Language | Rust, edition 2021 | [code] (apps/cli/Cargo.toml:6) |\n| Crate / version | `agiworkforce-cli` 0.0.1, `publish = false`, license Proprietary | [code] (apps/cli/Cargo.toml:1-9) |\n| Binaries | `agi` (src/main.rs), `agiworkforce` (src/bin/agiworkforce.rs); default-run `agi` | [code] (apps/cli/Cargo.toml:13-21) |\n| Library | `agiworkforce_cli` at src/lib.rs (about 11,000 lines; holds the command dispatch) | [code] (apps/cli/Cargo.toml:23-25; apps/cli/src/lib.rs) |\n| Async runtime | tokio multi-thread runtime built in `run_to_exit_code` | [code] (apps/cli/src/lib.rs:8797-8810) |\n| Command parsing | clap 4 derive; `Command` enum in src/lib.rs and src/cli_options.rs | [code] (Cargo.toml dependencies) |\n| Terminal UI | ratatui 0.30 + crossterm 0.29; line mode uses rustyline | [code] (Cargo.toml dependencies) |\n| HTTP | reqwest; local servers via axum (ws) and tokio-tungstenite | [code] (Cargo.toml dependencies) |\n| Credential storage | `keyring` crate (OS keychain), with an owner-only file fallback | [code] (apps/cli/src/auth.rs:92-120) |\n| Optional features | `voice` (push-to-talk, cpal+hound, off by default), `linux-seccomp` | [code] (Cargo.toml features) |\n| Lint policy | `warnings`, `unsafe_code`, `dead_code`, unused all set to deny | [code] (Cargo.toml `[lints.rust]`) |\n| Sandbox | macOS Seatbelt (`sandbox-exec`), Linux bubblewrap (`bwrap`); none on Windows. There is no in-process fallback; `--no-sandbox` is the only way past a missing backend | [code-doc] (apps/cli/README.md, Runtime requirement section) |\n| MCP | stdio, SSE and Streamable HTTP, optional OAuth | [code-doc] (apps/cli/README.md, Architecture) |\n| Hooks | README says 35 events in `ALL_EVENTS` | [unknown] I did not count them in code (apps/cli/src/features/hooks/hooks.rs) |\n\nThe model list is not in the CLI. `apps/cli/src/model_catalog.rs` compiles the shared generated catalog `packages/contracts/types/src/models.json` into the binary (`include_str!`). Edit `packages/ai/model-registry/catalog/models.curation.json` then run `pnpm sync:models` to change models. [code] (apps/cli/src/model_catalog.rs:1-25). This page names no model IDs for that reason.\n\nPlan credit windows are read at compile time from `packages/contracts/types/src/managed-usage-limits.ts`. [code] (apps/cli/src/plans.rs:14-16)"
+   },
+   {
+    "heading": "Folder map and entry points",
+    "markdown": "**Entry points**\n\n| Entry | What it does | Source |\n|---|---|---|\n| `src/main.rs` | 3 lines; calls `agiworkforce_cli::run_to_exit_code()` | [code] (apps/cli/src/main.rs:1-3) |\n| `src/bin/agiworkforce.rs` | the alias binary, 3 lines | [code] (apps/cli/src/bin/agiworkforce.rs) |\n| `run_to_exit_code` in `src/lib.rs` | builds tokio runtime, runs `run_main`, maps errors to exit codes (130 on Ctrl-C, a dedicated broken-pipe code) | [code] (apps/cli/src/lib.rs:8797-8822) |\n| `Command::Login` branch | calls `auth::interactive_login_for_provider` | [code] (apps/cli/src/lib.rs:7269-7272) |\n| `Command::RemoteControl` branch | starts `remote_control::run` over the developer-session host | [code] (apps/cli/src/lib.rs:6659-6678) |\n\n**Folders under apps/cli**\n\n| Path | Purpose | Basis |\n|---|---|---|\n| `Cargo.toml`, `README.md`, `.env.example` | manifest, docs, env template | [code] |\n| `src/` | about 100 modules; `lib.rs` declares them | [code] (apps/cli/src/lib.rs) |\n| `src/agent/` | agent loop: chat, executor, tools, prompt, history, checkpoints | [code] (directory listing) |\n| `src/tui/` | ratatui app (`tui_app.rs`), widgets, approval broker, markdown renderer, `remote_host.rs` | [code] (directory listing) |\n| `src/repl/` | line mode and slash commands (`slash_commands.rs`, `registry.rs`) | [code] (directory listing) |\n| `src/models/` | provider dispatch, streaming (managed gateway transport), gateway and OpenRouter model lists | [code] (directory listing) |\n| `src/routing/` | classify, fallback chain, profile | [code] (directory listing) |\n| `src/cloud/` | account-only features gated on Managed mode: chat, projects, library, memory, artifacts, shares, devices, code sessions, uploads, image | [code] (apps/cli/src/cloud/mod.rs:4, 212) |\n| `src/app_server/` and `app_server.rs` | the local developer-session server (threads, turns, account, workspace terminal, worktree apply) | [code] (directory listing) |\n| `src/mcp/`, `src/features/hooks`, `src/features/plugins`, `src/skills.rs`, `src/agents.rs`, `src/subagent.rs` | MCP, hooks, plugins, skills, agent definitions, subagents | [code] |\n| `src/safety/`, `src/path_security/`, `src/sandbox.rs`, `src/permissions.rs`, `src/secret_redaction.rs`, `src/sensitive_files.rs`, `src/trust/` | approvals, path checks, sandbox, redaction, workspace trust | [code] |\n| `src/auth.rs`, `src/oauth.rs`, `src/secure_store.rs`, `src/tier_cache.rs`, `src/plans.rs`, `src/device_registry.rs` | sign-in, device grant, key storage, plan cache, plan table, device heartbeat | [code] |\n| `src/remote_control/` | `envelope.rs`, `host.rs`, `mod.rs` | [code] (directory listing) |\n| `src/sessions.rs`, `src/conversations.rs`, `src/session_browser.rs` | persisted sessions, replay, fork | [code] |\n| `src/voice.rs`, `src/browser_bridge.rs`, `src/schedules.rs`, `src/daemon.rs`, `src/update_check.rs`, `src/doctor.rs` | voice (feature-gated), browser bridge, schedules, daemon, update, diagnostics | [code] |\n| `tests/` | integration tests: app-server stdio/websocket/read-only token, broken pipe, JSON events, developer session host, init trust, terminal escape, plugins, hooks | [code] (directory listing) |\n| `scripts/` | `cli-smoke.mjs`, `check-hook-fire-sites.mjs`, `generate-third-party-notices.mjs` (+ test), `demo.sh` | [code] |\n| `assets/` | holds `THIRD_PARTY_NOTICES.txt` (generated) | [code-doc] (README licenses section) |\n| `.agiworkforce/config.toml` | a project config checked into the app folder | [code] (directory listing) |\n\nAbout 4,578 `#[test]`/`#[tokio::test]` markers exist under apps/cli/src. [inferred] from a grep count; not a run result."
+   },
+   {
+    "heading": "Sign-in",
+    "markdown": "**Two kinds of sign-in, both through `agi login`.** [code] (apps/cli/src/auth.rs:1267-1288)\n\n1. **AGI account (device code).** `agi login` with no provider runs `login_agiworkforce`, which calls `oauth::device_code_login`, saves the grant, and sends a device heartbeat. [code] (apps/cli/src/auth.rs:1044-1051). The CLI POSTs `api:POST /api/auth/device/code`, `api:POST /api/auth/device/token` and `api:POST /api/auth/device/refresh` on the web origin; the `surface` it sends must be one the endpoint accepts (`cli`, `vscode` or another listed one). [code] (apps/cli/src/oauth.rs:69-75, 133, 229; apps/cli/src/auth.rs:1016-1018). The user opens the verification page `/auth/device` in a browser and enters a code (example `ZED3-E49H`). [code] (apps/cli/src/oauth.rs:285-291). The browser target is checked against trusted AGI hosts. [code] (apps/cli/src/oauth.rs:309-312 test name)\n2. **Own provider key.** `agi login <provider>` prompts for an API key. The accepted list in the error text: anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, plus brave or tavily for web search. GitHub Copilot sign-in is refused as unavailable. [code] (apps/cli/src/auth.rs:1267-1288, 1060-1090)\n\n**Where credentials live.** One OS-keyring entry per provider under service `com.agiworkforce.cli.auth`, plus a non-secret index. With `AGIWORKFORCE_NO_KEYRING=1` they go in an owner-only file. [code] (apps/cli/src/auth.rs:92-120, 175). The managed token can also come from env `AGIWORKFORCE_JWT`, then the keyring, then a legacy `~/.agiworkforce/auth.toml`. [code] (apps/cli/src/tier_cache.rs:20-22)\n\n**Account identity.** After sign-in the CLI calls `api:GET /api/me` for the plan tier and email, and caches the tier on disk for 5 minutes (`~/.agiworkforce/cache/tier.toml`, 3-second timeout, trusted `*.agiworkforce.com` HTTPS hosts only). [code] (apps/cli/src/app_server/account.rs:264-275; apps/cli/src/tier_cache.rs:1-50, 195-210). `AGI_AUTH_BASE` overrides the device-grant base for a trusted host. [code] (apps/cli/src/app_server/account.rs:287-292)\n\n**Other commands.** `agi logout` signs out of the account; `agi logout --all` also removes every saved provider key after a confirmation; `agi auth-status` reports state. [code] (apps/cli/src/lib.rs:7275-7300). The README says the sign-in system behind the account is shared with the web app (the endpoints are in apps/web). [code] (apps/cli/src/auth.rs:1016)\n\n**Sign-in not needed for Local or own key.** README: \"Local mode and BYOK need no plan.\" Whether a Local session can start with no account at all is not stated in one line of code I opened. [unknown for the no-account case; code-doc] (apps/cli/README.md, Subcommands section)"
+   },
+   {
+    "heading": "Modes: Local, own key, Cloud",
+    "markdown": "The CLI names its three trust boundaries with `PrivacyMode`: `Local`, `Byok`, `Managed`. Their words for people are \"Local\", \"Your key\", \"Managed\". [code] (apps/cli/src/platform/runtime/session.rs:253-290). Arguments accepted include `local|offline|device`, `byok|cloud-byok|provider`, `managed|agi|agi-cloud|cloud`. [code] (session.rs:~285-294)\n\n| Mode | Meaning in code | Who can use it | Source |\n|---|---|---|---|\n| mode:local | \"no prompt, chat, or file context should leave this device\". Providers are Ollama and LM Studio probed on this computer, plus a custom endpoint with no key on a local URL. | Any user, no subscription | [code] (session.rs:~270; apps/cli/src/local_models.rs:69-119; apps/cli/src/config.rs:1835-1855; README: \"Local mode and BYOK need no plan\") |\n| mode:own-key | \"selected context may be sent directly to the user's configured provider key\". Providers: anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu, mistral, openrouter, nvidia, user-defined OpenAI-compatible endpoints from `[providers.<name>]` in config.toml | Any user with a key; never gated by plan tier | [code] (session.rs:~272; apps/cli/src/model_catalog.rs:915-935 comment; apps/cli/README.md custom provider section) |\n| mode:cloud (`Managed`) | \"selected context may be sent through AGI managed cloud\"; requests go to `api:POST /api/llm/v1/chat/completions` with a bearer token, an `Idempotency-Key` header and client-surface headers | Premium (pro) and higher: pro, max, max_15x, team, team_premium, enterprise. Free and Basic fail closed | [code] (apps/cli/src/models/streaming.rs:501-551; apps/cli/src/model_catalog.rs:915-945; packages/contracts/types/src/billing-catalog.ts:341, 359) |\n\n**Free and subscribed users, in one table**\n\n| Plan | Local | Own key | Managed Cloud in the CLI |\n|---|---|---|---|\n| plan:free | yes | yes | no. `can_access_model_for_tier` returns false for Free, Basic and BYOK | \n| plan:basic | yes | yes | no, \"Basic can use the economy roster in Web/Mobile/Desktop chat, but not from the CLI\" |\n| plan:pro (shown as Premium) | yes | yes | yes, economy plus pro-additions models |\n| plan:team | yes | yes | yes, as Premium roster |\n| plan:max, plan:max_15x (shown as Ultra) | yes | yes | yes, all three slots for Max/Ultra |\n| plan:team_premium, plan:enterprise | yes | yes | yes |\n\nSource for the table: [code] (apps/cli/src/model_catalog.rs:915-960; apps/cli/src/tier_cache.rs:206-215, 244-253; apps/cli/src/plans.rs:96-104; billing-catalog.ts:359). The capability is named `developer_surfaces`, labelled \"Cloud in the CLI and VS Code\". [code] (billing-catalog.ts:417)\n\n**Subscription link.** The CLI uses the one AGI subscription system: it reads plan and entitlements from `api:GET /api/me`, plan-capability tables from `packages/contracts/types/src/billing-catalog.ts`, credit windows (5 hours, week, month) from `packages/contracts/types/src/managed-usage-limits.ts`, and a paywall body from the gateway when quota is exceeded (150 percent of tier quota per the code comment). `pnpm check:protocol-types` keeps the CLI plan table equal to the billing catalog. [code] (apps/cli/src/plans.rs:14-16; apps/cli/src/models/streaming.rs:309-315; apps/cli/README.md Subcommands). Usage accounting itself happens on the server. [inferred]\n\n**Boundary rules.** Account commands (`usage`, `invite`, `library`, `projects`, ...) run only in Managed and refuse in Local and own-key before any request. [code] (apps/cli/src/cloud/mod.rs:4, 212, 900-968; README). A Local chat \"stays on this device and is not saved to your account history\". [code] (apps/cli/src/cloud/client.rs:111, 1487). The gateway base must be a trusted AGI HTTPS host before the bearer token is attached. [code] (apps/cli/src/models/streaming.rs:465-480)\n\n**Fallback chains.** `-m a,b,c` lists models; on 429, network, 5xx or stream disconnect the next takes over with the provider switched automatically. Whether a chain can cross from Local into own key or Managed without consent is not established here. [code-doc] (README; apps/cli/src/routing/fallback.rs) [unknown for the consent question]"
+   },
+   {
+    "heading": "Shared code",
+    "markdown": "**Rust crates shared with the Desktop (Tauri) app.** Path dependencies in apps/cli/Cargo.toml: `agiworkforce-agent-core`, `-app-server`, `-llm`, `-model-registry`, `-mcp`, `-protocol`, `-sandbox-policy`, `-execpolicy`, `-command-registry`, `-utils-image`, `-worktree`. [code] (apps/cli/Cargo.toml:36-46). The Tauri crate also depends on agent-core, execpolicy, llm, model-registry, mcp, protocol, sandbox-policy and worktree. [code] (apps/desktop/src-tauri/Cargo.toml:32-39). ARCHITECTURE.md says crates/ is \"Shared Rust used by both the desktop and the CLI\". [requirement] (ARCHITECTURE.md:22)\n\n**Contracts from the TypeScript side.** The CLI compiles in `packages/contracts/types/src/models.json` (model catalog), `managed-usage-limits.ts` (credit windows) and equals `billing-catalog.ts` (plan capabilities) via a check. [code] (model_catalog.rs:25; plans.rs:14; README)\n\n**Protocol types.** `crates/agiworkforce-protocol` exports ts-rs bindings into `packages/contracts/types/src/generated/protocol`; regenerate with `pnpm generate:protocol-types`. [requirement] (AGENTS.md section 5)\n\n**Other apps that use the CLI as their runtime**\n\n- surface:vscode starts `agi app-server` as the local developer-session runtime (README: used by AGI for VS Code); the extension has app-server references in `apps/extension-vscode/src/providers/terminalProvider.ts` among others. [code-doc + code] (apps/cli/README.md Architecture; grep of apps/extension-vscode/src)\n- surface:desktop (Electron) bundles its own `agi` for local coding sessions and talks to it with `DeveloperSessionClient` over stdio. [requirement] (apps/cli/README.md Install section; ARCHITECTURE.md:57-64)\n- Desktop workspace terminal: `apps/desktop/electron/runtime/developerSessionService.ts` consumes `apps/cli/src/app_server/workspace_terminal.rs`. [code] (audit/registers/known-flaws.md DESKTOP-ELECTRON-WORKSPACE-TERMINAL-WIRE-01)\n- `agi acp` serves the Agent Client Protocol for Zed and JetBrains. [code-doc] (README)\n\nNothing under `packages/ui/unified-chat` is used by the CLI; the CLI renders its own terminal UI. [inferred]"
+   },
+   {
+    "heading": "Build, run and test",
+    "markdown": "All commands come from `docs/agent-context/commands.json` (cli block, lines 142-148) unless noted. [code]\n\n| Task | Command |\n|---|---|\n| Type-check | `cargo check -p agiworkforce-cli` |\n| Unit tests | `cargo test -p agiworkforce-cli --lib` |\n| One test | `cargo test -p agiworkforce-cli --lib <test-name>` |\n| Release build | `cargo build --release -p agiworkforce-cli` (binary `agi`) |\n| Install from source | `cargo install --path apps/cli --bin agi` (README) |\n| Notices | `node apps/cli/scripts/generate-third-party-notices.mjs` (and `--check`) |\n| Clippy | `cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code` (commands.json:21) |\n\n**Run.** `agi` opens the TUI; `agi exec \"...\"` or `agi --print` run once; `agi --json-events exec ...` writes one JSON object per event; `agi doctor` checks the setup; `agi app-server` serves the local runtime; `agi remote-control` starts a host. [code-doc] (README) / [code] (apps/cli/src/lib.rs:6659)\n\n**CI.** `.github/workflows/ci.yml` runs `cargo test --locked -p agiworkforce-cli` under `xvfb-run` on Linux, then the workspace lib tests excluding desktop and cli, the app-server and protocol tests, and MCP tests. [code] (.github/workflows/ci.yml:915-918)\n\n**Test layout.** Unit tests are inline in src modules; integration tests are in `apps/cli/tests/` (app_server_stdio, app_server_websocket, app_server_read_only_token, developer_session_host, json_events_jsonl, broken_pipe, init_managed_trust, terminal_escape_diagnostics, plugins and hooks coverage). TUI snapshot files live in `src/tui/snapshots` (insta). [code] (directory listings; Cargo.toml dev-dependencies)\n\n**Local rules.** On the owner's 16 GB machine, cargo builds and full suites run one at a time through `scripts/dev/heavy-job.sh`. [requirement] (CLAUDE.md, Delegation section). I ran nothing for this page. No run of these commands is recorded in the documents I read. [unknown]\n\n**Runtime need.** A sandbox backend (bubblewrap on Linux, Seatbelt on macOS); `agi doctor` reports `sandbox.os` as a warning when missing. [code-doc] (README)"
+   },
+   {
+    "heading": "Release state",
+    "markdown": "**Implementation status.** The code is broad and connected: the Cargo manifest, command dispatch, auth, managed gateway client, app-server, TUI and REPL are all present (see Folder map). Version is 0.0.1. [code]\n\n**Release status.** [code] (apps/web/lib/surface-status.ts:6-13) `SURFACE_STATUS` marks only web \"Available now\"; `cli` is \"Coming soon\". The public CLI download link is `/download#cli-downloads`. [code] (surface-status.ts:62)\n\n**Pipeline exists, first release unconfirmed.**\n\n- `.github/workflows/release-cli.yml` triggers on tags `v-cli-*` (tag must equal the Cargo version) and on manual runs. A tag run validates, builds six archives (macOS arm64 and x64, Linux x64 and arm64 with glibc 2.35 or newer, Windows x64 and arm64), signs `SHA256SUMS` with a P-256 key held in the protected `cli-release` environment, and publishes a GitHub release. A manual run builds and stops. [requirement] (docs/runbooks/cli-release.md:1-50; .github/workflows/release-cli.yml:1-30)\n- The binaries have no Apple notarization or Windows Authenticode signature; the signed checksum manifest is the integrity check. [requirement] (cli-release.md)\n- `apps/web/public/install.sh` pins a public release key (line 31) and stops with \"No signed AGI CLI release is published yet\" when GitHub answers 404. [code] (install.sh:31-35, 133)\n- The README says the installer stops with that message until the first signed release exists. The surface matrix says \"Whether it has ever run is not in this tree.\" [code-doc] [requirement] (apps/cli/README.md; docs/product/suite.md; docs/product/surface-feature-matrix.md:26). So whether any release is live is [unknown].\n\n**Install channels.** Only the curl installer is advertised; `agi update --install` self-updates; the VS Code extension and Desktop installer bundle or fetch `agi`. Homebrew, npm, WinGet, apt, native Windows installer: none advertised (Homebrew writes to a private tap). [requirement] (cli-release.md, Install channels)\n\n**Verification status.** No document I read records a real end-to-end run of the CLI against production. The audit register records some Electron-to-CLI acceptance work, but it is isolated and not a CLI release check. [unknown / code-doc] (audit/registers/known-flaws.md line 224)"
+   },
+   {
+    "heading": "Differences from the unified experience",
+    "markdown": "| Topic | Unified product (Web/Desktop/Mobile) | CLI | Basis |\n|---|---|---|---|\n| Chat history | Account cloud chats sync across apps | Developer sessions in `~/.agiworkforce/managed_sessions/`, shared only with VS Code; no cloud chat sync, explicit handoff only | [requirement] (docs/architecture/overview.md:49; README) |\n| Managed Cloud access | Cloud chat from Free upward on Web, Desktop, Mobile, Chrome (capability `managed_chat` covers free to enterprise) | Managed needs Premium or higher (`developer_surfaces`) | [code] (apps/cli/src/plans.rs:93-99; billing-catalog.ts:346, 359) |\n| Local mode | Local inference on mobile and desktop is free of a paid subscription | Local (Ollama, LM Studio) and own key are free of plan gating in the CLI; Free users can use them | [code] (model_catalog.rs:915-935) |\n| UI | Shared `packages/ui/unified-chat` | Own ratatui TUI and REPL; own slash commands | [inferred] |\n| Features absent in the CLI | Research reports, study mode, video, camera, screen capture, connector gallery, app/artifact rendering, library browser, computer-use driving | absent per matrix: research, study, video, camera, screen capture, connectors (it uses MCP), apps rendering, library browser, desktop driving | [requirement] (docs/product/surface-feature-matrix.md:197, 277, 287, 317, 337, 347, 357, 407, 517) |\n| Fast mode | Provider speed tier | `/fast` switches to a faster model in-session; sends no provider speed field | [requirement] (surface-feature-matrix.md:267) |\n| Billing and admin | Web control plane | None in CLI: billing, Team admin, connector setup, Enterprise sales live in Web | [code-doc] (README) |\n| Model catalog | One generated catalog | Same `models.json`, compiled in; Free and Basic see no Cloud section in the picker | [code] (model_catalog.rs:915-960) |\n| Account-cloud features present in CLI | projects, memory, artifacts, image, shares, devices, library | present under `src/cloud/` | [requirement] (surface-feature-matrix.md:177, 187, 207, 307) |\n| Remote control | Mobile steers Desktop/local host | CLI has a `remote-control` command and a module | [code] (apps/cli/src/lib.rs:894, 6659; src/remote_control/) |"
+   },
+   {
+    "heading": "Gaps",
+    "markdown": "| Gap | Detail | Basis |\n|---|---|---|\n| No published release | Surface marked Coming soon; installer reports no signed release; first run of the pipeline is not shown in the tree | [code] (surface-status.ts:8-9; install.sh:133); [requirement] (surface-feature-matrix.md:26) |\n| No platform code signing | No Apple notarization or Windows Authenticode; Gatekeeper and SmartScreen warn on browser downloads | [requirement] (cli-release.md) |\n| Free and Basic cannot use Cloud | A Free user can run only Local or own key. If product wants Free cloud in the CLI, the capability table and picker gate must change | [code] (model_catalog.rs:915-945); [inferred] |\n| No Windows sandbox | Hooks, MCP servers and commands run with full user rights; sandboxed command execution is unsupported | [code-doc] (README) |\n| Needs OS sandbox binary | Missing bwrap or Seatbelt means `run_command` refuses unless `--no-sandbox` | [code-doc] (README) |\n| Voice off by default | `voice` feature not in default build because of an ALSA load problem | [code] (Cargo.toml features) |\n| Install channels | Only curl installer is advertised; Homebrew private; no npm, WinGet, apt | [requirement] (cli-release.md) |\n| Matrix has unsettled cells | MCP, approval, filesystem effects, cloud tasks and repo shown unverified; remote control wrongly shown absent | [requirement] (surface-feature-matrix.md:387, 397, 427, 477, 527, 567) vs [code] (lib.rs:6659) |\n| Unmaintained Rust dependencies | 17 unmaintained packages plus a yanked one in the maintenance scan | [requirement] (audit/registers/known-flaws.md RUST-DEPENDENCY-ADVISORIES-01) |\n| Installed Electron cutover | Installed Electron builds fall back to command mode against the workspace terminal protocol | [requirement] (audit/registers/known-flaws.md:224) |\n| Run evidence | No recorded real-world run in the documents I read | [unknown] |"
+   },
+   {
+    "heading": "How to verify",
+    "markdown": "Only read-only checks were done for this page; run nothing below unless you intend to.\n\n1. Build state: `cargo check -p agiworkforce-cli` and `cargo test -p agiworkforce-cli --lib` (commands.json:143-145).\n2. Release state: read `SURFACE_STATUS` in apps/web/lib/surface-status.ts; check GitHub for a `v-cli-*` release; run `bash apps/web/public/install.sh` only on a throwaway machine.\n3. Plan gate: read `can_access_model_for_tier` in apps/cli/src/model_catalog.rs and `developer_surfaces` in packages/contracts/types/src/billing-catalog.ts; run `agi plans` signed in to see which plans include \"Cloud in the CLI and VS Code\".\n4. Sign-in: run `agi login`, then `agi auth-status`; for own key run `agi login <provider>`.\n5. Modes: run `agi --privacy local` (or the `--privacy` argument) and `agi doctor` with Ollama running; see apps/cli/src/local_models.rs probes.\n6. Doc drift: compare surface-feature-matrix.md cli rows to `pub mod` lines in apps/cli/src/lib.rs.\n7. Guards: `pnpm check:protocol-types`, `pnpm check:llm-operability`, and `node apps/cli/scripts/generate-third-party-notices.mjs --check`."
+   }
+  ],
+  "key_facts": [
+   {
+    "fact": "The CLI is a Rust crate named agiworkforce-cli, version 0.0.1, proprietary, not published to crates.io.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/Cargo.toml:1-9"
+    ]
+   },
+   {
+    "fact": "Two binaries: `agi` (primary, default-run) and `agiworkforce` (backward-compatible alias).",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/Cargo.toml:13-21",
+     "apps/cli/README.md:60-62"
+    ]
+   },
+   {
+    "fact": "main.rs only calls agiworkforce_cli::run_to_exit_code(); the real command dispatch lives in src/lib.rs (about 11,000 lines).",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/main.rs:1-3",
+     "apps/cli/src/lib.rs:8797"
+    ]
+   },
+   {
+    "fact": "Sign-in to an AGI account uses a browser device code against /api/auth/device/code, /token and /refresh on the web origin.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/oauth.rs:69-75,133,229",
+     "apps/cli/src/auth.rs:1016-1018,1044-1051"
+    ]
+   },
+   {
+    "fact": "Credentials are stored in the OS keyring (service com.agiworkforce.cli.auth) with an owner-only file fallback when AGIWORKFORCE_NO_KEYRING=1.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/auth.rs:92-120,175"
+    ]
+   },
+   {
+    "fact": "The CLI has three trust boundaries in code: PrivacyMode Local, Byok, Managed.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/platform/runtime/session.rs:253-290"
+    ]
+   },
+   {
+    "fact": "Managed Cloud in the CLI requires the developer_surfaces capability, granted to pro, max, max_15x, team, team_premium and enterprise; Free and Basic fail closed.",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:341,359",
+     "apps/cli/src/model_catalog.rs:933-945",
+     "apps/cli/src/plans.rs:82-104"
+    ]
+   },
+   {
+    "fact": "Local (Ollama, LM Studio) and own-key modes are never gated by subscription tier, so a Free user can use them.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/model_catalog.rs:915-935",
+     "apps/cli/src/local_models.rs:69-119",
+     "apps/cli/README.md Subcommands section"
+    ]
+   },
+   {
+    "fact": "Managed chat requests go to /api/llm/v1/chat/completions on a trusted AGI HTTPS host with a bearer token and an Idempotency-Key header.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/models/streaming.rs:501-551"
+    ]
+   },
+   {
+    "fact": "Plan tier is read from GET /api/me and cached in ~/.agiworkforce/cache/tier.toml for 5 minutes with a 3-second timeout.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/app_server/account.rs:264-275",
+     "apps/cli/src/tier_cache.rs:36-50"
+    ]
+   },
+   {
+    "fact": "Account commands (usage, library, projects, invite and others) run only in Managed mode and refuse in Local and own-key mode before any request.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/cloud/mod.rs:4,212,900-968",
+     "apps/cli/README.md Subcommands section"
+    ]
+   },
+   {
+    "fact": "The web release-status table marks the CLI 'Coming soon'; only web is 'Available now'.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/surface-status.ts:6-13"
+    ]
+   },
+   {
+    "fact": "A release workflow exists (tags v-cli-*, six archives, signed SHA256SUMS), but the installer says 'No signed AGI CLI release is published yet' on a 404, and the matrix says whether the workflow ever ran is not in the tree.",
+    "basis": "code",
+    "evidence": [
+     ".github/workflows/release-cli.yml:1-30",
+     "apps/web/public/install.sh:133",
+     "docs/product/surface-feature-matrix.md:26",
+     "docs/runbooks/cli-release.md:7-30"
+    ]
+   },
+   {
+    "fact": "Binaries carry no Apple notarization or Windows Authenticode signature; integrity relies on a signed checksum manifest.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/runbooks/cli-release.md:32-42"
+    ]
+   },
+   {
+    "fact": "Build and test commands: cargo check/test -p agiworkforce-cli --lib, cargo build --release -p agiworkforce-cli.",
+    "basis": "code",
+    "evidence": [
+     "docs/agent-context/commands.json:142-148"
+    ]
+   },
+   {
+    "fact": "CI runs cargo test --locked -p agiworkforce-cli under xvfb-run, then workspace lib tests excluding desktop and cli.",
+    "basis": "code",
+    "evidence": [
+     ".github/workflows/ci.yml:915-918"
+    ]
+   },
+   {
+    "fact": "The CLI shares 11 path-dependency crates with the Tauri desktop backend (agent-core, llm, model-registry, mcp, protocol, sandbox-policy, execpolicy, worktree and more).",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/Cargo.toml:36-46",
+     "apps/desktop/src-tauri/Cargo.toml:32-39"
+    ]
+   },
+   {
+    "fact": "`agi app-server` is the local developer-session runtime used by VS Code and the Electron Desktop; CLI and VS Code share ~/.agiworkforce/managed_sessions/ and do not sync into Cloud chat.",
+    "basis": "requirement",
+    "evidence": [
+     "apps/cli/README.md Architecture section",
+     "ARCHITECTURE.md:57-64",
+     "docs/architecture/overview.md:49"
+    ]
+   },
+   {
+    "fact": "The model catalog is compiled in from packages/contracts/types/src/models.json; model IDs are not hardcoded in the CLI.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/model_catalog.rs:1-25"
+    ]
+   },
+   {
+    "fact": "Sandbox: macOS Seatbelt and Linux bubblewrap, none on Windows; no in-process fallback; --no-sandbox is the only workaround.",
+    "basis": "requirement",
+    "evidence": [
+     "apps/cli/README.md Runtime requirement and Sandbox defaults sections"
+    ]
+   },
+   {
+    "fact": "Voice (push-to-talk) is an optional Cargo feature off by default because cpal links ALSA on Linux.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/Cargo.toml features block"
+    ]
+   },
+   {
+    "fact": "The CLI has a remote-control command and module, although the surface matrix reports remote control absent for the CLI.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/lib.rs:894,6659-6678",
+     "apps/cli/src/remote_control/mod.rs",
+     "docs/product/surface-feature-matrix.md:567"
+    ]
+   },
+   {
+    "fact": "The CLI plan credit windows are read at compile time from managed-usage-limits.ts; plan labels show pro as Premium and max_15x as Ultra.",
+    "basis": "code",
+    "evidence": [
+     "apps/cli/src/plans.rs:14-16",
+     "apps/cli/src/tier_cache.rs:225-236"
+    ]
+   },
+   {
+    "fact": "Custom OpenAI-compatible providers are added with [providers.<name>] in ~/.agiworkforce/config.toml; names that collide with built-ins are ignored.",
+    "basis": "requirement",
+    "evidence": [
+     "apps/cli/README.md custom provider section"
+    ]
+   },
+   {
+    "fact": "The README claims 35 hook events; I did not verify the count in code.",
+    "basis": "unknown",
+    "evidence": [
+     "apps/cli/README.md Architecture",
+     "apps/cli/src/features/hooks/hooks.rs"
+    ]
+   },
+   {
+    "fact": "A multi-model fallback chain (-m a,b,c) switches model and provider on 429, network, 5xx or stream disconnect.",
+    "basis": "requirement",
+    "evidence": [
+     "apps/cli/README.md section 3"
+    ]
+   },
+   {
+    "fact": "About 4,578 test markers exist under apps/cli/src; this is a grep count, not a run result.",
+    "basis": "inferred",
+    "evidence": [
+     "grep count of #[test] and #[tokio::test] in apps/cli/src"
+    ]
+   }
+  ],
+  "relationships": [
+   {
+    "from": "surface:cli",
+    "rel": "implemented_by",
+    "to": "file:apps/cli/src/lib.rs",
+    "evidence": [
+     "apps/cli/src/lib.rs:8797"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "implemented_by",
+    "to": "file:apps/cli/src/main.rs",
+    "evidence": [
+     "apps/cli/src/main.rs:1-3"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "configured_by",
+    "to": "file:apps/cli/Cargo.toml",
+    "evidence": [
+     "apps/cli/Cargo.toml:1-25"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "documented_in",
+    "to": "file:apps/cli/README.md",
+    "evidence": [
+     "apps/cli/README.md:1-20"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "documented_in",
+    "to": "file:docs/runbooks/cli-release.md",
+    "evidence": [
+     "docs/runbooks/cli-release.md:1-10"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "available_on",
+    "to": "mode:local",
+    "evidence": [
+     "apps/cli/src/platform/runtime/session.rs:253-290",
+     "apps/cli/src/local_models.rs:69-119"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "available_on",
+    "to": "mode:own-key",
+    "evidence": [
+     "apps/cli/src/auth.rs:1060-1090",
+     "apps/cli/src/model_catalog.rs:915-935"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "available_on",
+    "to": "mode:cloud",
+    "evidence": [
+     "apps/cli/src/models/streaming.rs:501-551"
+    ]
+   },
+   {
+    "from": "mode:cloud",
+    "rel": "governed_by_subscription",
+    "to": "plan:pro",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:341,359"
+    ]
+   },
+   {
+    "from": "mode:cloud",
+    "rel": "governed_by_subscription",
+    "to": "plan:max",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:341,359"
+    ]
+   },
+   {
+    "from": "mode:cloud",
+    "rel": "blocked_by",
+    "to": "plan:free",
+    "evidence": [
+     "apps/cli/src/model_catalog.rs:933-945"
+    ]
+   },
+   {
+    "from": "mode:cloud",
+    "rel": "blocked_by",
+    "to": "plan:basic",
+    "evidence": [
+     "apps/cli/src/model_catalog.rs:933-945"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "exposes_api",
+    "to": "api:POST /api/auth/device/code",
+    "evidence": [
+     "apps/cli/src/oauth.rs:75"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "depends_on",
+    "to": "api:POST /api/auth/device/token",
+    "evidence": [
+     "apps/cli/src/oauth.rs:133"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "depends_on",
+    "to": "api:POST /api/auth/device/refresh",
+    "evidence": [
+     "apps/cli/src/oauth.rs:229"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "depends_on",
+    "to": "api:GET /api/me",
+    "evidence": [
+     "apps/cli/src/app_server/account.rs:264"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "depends_on",
+    "to": "api:POST /api/llm/v1/chat/completions",
+    "evidence": [
+     "apps/cli/src/models/streaming.rs:549-551"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "stores_data_in",
+    "to": "store:os-keyring",
+    "evidence": [
+     "apps/cli/src/auth.rs:92-120"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "stores_data_in",
+    "to": "store:~/.agiworkforce/managed_sessions",
+    "evidence": [
+     "apps/cli/README.md section 4 and Architecture"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "stores_data_in",
+    "to": "store:~/.agiworkforce/cache/tier.toml",
+    "evidence": [
+     "apps/cli/src/tier_cache.rs:36-50"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "depends_on",
+    "to": "file:packages/contracts/types/src/models.json",
+    "evidence": [
+     "apps/cli/src/model_catalog.rs:25"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "depends_on",
+    "to": "file:packages/contracts/types/src/billing-catalog.ts",
+    "evidence": [
+     "apps/cli/src/model_catalog.rs:925-930",
+     "apps/cli/README.md Subcommands"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "depends_on",
+    "to": "file:packages/contracts/types/src/managed-usage-limits.ts",
+    "evidence": [
+     "apps/cli/src/plans.rs:14-16"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "depends_on",
+    "to": "file:crates/agiworkforce-app-server",
+    "evidence": [
+     "apps/cli/Cargo.toml:38"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "depends_on",
+    "to": "file:crates/agiworkforce-protocol",
+    "evidence": [
+     "apps/cli/Cargo.toml:42"
+    ]
+   },
+   {
+    "from": "surface:desktop",
+    "rel": "depends_on",
+    "to": "surface:cli",
+    "evidence": [
+     "ARCHITECTURE.md:57-64",
+     "apps/cli/README.md Install section"
+    ]
+   },
+   {
+    "from": "surface:vscode",
+    "rel": "depends_on",
+    "to": "surface:cli",
+    "evidence": [
+     "apps/cli/README.md Architecture (app-server)",
+     "apps/extension-vscode/src/providers/terminalProvider.ts"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "configured_by",
+    "to": "file:apps/web/lib/surface-status.ts",
+    "evidence": [
+     "apps/web/lib/surface-status.ts:6-13"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "documented_in",
+    "to": "file:.github/workflows/release-cli.yml",
+    "evidence": [
+     ".github/workflows/release-cli.yml:1-30"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "documented_in",
+    "to": "file:apps/web/public/install.sh",
+    "evidence": [
+     "apps/web/public/install.sh:31-35,133"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "tested_by",
+    "to": "test:apps/cli/tests/app_server_stdio.rs",
+    "evidence": [
+     "apps/cli/tests directory listing"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "tested_by",
+    "to": "test:apps/cli/tests/developer_session_host.rs",
+    "evidence": [
+     "apps/cli/tests directory listing"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "tested_by",
+    "to": "test:apps/cli/tests/json_events_jsonl.rs",
+    "evidence": [
+     "apps/cli/tests directory listing"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "documented_in",
+    "to": "file:docs/product/surface-feature-matrix.md",
+    "evidence": [
+     "docs/product/surface-feature-matrix.md:26"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "uses_provider",
+    "to": "provider:anthropic",
+    "evidence": [
+     "apps/cli/src/auth.rs:1060-1070"
+    ]
+   },
+   {
+    "from": "surface:cli",
+    "rel": "uses_provider",
+    "to": "provider:openai",
+    "evidence": [
+     "apps/cli/src/auth.rs:1066-1075"
+    ]
+   }
+  ],
+  "open_questions": [
+   "Has any signed CLI release ever been published? The tree does not say; the installer reports none and the surface status is Coming soon.",
+   "Can Local mode start with no AGI account at all? README says Local and own key need no plan, but I did not find the single code check for the no-account case.",
+   "May a fallback chain cross from Local to own key or Managed without a consent step? AGENTS.md requires explicit consent for such moves; apps/cli/src/routing/fallback.rs was not read.",
+   "Product choice: should Free and Basic users get any managed model in the CLI? Code excludes them; billing-catalog sets developer_surfaces to PRO_TIERS.",
+   "Are the hook events really 35, and are all three MCP transports connected? Only the README states this.",
+   "Do the packages ai/providers folders map to CLI providers? The CLI uses the Rust crate agiworkforce-llm, so provider:<package folder> edges are only approximate.",
+   "What real verification (manual run, CI results) exists for Managed mode on production? None is recorded in the documents read.",
+   "Does the Desktop (Electron) installer currently ship the CLI binary in a released build, given Desktop is also Coming soon?"
+  ],
+  "outdated_documents": [
+   {
+    "document": "docs/product/surface-feature-matrix.md (cli remote-control cell, line ~567)",
+    "what_is_outdated": "Says 'Nothing under apps/cli/src is a remote-control host or client.'",
+    "what_the_code_says": "apps/cli declares `pub mod remote_control`, has a `Command::RemoteControl` that calls `remote_control::run`, and a src/remote_control folder with host.rs and envelope.rs.",
+    "evidence": "apps/cli/src/lib.rs:60,894,6659-6678"
+   },
+   {
+    "document": "docs/product/surface-feature-matrix.md (cli MCP, approval, cloud tasks, repo cells)",
+    "what_is_outdated": "Marks mcp/mod.rs, safety/approval.rs, cloud and repo as 'unverified' because no import was found.",
+    "what_the_code_says": "lib.rs declares `pub mod cloud`, `pub mod mcp`, `pub mod repo` and `pub mod safety`, so they are mounted.",
+    "evidence": "apps/cli/src/lib.rs:22,44,62,63"
+   },
+   {
+    "document": "apps/cli/Cargo.toml description",
+    "what_is_outdated": "Says '10+ providers' and lists a fixed set, which differs from the lists in README and the auth error text (mistral, openrouter, nvidia, minimax are also named elsewhere).",
+    "what_the_code_says": "Login accepts anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia; README lists pre-registered providers including mistral and lmstudio.",
+    "evidence": "apps/cli/Cargo.toml:4; apps/cli/src/auth.rs:1281"
+   },
+   {
+    "document": "apps/cli/README.md (Purpose banner example)",
+    "what_is_outdated": "Not wrong, but states 'Last updated: 2026-11-11' while the file was modified 2026-11-24, so dated claims such as the release state may lag.",
+    "what_the_code_says": "File mtime is Nov 24; the surface status and install.sh still say no release.",
+    "evidence": "apps/cli/README.md:5; directory listing"
+   }
+  ]
+ },
+ "issues": [
+  {
+   "page_a": "00-start/product-overview.md (line 138: 'nothing has been released to the public')",
+   "says_a": "No app has been released to the public.",
+   "page_b": "30-surfaces/web.md (line 28); 30-surfaces/cli.md (line 176); 00-start/glossary.md (lines 56, 69); 70-qa/start-here/where-things-stand.md (line 296: 'Production is older than all three')",
+   "says_b": "Web is marked 'Available now' and is the only released app. Production exists and is older than the three local builds.",
+   "which_is_right": "web.md, cli.md and the glossary are right. The overview should say that every app except Web is unreleased.",
+   "evidence": "apps/web/lib/surface-status.ts:6-13: web is AVAILABLE_NOW_LABEL and desktop, cli, mobile, vscode and chrome are COMING_SOON_LABEL."
+  },
+  {
+   "page": "30-surfaces/vscode.md (summary line 12, Modes table line 101, lines 186 and 223) and 30-surfaces/cli.md (lines 118-121)",
+   "problem": "Plan names are inconsistent. vscode.md says 'Pro-or-higher' and lists 'Pro, Max, Max 15x'. cli.md and the subscriptions page use Premium and Ultra. A reader cannot tell that Pro, Premium and the `pro` tier are one plan, or that Max 15x is Ultra at $200. The execution-boundaries page also mixes 'PRO_TIERS' and 'Premium'.",
+   "fix": "Use public labels in prose: Premium, Max, Ultra. Show the stored id once in backticks, for example 'Premium (`pro`) or higher'. The set is `pro`, `max`, `max_15x`, `team`, `team_premium`, `enterprise`. Do the same in the cli.md plan table."
+  },
+  {
+   "page": "30-surfaces/cli.md (line 109 versus line 92)",
+   "problem": "The own-key provider list differs inside the page. Line 109 lists 'mistral' and omits minimax and ollama-cloud. Line 92 lists the accepted login ids, which include minimax and ollama-cloud and no mistral.",
+   "fix": "Use one list taken from API_KEY_PROVIDERS. As of f51d16e747: anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, plus brave and tavily for search. Mention 'user-defined OpenAI-compatible endpoints' separately. Remove mistral unless a source is found (apps/cli/src/auth.rs:1060-1160). A grep of apps/cli/src finds no mistral."
+  }
+ ]
+}

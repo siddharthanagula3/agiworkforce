@@ -1,0 +1,232 @@
+{
+ "S52.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/agent_picker.rs",
+    "text": "Agents"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/agents"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents delete <name> --yes"
+   }
+  ],
+  "needs": "at least one custom assistant already created",
+  "note": "The list is a picker: Enter activates an agent. Edit and remove are typed commands, not buttons in the list.",
+  "reachable": "yes",
+  "steps": [
+   "Start the app with agi, then type /agents and press Enter.",
+   "Look for the \"Agents\" box: each row shows the name, color, scope (project or global), model and description.",
+   "Type part of a name in the search line to filter the list, then press Esc to close it.",
+   "To remove one, type /agents delete <name> --yes (without --yes it only shows a warning that the delete cannot be undone).",
+   "To change one, type /agents set <name> <field> <value>, then /agents show <name> to see the result.",
+   "Compare with Expected: open, edit and remove are all reachable, but the list itself has no edit or remove buttons, and Enter activates the agent instead of opening an editor."
+  ],
+  "where": "Type /agents (no words after it) in the AGI CLI chat screen. It opens the \"Agents\" list."
+ },
+ "S52.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "Create new agent"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents create <name>"
+   }
+  ],
+  "needs": "a signed-in account with a model for the description form; none for the blank template",
+  "note": "The description form runs a model request. A single word creates a blank template instead.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents create (with nothing after it) and press Enter to see the \"Create new agent\" help.",
+   "Type /agents create reviews pull requests for risky changes and press Enter.",
+   "Wait for \"Generating agent configuration...\" to finish.",
+   "Type /agents and press Enter to check that the new agent appears in the \"Agents\" list.",
+   "For a blank template, type /agents create my-reviewer and press Enter, then check for \"Created project agent `my-reviewer` at\" in the reply.",
+   "Compare with Expected: the new assistant can be created from the product, and it shows up in the list."
+  ],
+  "where": "Type /agents create <description> (several words, for an AI-drafted assistant) or /agents create <name> (one word, for a blank template) in the chat screen."
+ },
+ "S52.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents set <name> <field> <value>"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "Fields:"
+   }
+  ],
+  "needs": "a custom assistant to change",
+  "note": "Expected asks for a form or editor; the product offers one typed command per field instead.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents set reviewer description Reviews risky pull requests and press Enter, using the name of an assistant you made.",
+   "Read the reply: it should say the field was updated.",
+   "Type /agents show reviewer and press Enter.",
+   "Compare with Expected: the new description shows in the details.",
+   "Repeat with another field, for example /agents set reviewer model <model name> or /agents set reviewer tools read_file, search_files.",
+   "Note the editable fields listed in the \"Fields:\" line: description, model, color, tools, disallowedTools, skills, maxTurns, maxBudgetUsd, permissionMode, prompt."
+  ],
+  "where": "Type /agents set <name> <field> <value> in the chat screen. There is no form or editor screen; each command changes one field."
+ },
+ "S52.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "/agents rename <name> <new-name>"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "name"
+   }
+  ],
+  "needs": "a custom assistant to rename",
+  "note": "The new name is turned into a lowercase slug, so spaces and capitals are removed in the saved name.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents rename reviewer code-reviewer and press Enter.",
+   "Read the reply: it should say the agent was renamed.",
+   "Type /agents and press Enter.",
+   "Compare with Expected: the new name is shown in the \"name\" column of the \"Agents\" list.",
+   "Type /agents show code-reviewer and check the \"Agent:\" heading."
+  ],
+  "where": "Type /agents rename <name> <new-name> in the chat screen, then type /agents to check the list."
+ },
+ "S52.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "description"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/agent_picker.rs",
+    "text": "(no description)"
+   }
+  ],
+  "needs": "a custom assistant to describe",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents set reviewer description Reviews risky pull requests and press Enter.",
+   "Type /agents and press Enter.",
+   "Compare with Expected: the description appears in the list row for reviewer.",
+   "Clear it with /agents set reviewer description and check that the row shows \"(no description)\"."
+  ],
+  "where": "Type /agents set <name> description <text> in the chat screen, then type /agents to see it in the list."
+ },
+ "S52.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "Prompt:"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "prompt"
+   }
+  ],
+  "needs": "a custom assistant to give instructions to",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents set reviewer prompt You review code for security problems only and press Enter.",
+   "Type /agents show reviewer and press Enter.",
+   "Check the \"Prompt:\" section at the bottom of the reply for the new text.",
+   "Type /agents reviewer to activate it. The reply should say Agent `reviewer` activated.",
+   "Ask a question in the chat and compare the answer with the instructions in Expected."
+  ],
+  "where": "Type /agents set <name> prompt <text> in the chat screen, then /agents show <name> to read it back."
+ },
+ "S52.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "model"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "default model"
+   }
+  ],
+  "needs": "a model name that this account can use",
+  "note": "If the model cannot be switched, the product prints \"model override ignored\" instead.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents set reviewer model <model name> and press Enter, using a model name the product accepts.",
+   "Type /agents show reviewer and press Enter.",
+   "Check the \"model:\" line in the reply for the chosen model.",
+   "Type /agents reviewer to activate it.",
+   "Compare with Expected: the reply should say Agent `reviewer` activated and show \"(model: ...)\" with the pinned model."
+  ],
+  "where": "Type /agents set <name> model <model name> in the chat screen, then /agents show <name>. Model names come from the model list in the product."
+ },
+ "S52.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "tools"
+   },
+   {
+    "file": "apps/cli/src/agents.rs",
+    "text": "disallowedTools"
+   }
+  ],
+  "needs": "a custom assistant to change",
+  "note": "The product has no list of tool names to pick from; the names are typed by hand. The name web_fetch appears in the source, and the picker shows tools: all when no list is set.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents set reviewer tools read_file, search_files and press Enter.",
+   "Type /agents show reviewer and press Enter.",
+   "Check the \"tools:\" line in the reply.",
+   "Type /agents set reviewer disallowedTools web_fetch to block one tool, then /agents show reviewer again.",
+   "Compare with Expected: the tools line lists only the chosen tools, and the disallowed one appears under \"disallowed_tools\"."
+  ],
+  "where": "Type /agents set <name> tools <tool names> in the chat screen, or /agents set <name> disallowedTools <tool names> to block some. Check the result with /agents show <name>."
+ },
+ "S52.18": {
+  "labels": [],
+  "needs": "none",
+  "note": "No web-search switch for an assistant was found in apps/cli/src/agents.rs or the picker. The only per-assistant control is the tools and disallowedTools list, which takes tool names; I did not find a product-defined web-search tool name outside tests. Searched the CLI source for web_search, web search and per-agent options.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S52.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "No code-execution switch for an assistant was found. The only per-assistant control is the tools and disallowedTools list; the code-execution tool name is not defined in the agent settings. Searched the CLI source for code_execution, code execution and per-agent options.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S52.21": {
+  "labels": [],
+  "needs": "none",
+  "note": "The agent file frontmatter reads mcpServers (apps/cli/src/agents.rs) and applies it as the allowed MCP servers, but mcpServers is not one of the editable fields for /agents set. No connector picker was found. The only way found is editing the file that /agents path <name> prints. Searched for connector, mcp and mcpServers in the CLI source.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S52.31": {
+  "labels": [],
+  "needs": "none",
+  "note": "No private setting for an assistant was found. Assistants are markdown files: project scope in .agiworkforce/agents and global scope in the user folder, shown as scope in the list. Searched apps/cli/src/agents.rs for private, visibility and share.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S52.33": {
+  "labels": [],
+  "needs": "none",
+  "note": "No workspace or organisation sharing for assistants was found. A project-scope assistant lives in the repository, so others see it only through the repository, and it loads only in a trusted project (trusted_project in apps/cli/src/agents.rs). Searched apps/cli/src/agents.rs for workspace, organization and share; the only hits are in tests.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

@@ -1,0 +1,510 @@
+{
+ "S71.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "New chat"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   }
+  ],
+  "needs": "none",
+  "note": "Drawer swipe is set in src/features/shell/drawerGestures.ts; the app opens the drawer on phones by a left-edge swipe.",
+  "reachable": "yes",
+  "steps": [
+   "Open AGI Mobile and sign in. Swipe right from the left edge of the screen.",
+   "Look: a drawer slides in from the left over the screen.",
+   "Tap \"Library\" in the drawer.",
+   "Look: the Library screen opens as a new page on top of the drawer's screen.",
+   "Swipe from the left edge of the Library screen (or tap the back control at the top left).",
+   "Look: you return to the previous screen, the way a stack route with a back gesture should."
+  ],
+  "where": "Any main screen > swipe right from the left edge to open the drawer, then tap \"New chat\" or \"Library\""
+ },
+ "S71.02": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ChatInput.tsx",
+    "text": "Expand message"
+   },
+   {
+    "file": "src/features/chat/components/ChatInput.tsx",
+    "text": "Type or hold to talk"
+   },
+   {
+    "file": "src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "none",
+  "note": "The growth cap is maxHeight 160 on the message input in ChatInput.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat, or tap \"New chat\" in the drawer.",
+   "Tap the message box and type one short line. Look: a single-line pill.",
+   "Keep typing until the text wraps onto a second line. Look: the box grows taller, up to a limit, and a small expand button appears at its top-right.",
+   "Tap \"Expand message\". Look: a full-screen editor titled by the field \"Expanded message input\" opens.",
+   "Type a little more, then tap \"Send message\" (the send button). Look: the message is sent and the editor closes."
+  ],
+  "where": "Chat screen > message box (placeholder \"Type or hold to talk\") > \"Expand message\" button at its top-right corner once the text wraps"
+ },
+ "S71.03": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ChatInput.tsx",
+    "text": "Message input"
+   }
+  ],
+  "needs": "none",
+  "note": "On a Mac Simulator the software keyboard can be shown with I/O > Keyboard > Toggle Software Keyboard if no keyboard appears.",
+  "reachable": "yes",
+  "steps": [
+   "Open any chat.",
+   "Tap \"Message input\" at the bottom of the screen. The software keyboard rises.",
+   "Look: the message box and send controls sit above the keyboard, not under it.",
+   "Look: the last message in the chat stays visible above the composer.",
+   "Dismiss the keyboard and check that the layout returns to its normal place."
+  ],
+  "where": "Chat screen > tap \"Message input\""
+ },
+ "S71.04": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/MessageBubble.tsx",
+    "text": "Regenerate response"
+   },
+   {
+    "file": "src/features/chat/components/MessageBubble.tsx",
+    "text": "Read aloud"
+   }
+  ],
+  "needs": "none",
+  "note": "Expected says share and rate are tap targets on the message, but the tap row in the code has only copy, read aloud, regenerate and a more-actions button; share and rate appear only in the long-press menu (rate) or on images and files.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has an assistant reply.",
+   "Look under the reply for a small row of icon buttons.",
+   "Tap the copy button. Look: it shows a check mark, and the text is on the clipboard.",
+   "Tap \"Read aloud\". Look: the reply is spoken, and the button changes to \"Stop reading aloud\".",
+   "Tap \"Regenerate response\". Look: a new answer to the same question appears.",
+   "Compare with Expected: the row has copy, read aloud and regenerate; share and rate are not on this row. Rate is in the long-press menu as \"Good Response\" and \"Bad Response\"."
+  ],
+  "where": "Chat screen > below an assistant reply: the row of buttons \"Copy\", \"Read aloud\", \"Regenerate response\" and \"More message actions\""
+ },
+ "S71.05": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/MessageBubble.tsx",
+    "text": "Edit Message"
+   },
+   {
+    "file": "src/features/chat/components/MessageBubble.tsx",
+    "text": "Copy Message"
+   },
+   {
+    "file": "src/features/chat/components/MessageBubble.tsx",
+    "text": "Delete Message"
+   }
+  ],
+  "needs": "none",
+  "note": "The long-press menu list is in MessageBubble.tsx around lines 1643 to 1725; the screen-reader versions use lower-case labels such as \"Edit message\". I did not check whether Delete asks for confirmation.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with one of your messages and one assistant reply.",
+   "Press and hold your message for about half a second. Look: a menu of actions opens.",
+   "Tap \"Edit Message\", change a word and submit the edit. Look: the edited message and a new answer appear.",
+   "Press and hold the assistant reply, tap \"Copy Message\". Look: the text is copied.",
+   "Press and hold the reply again, tap \"Export Message\". Look: the export sheet opens.",
+   "Compare with Expected: each menu item should run what its name says."
+  ],
+  "where": "Chat screen > long-press (press and hold) a message bubble > menu with \"Edit Message\", \"Retry\", \"Copy Message\", \"Export Message\", \"Delete Message\", \"Good Response\", \"Bad Response\""
+ },
+ "S71.06": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Camera"
+   },
+   {
+    "file": "app/(app)/camera.tsx",
+    "text": "Take photo"
+   }
+  ],
+  "needs": "a real iPhone with a camera (the Mac Simulator has no camera)",
+  "note": "The camera screen is blocked when camera access is denied (app/(app)/camera.tsx uses the canUseCamera capability check).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap \"Add to chat\".",
+   "Tap \"Camera\" in the sheet. Allow camera access if the phone asks.",
+   "Tap \"Take photo\" on the camera screen.",
+   "Look: the camera screen closes and the photo appears as an attachment above the message box.",
+   "Send a message and check that the photo goes with it."
+  ],
+  "where": "Chat screen > \"Add to chat\" (the + beside the message box) > \"Camera\" > \"Take photo\""
+ },
+ "S71.07": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a photo library with at least two photos",
+  "note": "Multiple selection is on, with a limit that depends on plan and mode (app/(app)/chat/[id].tsx around line 1580).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap \"Add to chat\".",
+   "Tap \"Photos\". Allow access to the photo library if asked.",
+   "Select two or more photos in the system picker and confirm.",
+   "Look: each selected photo appears as an attachment above the message box, in the order picked.",
+   "Send the message and check the photos are attached."
+  ],
+  "where": "Chat screen > \"Add to chat\" > \"Photos\""
+ },
+ "S71.08": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a file to upload, for example a PDF in Files",
+  "note": "The picker is opened with multiple selection on (app/(app)/chat/[id].tsx around line 1606).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap \"Add to chat\".",
+   "Tap \"File\". The system document picker opens.",
+   "Choose one or more files (for example a PDF) and confirm.",
+   "Look: each file appears as an attachment chip above the message box.",
+   "Send the message and check the file is attached."
+  ],
+  "where": "Chat screen > \"Add to chat\" > \"File\""
+ },
+ "S71.09": {
+  "labels": [
+   {
+    "file": "src/features/share-preview/index.tsx",
+    "text": "Send to Chat"
+   },
+   {
+    "file": "src/features/share-preview/index.tsx",
+    "text": "Summarize this page"
+   }
+  ],
+  "needs": "a phone with the app installed; a web page, an image or a PDF to share",
+  "note": "The share sheet name of the app was not confirmed in the code; the share extension is set up in app.config.js.",
+  "reachable": "yes",
+  "steps": [
+   "On a phone with the app installed, open Safari and go to any web page.",
+   "Tap Share, then choose the AGI app from the share sheet.",
+   "Look: the share preview screen opens with the shared content shown.",
+   "For a link, check for \"Summarize this page\" and \"Ask about this page\".",
+   "Tap \"Send to Chat\" (or \"Add to chat\" if files are staged). Look: a chat starts or the files are attached."
+  ],
+  "where": "Another app (for example Safari) > Share > the AGI app in the share sheet > the preview screen with \"Send to Chat\" or \"Add to chat\""
+ },
+ "S71.10": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   },
+   {
+    "file": "src/features/voice/components/VoiceInlineBar.tsx",
+    "text": "Exit voice mode"
+   }
+  ],
+  "needs": "a microphone, and a phone that supports live voice",
+  "note": "Full-duplex behaviour (talking over the reply) was not confirmed in the code; if voice is unavailable the app shows a reason from liveVoiceModeUnavailableReason.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and tap \"Start voice mode\". Allow microphone access if asked.",
+   "Look: the voice bar replaces the composer.",
+   "Say a question and pause. Look: the assistant answers out loud.",
+   "Ask a follow-up in the same voice session and check it continues without tapping.",
+   "Tap \"Exit voice mode\" to stop. Look: the normal composer returns."
+  ],
+  "where": "Chat screen > \"Start voice mode\" (round button at the right of the composer)"
+ },
+ "S71.12": {
+  "labels": [
+   {
+    "file": "src/features/settings/notifications/index.tsx",
+    "text": "Turn on notifications"
+   },
+   {
+    "file": "src/features/settings/notifications/index.tsx",
+    "text": "Your device is delivering notifications"
+   }
+  ],
+  "needs": "a real iPhone; an AGI Cloud account; a running agent task for the push test",
+  "note": "Whether push registration works on the Mac Simulator was not checked in the code; the token storage and server sends are not visible in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Settings, then find the \"Device\" section and tap \"Notifications\".",
+   "Read the status card at the top: \"Turn on notifications\", \"Your device is delivering notifications\" or \"Your device is blocking notifications\".",
+   "If the card says \"Turn on notifications\", tap it or the allow control and accept the iOS prompt.",
+   "Look: the card changes to \"Your device is delivering notifications\" and the list below shows which alerts AGI sends.",
+   "The server-side token storage and the pushes themselves cannot be seen on the phone; check that alerts arrive when an agent task finishes."
+  ],
+  "where": "Settings > Device > Notifications"
+ },
+ "S71.13": {
+  "labels": [
+   {
+    "file": "src/shared/components/DrawerButton.tsx",
+    "text": "Open notifications"
+   }
+  ],
+  "needs": "an AGI Cloud account; a notification that links to a task, approval, schedule or chat",
+  "note": "The deep link routes are in app/(app)/open/[target]/[id].tsx; the banner tap itself needs a real device.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger a notification, for example by finishing an agent task or a schedule.",
+   "Tap the banner on the phone. Or tap the bell button (\"Open notifications, N unread\") at the top of the drawer header.",
+   "Tap the row in the Notifications list.",
+   "Look: the screen opens that the notification is about (task, approval, schedule or chat).",
+   "Compare with Expected: the right screen opens, not the home screen."
+  ],
+  "where": "Notification banner on the phone, or the bell button (\"Open notifications\") > tap a row in the Notifications list"
+ },
+ "S71.14": {
+  "labels": [
+   {
+    "file": "src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "src/features/tasks/components/CloudRunInputForm.tsx",
+    "text": "Send answer"
+   }
+  ],
+  "needs": "a Cloud task that is waiting for an answer",
+  "note": "I did not check whether a notification can carry a reply action; only the in-app answer form was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer (swipe right from the left edge) and tap \"AGI Work\".",
+   "Tap a Cloud task that shows a question from the agent.",
+   "Fill in the answer form that appears under the task details.",
+   "Tap \"Send answer\".",
+   "Look: the question disappears and the task status moves on from waiting for input."
+  ],
+  "where": "AGI Work > tap a task that is waiting for an answer > fill the question form > \"Send answer\""
+ },
+ "S71.15": {
+  "labels": [
+   {
+    "file": "src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a Cloud task that is waiting for an approval",
+  "note": "The desktop-side remote approval (Remote control) is hidden in v1 because FEATURES.companion is false in apps/mobile/lib/v1FeatureFlags.ts; only the Cloud task approval is reachable.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer and tap \"AGI Work\".",
+   "Tap a Cloud task that shows a pending action needing approval.",
+   "Read the tool call listed in the task.",
+   "Tap \"Approve\" (or \"Deny\").",
+   "Look: the pending approval disappears and the task resumes (or stops, after deny)."
+  ],
+  "where": "AGI Work > tap a task that is waiting for approval > \"Approve\" or \"Deny\""
+ },
+ "S71.16": {
+  "labels": [],
+  "needs": "a paid account and a paired computer (the Remote feature is off in v1)",
+  "note": "The remote code session screens are gated by FEATURES.companion = false (apps/mobile/lib/v1FeatureFlags.ts line 16) and show a \"Remote\" unavailable message (app/(app)/companion/code/[threadId].tsx). The Remote control settings row is also hidden. I searched the app folder for the remote code session screens and Remote control entry points.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S71.17": {
+  "labels": [
+   {
+    "file": "src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "src/features/tasks/CloudTasksScreen.tsx",
+    "text": "New task"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The start flow is in src/features/tasks/startWork.ts; the exact position of \"New task\" on screen was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer and tap \"AGI Work\".",
+   "Tap \"New task\".",
+   "Type what the task should do and start it.",
+   "Look: the new task appears at the top of the AGI Work task list with a status.",
+   "Tap it to open the task and check its activity."
+  ],
+  "where": "AGI Work > \"New task\""
+ },
+ "S71.19": {
+  "labels": [],
+  "needs": "a signed-in account with a chat that has messages",
+  "note": "The Code line points at a line in MessageBubble.tsx that is now an animation setting; the draft store is src/features/chat/draftStore.ts and in-flight recovery is src/features/chat/inFlightTurnRecovery.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat, type a draft in the message box, but do not send it.",
+   "Force-quit AGI Mobile (on the Simulator: Cmd+Shift+H twice, then swipe the app card up).",
+   "Open the app again from the home screen.",
+   "Look: the same chat opens with the draft still in the message box and the earlier messages still shown.",
+   "If a reply was in progress, check that it resumes or shows as finished, as Expected says."
+  ],
+  "where": "Effect seen after the app is force-quit and reopened, on the chat screen"
+ },
+ "S71.25": {
+  "labels": [],
+  "needs": "an iPad or iPad Simulator",
+  "note": "The layout switches at 768 px (TABLET_MIN_WIDTH) and 1024 px (REGULAR_MIN_WIDTH) in src/shared/hooks/useTabletLayout.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the app on an iPad (the app is set to support tablets in app.config.js).",
+   "Look: the drawer stays on the left side as a fixed panel, not a slide-out.",
+   "Look: the chat area is wider and the message grid is laid out in more columns.",
+   "Turn the iPad or change split view width and check the layout adapts.",
+   "Compare with Expected: persistent drawer and wider layout on tablets."
+  ],
+  "where": "Effect seen on an iPad or iPad Simulator; the drawer stays visible on the left"
+ },
+ "S71.27": {
+  "labels": [],
+  "needs": "a phone or Simulator that can rotate",
+  "note": "Phones are locked to portrait (app/_layout.tsx calls lockPhonePortrait; app.config.js sets orientation portrait). Landscape is only used while a video player or presentation viewer is open. The iPad behaviour was not checked.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a chat on a phone.",
+   "Turn the phone sideways (on the Simulator, use Cmd+Left or Cmd+Right).",
+   "Look: the chat stays in portrait layout.",
+   "Compare with Expected: Expected says landscape re-lays out the chat usefully, but the code locks phones to portrait."
+  ],
+  "where": "Effect seen when a phone is turned sideways with a chat open; the screen should stay upright"
+ },
+ "S71.28": {
+  "labels": [
+   {
+    "file": "src/features/settings/index.tsx",
+    "text": "Storage"
+   },
+   {
+    "file": "app/(app)/settings/storage.tsx",
+    "text": "Clear cache"
+   },
+   {
+    "file": "app/(app)/settings/storage.tsx",
+    "text": "Delete all local data"
+   }
+  ],
+  "needs": "a downloaded model (for the model delete step, see S71.30); a test account for the delete-all step",
+  "note": "Clear cache asks first with the title \"Clear cache?\" (app/(app)/settings/storage.tsx around line 289).",
+  "reachable": "yes",
+  "steps": [
+   "Tap Settings, go to the \"Device\" section, tap \"Storage\".",
+   "Look at \"Downloaded models (estimated)\", \"Cache\" and \"Free space\" figures.",
+   "Tap \"Clear cache\" and confirm. Look: the cache figure drops and conversations and models stay.",
+   "If a downloaded model is listed, tap \"Delete <model name>\" and confirm. Look: the model is removed from the list.",
+   "Tap \"Delete all local data\" only on a test account, since it wipes conversations, memory and models from this device."
+  ],
+  "where": "Settings > Device > Storage"
+ },
+ "S71.30": {
+  "labels": [
+   {
+    "file": "src/features/model-picker/components/ModelPickerSheet.tsx",
+    "text": "On device"
+   },
+   {
+    "file": "src/features/model-picker/downloadConfirmation.ts",
+    "text": "Download"
+   },
+   {
+    "file": "app/(app)/(tabs)/chat.tsx",
+    "text": "Download a model to chat"
+   }
+  ],
+  "needs": "Wi-Fi for the download; enough free storage; a phone (Simulator may not run on-device models)",
+  "note": "I did not find the exact control that switches a chat from Cloud to Local mode; the picker's On device group is the route found. Check the mode before relying on the steps.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat. Tap the model button beside the + (it reads \"Model:\" followed by the model name).",
+   "In the model picker, find the \"On device\" group and tap a model to download it.",
+   "Tap \"Download\" in the confirmation. Look: the download starts and the storage size is shown.",
+   "When the download finishes, pick that model, type a message and send it.",
+   "Look: a reply comes from the model on the device. Turn Wi-Fi and cellular off on the phone to check it needs no cloud."
+  ],
+  "where": "Chat screen > \"Model:\" button beside the + in the composer (opens the model picker) > \"On device\" group > download a model"
+ },
+ "S71.31": {
+  "labels": [
+   {
+    "file": "src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   },
+   {
+    "file": "src/features/settings/cloud-billing/index.tsx",
+    "text": "Restore purchases"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account; an App Store or Google Play test account for a real restore",
+  "note": "Purchases are switched off: FEATURES.billing is false in apps/mobile/lib/v1FeatureFlags.ts, and src/features/billing/service.ts throws 'cloud billing not available in v1'. Only the restore screen is reachable.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Settings, go to the \"Account\" section, tap \"Subscription\".",
+   "Look: if the store is not live you will see \"Purchases are not available right now\".",
+   "Tap \"Restore purchases\". Look: a message appears such as \"No purchases to restore\" or \"Restore purchases needs the store\".",
+   "Compare with Expected: buying a plan or credits is not switched on in v1, so the buy path cannot be tested yet."
+  ],
+  "where": "Settings > Account > Subscription > \"Restore purchases\""
+ },
+ "S71.32": {
+  "labels": [
+   {
+    "file": "src/features/settings/index.tsx",
+    "text": "Safety & Security"
+   },
+   {
+    "file": "src/features/settings/safety-security/index.tsx",
+    "text": "App Lock"
+   },
+   {
+    "file": "src/features/settings/safety-security/index.tsx",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "a device with Face ID or Touch ID set up (not checked on the Simulator)",
+  "note": "The privacy cover on app switch was not found: searched apps/mobile for privacy cover, app switch and AppState usage and found nothing.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Settings, go to the \"Device\" section, tap \"Safety & Security\".",
+   "Under \"Device boundary\", turn on the \"App Lock\" switch and follow the device prompt.",
+   "Close the app and open it again. Look: an app lock screen asks you to unlock before the chat shows.",
+   "Tap \"Permissions\" and look at the list of phone permissions (camera, microphone, photos, notifications).",
+   "Compare with Expected: App Lock and OS permission management are present; no privacy cover on app switch was found in the code."
+  ],
+  "where": "Settings > Device > Safety & Security > \"App Lock\" and \"Permissions\""
+ }
+}

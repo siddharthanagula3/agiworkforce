@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-02
+Last updated: 2026-11-24
 
 What the system's limits are, which of them are measured, and how to measure the
 rest. `tools/load-test` holds the scenarios; this file holds the targets and the
@@ -54,13 +54,15 @@ any test account holds, which is the work, not the script.
 | CPU and memory        | the hosting platform's function limits                                         | platform dashboards, not in repo    |
 | Object storage        | the store's own quota                                                          | platform dashboards, not in repo    |
 | CDN                   | platform-managed                                                               | platform dashboards, not in repo    |
-| Streaming connections | one active turn per conversation, admitted in `conversation-turn-admission.ts` | per-request                         |
+| Streaming connections | one active turn per conversation (`conversation-turn-admission.ts`), and a per-user concurrent turn ceiling by plan (`acquireManagedTurnSlot`) | per-request                         |
 | Notification sends    | the generic rate limiter                                                       | per namespace                       |
 
 Two of these are worth stating plainly rather than leaving implied:
 
-- **There is no global backpressure.** Admission is per conversation, and video
-  generation has its own slot. Nothing sheds load across the whole process, so
+- **There is no global backpressure.** Admission is per conversation and, for
+  managed turns, per user by plan (denied as `plan-excluded`, `ceiling-reached`
+  or `limiter-unavailable`), rate limits scale by tier, and video generation
+  has its own slot. Nothing sheds load across the whole process, so
   the first symptom of saturation is latency rather than refusal. A run that
   finds the ceiling should say which of the two it hit.
 - **The key-value store is a hard dependency of the completion path.** When it

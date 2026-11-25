@@ -1,0 +1,382 @@
+{
+ "S68.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   }
+  ],
+  "needs": "a second client signed in to the same account",
+  "note": "The Code line cites ChatStateManager.ts:340, which now holds the sendMessage type, not the identifier logic; the session identifier itself has no visible text.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the Sessions icon in the sidebar header and note the session title on the Local tab.",
+   "Open the same session on the second client and compare the title and row shown with Expected."
+  ],
+  "where": "No control of its own. Its effect shows as the same session title and row in the Sessions sheet on each client"
+ },
+ "S68.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Local"
+   }
+  ],
+  "needs": "a second client (VS Code, CLI or desktop) signed in to the same account and the same workspace",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions icon (tooltip Sessions) in the sidebar header.",
+   "Make sure the Local tab is selected, then click a session row.",
+   "Compare the conversation history shown with the history on the second client, as Expected."
+  ],
+  "where": "Sessions icon in the sidebar header > Local tab > click a session row"
+ },
+ "S68.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a cloud session that has a working branch, and a second client on the same account",
+  "note": "The branch appears as small text on the row with no label of its own.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions icon in the sidebar header.",
+   "Click the Cloud tab.",
+   "Read the branch text under a session row (shown only when the session has a working branch).",
+   "Compare the branch with the branch the same session shows on the second client."
+  ],
+  "where": "Sessions icon in the sidebar header > Cloud tab > look at the branch line under a session row"
+ },
+ "S68.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue in the Cloud"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Repository: {repository}"
+   }
+  ],
+  "needs": "a folder with a GitHub git remote and a pushed branch",
+  "note": "The Cloud tab list is filtered to sessions of the repository open in the window, but no row shows the repository name directly.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder whose git remote is on GitHub, with its branch pushed.",
+   "Open the Command Palette and run Code: Continue in the Cloud.",
+   "Type a goal and press Enter.",
+   "Read the Repository: line in the review dialog and compare it with the repository on the other client, then click Cancel."
+  ],
+  "where": "Command palette > Code: Continue in the Cloud > type a goal > review dialog line Repository:"
+ },
+ "S68.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Session Worktrees"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: New Session in a Worktree"
+   }
+  ],
+  "needs": "a git repository with at least one session worktree",
+  "note": "The Code line cited sessionWorktrees.ts lines that moved; the command and its worktree list are present in the file.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and run Code: Session Worktrees.",
+   "Read the list of worktrees and the branch named for each one.",
+   "Compare the worktree a session is tied to with the worktree shown on the second client."
+  ],
+  "where": "Command palette > Code: Session Worktrees"
+ },
+ "S68.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Model: {model}"
+   }
+  ],
+  "needs": "a folder with a GitHub git remote and a pushed branch",
+  "note": "No screen was found that shows the instruction files a session uses.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Run Code: Continue in the Cloud, type a goal and press Enter.",
+   "Read the Model: line in the review dialog and compare it with the model shown on the second client.",
+   "Click Cancel."
+  ],
+  "where": "No control of its own. Its visible effect is the Model: line in the Code: Continue in the Cloud review dialog"
+ },
+ "S68.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Checkpoints"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Checkpoints"
+   }
+  ],
+  "needs": "a session that already has at least one prompt",
+  "note": "No separate task-plan screen was found; the plan appears only in the chat. The Code line cited lines that moved.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with some turns in it.",
+   "Open the Command Palette and run Code: Checkpoints.",
+   "Read the checkpoints listed for the session, and the Checkpoints item in the chat menu if it shows.",
+   "Compare the checkpoints with those on the second client."
+  ],
+  "where": "Command palette > Code: Checkpoints"
+ },
+ "S68.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Approval required"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a cloud session with a pending approval, and a second client on the same account",
+  "note": "The approve item text is built from Approve plus ' and continue'.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions icon in the sidebar header and click the Cloud tab.",
+   "Click a cloud session that is waiting for an approval.",
+   "Read the Approval required section at the top of the list (items show Approve and continue or Reject).",
+   "Answer it here, then check the second client shows the answer."
+  ],
+  "where": "Sessions icon in the sidebar header > Cloud tab > click a session row > Approval required"
+ },
+ "S68.09": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Working"
+   }
+  ],
+  "needs": "a cloud session that is running a turn, and a second client on the same account",
+  "note": "No separate view of tool activity was found in this app.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a turn in a cloud session from one client.",
+   "Open the same session on the second client and watch the progress notice that reads Working while the turn runs."
+  ],
+  "where": "No control of its own. Its visible effect is tool lines appearing live in an open cloud session while a turn runs"
+ },
+ "S68.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts",
+    "text": "Continue here"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a cloud session on the same account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions icon in the sidebar header and click the Cloud tab.",
+   "Click a cloud session row.",
+   "In the list, click Continue here and confirm the review dialog.",
+   "Check the chat in this window now shows the session's conversation, and that the handoff is explicit."
+  ],
+  "where": "Sessions icon in the sidebar header > Cloud tab > click a session row > Continue here"
+ },
+ "S68.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Remote Control"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Pair a phone"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Pair with Desktop"
+   }
+  ],
+  "needs": "a phone with the Mobile app signed in to the same account, a folder open in VS Code, a trusted workspace",
+  "note": "The phone-side wording is taken from the text in the desktop code; the phone app is outside this folder and was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI in VS Code and open a folder, trusting the workspace.",
+   "Run Code: Remote Control from the Command Palette and click Pair a phone.",
+   "On the phone, open the Mobile app, choose Pair with Desktop and scan the code.",
+   "On the phone, open a local session from this folder and send a message, then check it runs on this computer."
+  ],
+  "where": "Command palette > Code: Remote Control > Pair a phone; then on the phone, Pair with Desktop"
+ },
+ "S68.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Continue in the cloud"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Continue in the Cloud"
+   }
+  ],
+  "needs": "a folder with a GitHub git remote and a pushed branch, and a signed-in AGI account",
+  "note": "Code line says unfinished: session creation needs AGI_E2B_EXECUTION on in production, so the cloud run may not start.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions icon in the sidebar header and click the Cloud tab.",
+   "Click the Continue in the cloud icon (tooltip Continue in the cloud) in the sheet header.",
+   "Type a goal, read the review dialog, and click Continue in the cloud to start, or Cancel to stop.",
+   "Check the cloud session appears on the Cloud tab with the goal as its title."
+  ],
+  "where": "Sessions icon in the sidebar header > Cloud tab > Continue in the cloud icon in the sheet header"
+ },
+ "S68.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/context-handoff/index.ts",
+    "text": "Bring the branch in"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a cloud session with a working branch on a GitHub repository, and a local folder with that repository open",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions icon in the sidebar header and click the Cloud tab.",
+   "Click a cloud session that has a working branch.",
+   "Click Bring the branch in in the list.",
+   "If the folder has uncommitted files, read the list of files at stake and decide; then check the branch from the cloud session is checked out locally."
+  ],
+  "where": "Sessions icon in the sidebar header > Cloud tab > click a session row > Bring the branch in"
+ },
+ "S68.18": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "What moves: the task you typed and the pushed branch."
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "What stays here: this chat\u2019s conversation, local tools and servers, and anything not pushed."
+   }
+  ],
+  "needs": "a folder with a GitHub git remote and a pushed branch",
+  "note": "The review dialog is the place the file and environment list is shown; no list of individual files is shown for a cloud move, only the uncommitted count.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder with a GitHub remote and a pushed branch, with some uncommitted changes if you want to see that line.",
+   "Run Code: Continue in the Cloud and type a goal.",
+   "Read the review dialog: Repository, Branch, Model, Network, What moves and What stays here.",
+   "Click Cancel and check that nothing was started."
+  ],
+  "where": "Command palette > Code: Continue in the Cloud > type a goal > review dialog lines What moves and What stays here"
+ },
+ "S68.22": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Pair a phone"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Pairing code"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Remote Control"
+   }
+  ],
+  "needs": "a phone with the Mobile app signed in to the same account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI in VS Code.",
+   "Run Code: Remote Control from the Command Palette and click Pair a phone.",
+   "Read the Pairing code and the QR code shown on the panel.",
+   "On the phone, scan the code with Pair with Desktop, then check the panel shows Connected to, followed by the phone name."
+  ],
+  "where": "Command palette > Code: Remote Control > Pair a phone"
+ },
+ "S68.23": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Disconnect phone"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Stop Remote Control"
+   }
+  ],
+  "needs": "a phone that is paired and connected",
+  "note": "The revoke-from-phone side is not in this folder; the desktop control is shown here.",
+  "reachable": "yes",
+  "steps": [
+   "With a phone connected, run Code: Remote Control from the Command Palette.",
+   "Click Disconnect phone and read the Disconnect dialog.",
+   "Click Disconnect phone in the dialog.",
+   "On the phone, try to follow or steer a session and check it no longer connects."
+  ],
+  "where": "Command palette > Code: Remote Control > Disconnect phone (while connected); or Command Palette > Code: Stop Remote Control"
+ },
+ "S68.26": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Remote Control: reconnecting"
+   }
+  ],
+  "needs": "a paired and connected phone, and a way to drop the network connection",
+  "note": "The reconnect step is in the remote control service; resuming the same chat state is in ChatStateManager, which has no separate screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Pair and connect a phone with a session open.",
+   "Turn Wi-Fi off on the Mac for a few seconds, then back on.",
+   "Run Code: Remote Control and read the status: Connection lost, then Connected to the phone, and check the session on the phone shows the same history."
+  ],
+  "where": "No control of its own. Its visible effect is the Remote Control panel status changing to reconnecting and then back to connected"
+ },
+ "S68.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/sessionActivityAlert.ts",
+    "text": "Open chat"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/local-code-session-activity.ts",
+    "text": "Approval needed"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Session Activity"
+   }
+  ],
+  "needs": "VS Code in the background and a session that can ask for approval",
+  "note": "Notices are posted only while the window is unfocused, and the cross-client source was not verified; the Code line cited sidebarProvider.ts and chatEditorPanel.ts lines that moved.",
+  "reachable": "yes",
+  "steps": [
+   "Click another app so VS Code is not the focused window.",
+   "Start or wait for an approval in a session that is active in this window.",
+   "Watch for the notification Approval needed with the Open chat button.",
+   "Click Open chat and check the session shows the item waiting for approval."
+  ],
+  "where": "VS Code notification (shown when the VS Code window is not focused): Approval needed, with an Open chat button"
+ }
+}

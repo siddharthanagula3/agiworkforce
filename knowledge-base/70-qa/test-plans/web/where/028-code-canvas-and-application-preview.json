@@ -1,0 +1,207 @@
+{
+ "S28.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Source"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Save"
+   }
+  ],
+  "needs": "a text artifact (code, HTML or document); not PDF, DOCX or image",
+  "note": "Source editing is offered only for text artifacts on the latest version; the code audit's line numbers had moved, but the Save and Source controls exist at ArtifactPreview.tsx:2600-2726. The control that starts editing inside the Source view was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a text artifact from the chat so it shows in the Artifacts panel.",
+   "Click the Source button (title \"Source\").",
+   "Change a line of the text in the editor.",
+   "Click Save (title \"Save as a new version\"). The Save button only appears when the source can be edited.",
+   "Look for a new version in the version controls, and check that the edited text is still there after you switch away and back."
+  ],
+  "where": "Artifacts panel > Source (icon button, title \"Source\") > edit the text > Save (title \"Save as a new version\")"
+ },
+ "S28.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Preview"
+   }
+  ],
+  "needs": "none",
+  "note": "Code audit says partial: the live preview needs the sandbox origin (NEXT_PUBLIC_SANDBOX_ORIGIN, apps/web/lib/artifact-sandbox.ts:159) set and the sandbox redeployed, per the plan; not verified live.",
+  "reachable": "yes",
+  "steps": [
+   "Generate an HTML artifact in the chat and open it in the Artifacts panel.",
+   "Make sure the Preview button (title \"Preview\") is selected.",
+   "Check that the page renders and responds to clicks and typing, as the page itself describes."
+  ],
+  "where": "Artifacts panel > Preview (icon button, title \"Preview\") on an HTML artifact"
+ },
+ "S28.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Preview"
+   }
+  ],
+  "needs": "none",
+  "note": "Code audit says partial: same sandbox origin dependency as S28.10 (apps/web/lib/artifact-sandbox.ts:159); not verified live.",
+  "reachable": "yes",
+  "steps": [
+   "Generate a React artifact in the chat and open it in the Artifacts panel.",
+   "Make sure the Preview button (title \"Preview\") is selected.",
+   "Check that the components render and respond to clicks, as the code describes.",
+   "Compare with Expected: components render as a live preview."
+  ],
+  "where": "Artifacts panel > Preview (icon button, title \"Preview\") on a React artifact"
+ },
+ "S28.16": {
+  "labels": [],
+  "needs": "an artifact that throws at run time",
+  "note": "The error box (pre id error) is written by infrastructure/sandbox/index.html:374 and reportRenderError at infrastructure/sandbox/index.html:920; it shows only the message text, with no recovery control of its own. Recovery depends on Refresh preview (ArtifactPreview.tsx:3542).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open an artifact whose code throws an error when it runs (for example a React artifact that throws).",
+   "Look in the preview area for the red-text message that starts with \"Render error:\" in a box.",
+   "Note that the box has no button; the recovery control is Refresh preview (aria-label \"Refresh preview\")."
+  ],
+  "where": "Preview area of the Artifacts panel, when the app throws an error"
+ },
+ "S28.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Refresh preview"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact that shows a preview.",
+   "Click the Refresh preview button (circular arrow icon, title \"Refresh preview\").",
+   "Look for the preview to reload and show its content again."
+  ],
+  "where": "Artifacts panel > Refresh preview (icon button, title \"Refresh preview\")"
+ },
+ "S28.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "No control labelled restart or reset was found in ArtifactPreview.tsx, ArtifactsPanel.tsx or the artifacts store. The nearest control is Refresh preview (ArtifactPreview.tsx:3542, which bumps refreshKey at ArtifactPreview.tsx:1757), but that is not a labelled restart. Searched apps/web/features/chat/components/artifacts, the artifacts store and packages/ui for Restart, Reload and restart.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S28.22": {
+  "labels": [],
+  "needs": "an app whose code calls agi.complete",
+  "note": "The brokered call is defined at infrastructure/sandbox/index.html:313 and served by apps/web/app/api/artifacts/runtime/[token]/complete/route.ts; the route's quoted line was not found, so the call path is confirmed by the sandbox file only.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open an app that calls agi.complete(...) in its code (the generated app itself makes the call).",
+   "Click the button or control in the app that triggers the AI call.",
+   "Look for the AI reply to appear inside the app; no separate control in the Artifacts panel shows this."
+  ],
+  "where": "Inside the app's own code: the agi.complete(prompt, options) call provided by the sandbox runtime"
+ },
+ "S28.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Refresh preview"
+   }
+  ],
+  "needs": "an app whose code uses storage",
+  "note": "No user-facing control to configure storage or a database was found in the artifacts panel; the storage routes are apps/web/app/api/artifacts/runtime/[token]/storage/route.ts and apps/web/lib/services/artifact-runtime-service.ts:208. Whether the user can configure it was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open an app whose code writes a value with storage.set(...).",
+   "Reload the preview with Refresh preview (title \"Refresh preview\").",
+   "Look for the value to still be there after the reload, which shows app-local storage works."
+  ],
+  "where": "Inside the app's own code: storage.get / storage.set calls provided by the sandbox runtime"
+ },
+ "S28.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download source"
+   }
+  ],
+  "needs": "none",
+  "note": "The menu item text is built from the language, so the extension part varies by artifact.",
+  "reachable": "yes",
+  "steps": [
+   "Open a code or text artifact in the Artifacts panel.",
+   "Click the Download button (title \"Download\", aria-label \"Download artifact\").",
+   "Click Download source; the item text ends with the file extension, for example \"Download source (.html)\".",
+   "Open the downloaded file and compare it with the code shown in the Source view."
+  ],
+  "where": "Artifacts panel > Download artifact (title \"Download\") > Download source (.ext)"
+ },
+ "S28.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Download all"
+   }
+  ],
+  "needs": "two or more artifacts in one conversation",
+  "note": "The button shows only when there are more than one artifact (ArtifactsPanel.tsx:735); the zip is built in apps/web/features/chat/utils/downloadArtifacts.ts:163.",
+  "reachable": "yes",
+  "steps": [
+   "Create a chat with two or more artifacts so the Artifacts panel shows them.",
+   "Click the Download all button (title \"Download all artifacts as zip\").",
+   "Wait for the toast \"Preparing artifact download\u2026\" to finish.",
+   "Open the downloaded artifacts.zip and check that each artifact is inside."
+  ],
+  "where": "Artifacts panel > Download all"
+ },
+ "S28.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Anyone with the link"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Whether a Free account can publish was not checked in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact in the Artifacts panel and sign in if asked.",
+   "Click the Publish button (globe icon, title \"Publish\"). Its label is visible only on wide panels.",
+   "Choose an audience: \"Anyone with the link\", \"Everyone in this workspace\" or \"Only people you invite\".",
+   "Wait for the toast \"Published \u00b7 link copied to clipboard\" or \"Published. Copy the link from the bar below.\"",
+   "Open the link in a private window and compare the page with the artifact."
+  ],
+  "where": "Artifacts panel > Publish (globe button, aria-label \"Publish artifact to a public link\")"
+ },
+ "S28.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Restore"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Version history"
+   }
+  ],
+  "needs": "an artifact with at least two versions",
+  "note": "A second route exists: the more menu item \"Restore version N\" (ArtifactPreview.tsx:2346) when viewing an older version. The label of the trigger that opens that menu was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact that has more than one version.",
+   "Click the version counter button (title \"Version history\") to open the list.",
+   "Click Restore beside an older version, then Restore in the confirmation \"Restore version N?\".",
+   "Check that the content matches the older version and that a new latest version was added."
+  ],
+  "where": "Artifacts panel > Version history (title \"Version history\") > Restore beside an older version"
+ }
+}

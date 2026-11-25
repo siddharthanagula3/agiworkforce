@@ -1,0 +1,566 @@
+{
+ "S88.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "How memory works"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Memory tab name was not checked in WebSettingsModal. The Policy page also links How workspace policy works (apps/web/app/workspace/policy/page.tsx), which needs a workspace admin.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the account menu and choose Settings.",
+   "Open the Memory section.",
+   "Click the link How memory works.",
+   "Check that a help article about memory opens and matches what Memory does."
+  ],
+  "where": "Settings > Memory > How memory works"
+ },
+ "S88.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "Help center"
+   },
+   {
+    "file": "apps/web/features/support/components/HelpSearch.tsx",
+    "text": "Search help articles"
+   }
+  ],
+  "needs": "none",
+  "note": "The search box heading is Search the help centre in the same file.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu, then choose Help.",
+   "Click Help center (it opens in a new tab).",
+   "Type a word such as billing into Search help articles.",
+   "Check that matching articles are listed and that clicking one opens it."
+  ],
+  "where": "Settings > Help > Help center"
+ },
+ "S88.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Raise a ticket"
+   },
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Send reply"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Contact support link in HelpSection.tsx goes to the public /support page, not this in-app form.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu, then choose Help.",
+   "Click Raise a ticket.",
+   "Type a Subject and What happened, then click Raise ticket.",
+   "Check that the ticket appears in the list, then open it and use Send reply to add a follow-up and check that the reply shows in the thread."
+  ],
+  "where": "Settings > Help > Raise a ticket"
+ },
+ "S88.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "Report a bug"
+   },
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Raise ticket"
+   },
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Attach diagnostics: your build, platform and the last few errors this browser recorded."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Report a bug link goes to /support#bugs, a public page. The in-app form is the one that attaches build and platform.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Help.",
+   "Click Raise a ticket, type a Subject and What happened, and read the line Attach diagnostics.",
+   "Click Raise ticket and check that the ticket is listed with its status.",
+   "Optional: click Report a bug in the Help list and compare the public page with Expected."
+  ],
+  "where": "Settings > Help > Raise a ticket (in-app bug report); Settings > Help > Report a bug (public page)"
+ },
+ "S88.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Send feedback"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "General feedback"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The plan marks this item as unfinished at mount. The dialog is mounted with hideTrigger in WebChatPage.tsx and WebAppShell.tsx, and the menu item calls it, but I did not test that it opens.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu from the sidebar.",
+   "Click Send feedback.",
+   "Choose General feedback, type in Details, then click Send feedback.",
+   "Check that the dialog says Thanks, your feedback was sent."
+  ],
+  "where": "Account menu > Send feedback"
+ },
+ "S88.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Feature request"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Send feedback"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Same mount caveat as S88.05.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Send feedback.",
+   "Choose Feature request.",
+   "Type in Details and click Send feedback.",
+   "Check the thank-you message and that the feedback type is Feature request."
+  ],
+  "where": "Account menu > Send feedback > Feature request"
+ },
+ "S88.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Review diagnostics"
+   },
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Download diagnostics"
+   },
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Attach diagnostics: your build, platform and the last few errors this browser recorded."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Sharing happens only when the ticket is raised with the checkbox ticked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Help, then click Raise a ticket.",
+   "Type a Subject and What happened. Leave Attach diagnostics ticked.",
+   "Click Review diagnostics and read the box of diagnostics that would be attached.",
+   "Click Download diagnostics, then compare the file and the box with Expected."
+  ],
+  "where": "Settings > Help > Raise a ticket > Review diagnostics > Download diagnostics"
+ },
+ "S88.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/turn-error-notice.ts",
+    "text": "Reference:"
+   }
+  ],
+  "needs": "a way to make a request fail",
+  "note": "The reference text comes from the translation template {{text}} Reference: {{reference}}. A tester cannot make a failure on purpose from the app, so this may need an engineer to cause one.",
+  "reachable": "unsure",
+  "steps": [
+   "Send a chat message while the service is failing, or use a failing model route.",
+   "Read the error line under the reply.",
+   "Check that it ends with a Reference: code you could quote to support."
+  ],
+  "where": "Any chat reply that fails: the error line under the reply"
+ },
+ "S88.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "System status"
+   },
+   {
+    "file": "apps/web/app/status/page.tsx",
+    "text": "Checks passing"
+   }
+  ],
+  "needs": "none",
+  "note": "The Help page also has a Check service status button in apps/web/app/help/page.tsx. The Composer footer shows Unavailable right now only for a model that is down.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Help.",
+   "Click System status (it opens in a new tab).",
+   "Read the overall status word and the list of checks.",
+   "Compare with Expected: the page should show when results were checked and show Checks passing or a failing state."
+  ],
+  "where": "Settings > Help > System status"
+ },
+ "S88.11": {
+  "labels": [],
+  "needs": "a live incident, which the tester cannot start",
+  "note": "The notice appears only when the server health checks fail. The dismissal is saved in this browser under agi-dismissed-service-notices (apps/web/shared/components/ServiceNotices.tsx). I did not find a visible label for the dismiss control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and watch the top of the app while an incident is open.",
+   "Read the notice text, then click its dismiss control.",
+   "Compare with Expected: the notice should say the problem and its status."
+  ],
+  "where": "A banner at the top of the app, shown only during a live incident"
+ },
+ "S88.12": {
+  "labels": [],
+  "needs": "a scheduled maintenance window, which the tester cannot create",
+  "note": "Window text comes from apps/web/lib/server/service-notices.ts (ANNOUNCE_AHEAD_MS, maintenanceNotice). I did not find the exact visible copy, so no label is given.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in when a maintenance window is scheduled within 72 hours.",
+   "Read the notice; it should change from upcoming to underway.",
+   "Compare with Expected: the notice should give the planned time."
+  ],
+  "where": "A banner at the top of the app, shown up to 72 hours before a planned maintenance window"
+ },
+ "S88.13": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/ReleaseNotice.tsx",
+    "text": "Read more"
+   },
+   {
+    "file": "apps/web/shared/components/ReleaseNotice.tsx",
+    "text": "What's new: "
+   }
+  ],
+  "needs": "a release newer than the last one this browser saw",
+  "note": "The banner depends on the last seen release stored in this browser (agi-last-seen-release). It appears only once per release.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in after a new release is published.",
+   "Look for the banner that starts with What's new:.",
+   "Click Read more and read the release notes page.",
+   "Check that the release notes show what changed."
+  ],
+  "where": "Any page after a new release: the banner What's new: <headline> > Read more"
+ },
+ "S88.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+    "text": "is no longer available"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Unavailable right now"
+   }
+  ],
+  "needs": "a model that is being retired, which the tester may not have",
+  "note": "Retirement dates are not visible to a tester without a live retirement. The Leaving text is built in ComposerFooter.tsx from a short label.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and open the model picker from the composer footer.",
+   "Look for a model marked Leaving or Unavailable right now.",
+   "If a chat is saved with a retired model, read the notice that says the model is no longer available.",
+   "Compare with Expected: the notice should name the replacement model and offer a way to pick another."
+  ],
+  "where": "Chat > the model picker in the composer, and the notice shown in chat when the model is retired"
+ },
+ "S88.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "Import memory from other AI providers"
+   },
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "Upload file"
+   },
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "Paste memories"
+   }
+  ],
+  "needs": "text or a file from another AI assistant",
+  "note": "The button that opens this dialog was not read from MemorySection.tsx (the open call is useImportMemoryDialog). The save button label was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Memory.",
+   "Click the button that opens the import dialog, the one titled Import memory from other AI providers.",
+   "Click Copy prompt, paste a reply into Paste memories, or use Upload file.",
+   "Check the preview of memories to import before saving, with Already saved marked where it applies."
+  ],
+  "where": "Settings > Memory > Import memory from other AI providers"
+ },
+ "S88.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Privacy choices"
+   },
+   {
+    "file": "apps/web/app/privacy/requests/YourRightsRequests.tsx",
+    "text": "Your requests"
+   },
+   {
+    "file": "apps/web/app/privacy/requests/page.tsx",
+    "text": "Exercise your rights."
+   }
+  ],
+  "needs": "a signed-in account to see your own requests (signed-out requests go by email)",
+  "note": "The request form's submit label was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and click Privacy choices.",
+   "Read Your requests and the Access, Correction and Erasure request types.",
+   "Submit a request and check that it appears under Your requests with its status."
+  ],
+  "where": "Footer > Privacy choices"
+ },
+ "S88.17": {
+  "labels": [
+   {
+    "file": "apps/web/app/cookies/CookiePreferencesButton.tsx",
+    "text": "Change your cookie preferences"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Cookies"
+   }
+  ],
+  "needs": "none",
+  "note": "The first-visit consent banner is in apps/web/shared/components/CookieConsent.tsx. The save button label was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and click Cookies.",
+   "Click Change your cookie preferences.",
+   "Turn a cookie category off, save, and reload the page.",
+   "Check that the choice stays off and that the page respects it."
+  ],
+  "where": "Footer > Cookies > Change your cookie preferences"
+ },
+ "S88.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Reported. Thank you: our trust and safety team will review it."
+   }
+  ],
+  "needs": "a chat with a reply",
+  "note": "The menu item's own label and the opener button were not confirmed in MessageBubble.tsx, only the click handler (around line 4065) and the Flag icon.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and find an assistant reply.",
+   "Open its more actions menu and choose the report item.",
+   "Read the confirmation message.",
+   "Compare with Expected: it should say the report goes to trust and safety."
+  ],
+  "where": "Chat > an assistant reply > its more actions menu, the item that reports the message"
+ },
+ "S88.19": {
+  "labels": [
+   {
+    "file": "apps/web/app/copyright/report/page.tsx",
+    "text": "Report infringing or impersonating content."
+   },
+   {
+    "file": "apps/web/app/copyright/report/CopyrightNoticeForm.tsx",
+    "text": "The information in this notice is accurate."
+   }
+  ],
+  "needs": "a shared conversation or artifact link on this site",
+  "note": "I did not find a footer or menu link to this page. The owner should confirm how people reach it.",
+  "reachable": "yes",
+  "steps": [
+   "Open the copyright report page in the browser.",
+   "Read the title Report infringing or impersonating content.",
+   "Choose What you are reporting, fill in the link and the contact details, tick the accuracy statement, and submit.",
+   "Check the confirmation that gives a reference and says nothing has been removed yet."
+  ],
+  "where": "Open /copyright/report in the browser (no sign-in needed)"
+ },
+ "S88.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "The model declined to finish this response for safety reasons."
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Report issue"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Submit report"
+   }
+  ],
+  "needs": "a refused reply, which the tester may not be able to cause",
+  "note": "The notice shows only when the last reply has a refusal finish reason.",
+  "reachable": "yes",
+  "steps": [
+   "Find a reply with the notice The model declined to finish this response for safety reasons.",
+   "Click Report issue.",
+   "Read the dialog Report an incorrect refusal, add details, and click Submit report.",
+   "Check the thank-you message."
+  ],
+  "where": "Chat > a reply that was refused for safety reasons > Report issue"
+ },
+ "S88.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/SuspensionAppeal.tsx",
+    "text": "Why should the suspension be lifted?"
+   },
+   {
+    "file": "apps/web/features/auth/SuspensionAppeal.tsx",
+    "text": "Email address of the suspended account"
+   },
+   {
+    "file": "apps/web/features/auth/AccountAccessNotice.tsx",
+    "text": "When accounts are suspended"
+   }
+  ],
+  "needs": "a suspended account (not normally available to a tester)",
+  "note": "I did not confirm the link or button on the suspended-account screen that leads to the appeal.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a suspended account, or open /appeal.",
+   "Read the notice about accounts being suspended.",
+   "Type the email address of the suspended account, then add your reason under Why should the suspension be lifted?.",
+   "Submit, then check the receipt and reference that the page says is sent by email."
+  ],
+  "where": "Appeal page /appeal, reached from the suspended-account notice"
+ },
+ "S88.22": {
+  "labels": [
+   {
+    "file": "apps/web/app/security/page.tsx",
+    "text": "Report a vulnerability"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Security"
+   }
+  ],
+  "needs": "none",
+  "note": "The footer group name was not checked; the Security link is in the nav list in nav.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and click Security.",
+   "Click Report a vulnerability on the page.",
+   "Read the reporting section.",
+   "Check that a security.txt file is served at /.well-known/security.txt and points to the policy."
+  ],
+  "where": "Footer > Security > Report a vulnerability"
+ },
+ "S88.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Report an accessibility barrier"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The public accessibility page is apps/web/app/accessibility/page.tsx. The dedicated channel wording was not confirmed on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Help.",
+   "Click Report an accessibility barrier.",
+   "Check that the form opens with the subject Accessibility barrier and a What happened box.",
+   "Compare with Expected: the form should say it is a dedicated accessibility channel."
+  ],
+  "where": "Settings > Help > Report an accessibility barrier"
+ },
+ "S88.24": {
+  "labels": [
+   {
+    "file": "apps/web/app/legal/archive/[policy]/page.tsx",
+    "text": "Version history."
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Legal"
+   }
+  ],
+  "needs": "none",
+  "note": "The version history link is a shared PolicyVersionsLink. I did not confirm the change-between-versions view.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and click Legal.",
+   "Open a policy such as Terms, then follow its version history link.",
+   "Read the page titled Version history. and open an archived date.",
+   "Compare with Expected: the archived version should show what changed."
+  ],
+  "where": "Footer > Legal > Version history"
+ },
+ "S88.25": {
+  "labels": [
+   {
+    "file": "apps/web/app/subprocessors/page.tsx",
+    "text": "Subprocessors."
+   }
+  ],
+  "needs": "none",
+  "note": "I did not find a footer link to this page. The change-log section was not confirmed by a read of the full page.",
+  "reachable": "yes",
+  "steps": [
+   "Open the subprocessors page in the browser.",
+   "Read the title Subprocessors. and the table with the caption Subprocessors.",
+   "Look for a change log on the page.",
+   "Compare with Expected: the list should be current and a change log should be published."
+  ],
+  "where": "Open /subprocessors in the browser (public page)"
+ },
+ "S88.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Trust centre"
+   },
+   {
+    "file": "apps/web/app/trust/page.tsx",
+    "text": "Trust and compliance status"
+   }
+  ],
+  "needs": "none",
+  "note": "Partial item: the owner has not decided on commissioning SOC 2, ISO 27001 or a penetration test, so reports may not exist.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and click Trust centre.",
+   "Read the title Trust and compliance status and the section list.",
+   "Look for the evidence section, The documents behind the rows.",
+   "Compare with Expected: the page should say no certifications are claimed; SOC 2, ISO 27001 and a penetration test are not yet published."
+  ],
+  "where": "Footer > Trust centre > Trust and compliance status"
+ },
+ "S88.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Legal"
+   },
+   {
+    "file": "apps/web/app/legal/page.tsx",
+    "text": "India: DPDP notice"
+   },
+   {
+    "file": "apps/web/app/privacy/india/page.tsx",
+    "text": "Notice to Data Principals in India."
+   }
+  ],
+  "needs": "none",
+  "note": "The Expected line asks for notices shown to users in a jurisdiction; these are reachable public pages, but the code does not show a notice shown automatically to users by their location (no region check found in the listed files), so a tester reaches them by navigating. The footer link is in apps/web/features/marketing/components/system/nav.ts (FOOTER_LEGAL), and the plan's \"Where to find it: not written yet\" is outdated. Whether the footer also appears inside signed-in screens was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the public website (no sign-in needed) and scroll to the footer.",
+   "Click \"Legal\" in the footer's legal links.",
+   "On the \"Legal.\" page, find the row \"India: DPDP notice\" and click its link to /privacy/india.",
+   "Check that the page titled \"Notice to Data Principals in India.\" shows the itemised DPDP notice, including the grievance redressal section and the nomination note.",
+   "Go back to the \"Legal.\" page and open the row that links to /legal/eu-representative.",
+   "Check that the page titled \"EU representative.\" says AGI has not designated an EU representative under GDPR Article 27, with the date and where to send privacy requests."
+  ],
+  "where": "Public site footer > Legal > India: DPDP notice (the EU representative page is the row above it on the Legal page, linking to /legal/eu-representative)"
+ }
+}

@@ -1,0 +1,755 @@
+{
+ "S54.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Customize"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "none",
+  "note": "The route apps/web/app/chat/customize/page.tsx also opens these three sections. How Settings is opened from the first screen was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the app.",
+   "Find the group headed Customize in the left list.",
+   "Click Skills, then Connectors, then Plugins in turn.",
+   "Check that all three sit under the one Customize heading, as Expected says."
+  ],
+  "where": "Settings > Customize (group heading) > Skills, Connectors, Plugins"
+ },
+ "S54.02": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Plugins"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Browse"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Add"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Plugins under Customize.",
+   "Look for the Browse and Add buttons above the list.",
+   "Check the installed list and the available plugins shown after Browse."
+  ],
+  "where": "Settings > Customize > Plugins"
+ },
+ "S54.03": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Browse"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Search skills"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Skills under Customize.",
+   "Click Browse.",
+   "Type research-and-citations in the Search skills box.",
+   "Check that one skill shows with its name, publisher and description."
+  ],
+  "where": "Settings > Customize > Skills"
+ },
+ "S54.04": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Search connectors"
+   }
+  ],
+  "needs": "none to view; an outside account for the service to connect it",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors under Customize.",
+   "Look at the list of connectors and the Connect buttons.",
+   "Check that each connector shows its status."
+  ],
+  "where": "Settings > Customize > Connectors"
+ },
+ "S54.05": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Browse"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Search plugins"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Install"
+   }
+  ],
+  "needs": "none",
+  "note": "Owner decision is open on this item.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Plugins under Customize, then click Browse.",
+   "Type a plugin name in Search plugins.",
+   "Click a plugin, then click Install.",
+   "Read the install confirmation, then compare with Expected."
+  ],
+  "where": "Settings > Customize > Plugins > Browse"
+ },
+ "S54.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Plugins"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Controls"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspacePlugins.tsx",
+    "text": "Available to install"
+   }
+  ],
+  "needs": "an organization admin account in a workspace, and a second member account in the same workspace",
+  "note": "The member-side view was not traced in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as an organization admin and open the workspace console.",
+   "Under Controls, click Plugins.",
+   "Read the publish options Required, Installed by default and Available to install.",
+   "Compare with Expected, then check that a member sees the plugin in Settings > Customize > Plugins."
+  ],
+  "where": "Workspace console > Controls > Plugins"
+ },
+ "S54.07": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Add marketplace"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Add from a repository"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Repository url"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Sync marketplace"
+   }
+  ],
+  "needs": "a git repository that lists plugins",
+  "note": "The Add menu was read from constants only; its exact layout was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Plugins, then click Add.",
+   "Click Add marketplace, then Add from a repository.",
+   "Type a git repository address in Repository url and click Sync marketplace.",
+   "Check that plugins from that repository appear in the list."
+  ],
+  "where": "Settings > Customize > Plugins > Add > Add marketplace > Add from a repository"
+ },
+ "S54.08": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Search plugins"
+   }
+  ],
+  "needs": "none",
+  "note": "The filter menu label was not found in the constants read.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Plugins under Customize.",
+   "Type Research in Search plugins.",
+   "Check that the results narrow to matching plugins.",
+   "Use the filter control beside the search box and check the results change."
+  ],
+  "where": "Settings > Customize > Plugins, then the Search plugins box"
+ },
+ "S54.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "The plugin detail shows a Category row, but no browse-by-category control was found in DirectoryToolbar.tsx or the directory constants. Searched packages/ui/ui/src/directory and apps/web/features/directory for category controls.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S54.12": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Publisher"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "More from"
+   }
+  ],
+  "needs": "none",
+  "note": "The More from link shows only when the publisher profile is loaded.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page from Browse.",
+   "Find the Publisher row and read the publisher name.",
+   "Click the link that reads More from and the publisher name.",
+   "Check that the list now shows that publisher's plugins."
+  ],
+  "where": "Settings > Customize > Plugins > Browse > open a plugin > Publisher"
+ },
+ "S54.13": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Browse"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Includes"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Plugins, then click Browse.",
+   "Type Research in Search plugins.",
+   "Click the Research pack card.",
+   "Check the detail page shows the name, publisher, version and Includes section."
+  ],
+  "where": "Settings > Customize > Plugins > Browse > click a plugin"
+ },
+ "S54.14": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Includes"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Use"
+   }
+  ],
+  "needs": "none to view; an install is needed for the Use switches",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page.",
+   "Under Includes, click the Skills tab.",
+   "Read the skill names and descriptions.",
+   "Install the plugin, then check that each skill has a Use switch."
+  ],
+  "where": "Settings > Customize > Plugins > Browse > open a plugin > Includes > Skills"
+ },
+ "S54.15": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Not connected"
+   }
+  ],
+  "needs": "an outside account for the service",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page.",
+   "Under Includes, click the Connectors tab.",
+   "Read each connector's status: Connected, Not connected or Not added.",
+   "Click Connect on one connector and check the status changes."
+  ],
+  "where": "Settings > Customize > Plugins > Browse > open a plugin > Includes > Connectors"
+ },
+ "S54.16": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Agents"
+   }
+  ],
+  "needs": "none",
+  "note": "Agents are usable in the agi CLI, not in the web chat. The CLI command for them was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page.",
+   "Find the Agents row under Includes.",
+   "Read the note: Agents run in the agi CLI, not in chat.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Customize > Plugins > Browse > open a plugin > Includes > Agents"
+ },
+ "S54.17": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Commands"
+   }
+  ],
+  "needs": "none",
+  "note": "Where a command is typed to run it was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page.",
+   "Find the Commands row under Includes.",
+   "Read the list of commands shown."
+  ],
+  "where": "Settings > Customize > Plugins > Browse > open a plugin > Includes > Commands"
+ },
+ "S54.19": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Permissions"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Install"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page before installing.",
+   "Read the Permissions section and its copy.",
+   "Click Install and read the confirmation.",
+   "Cancel, then compare with Expected."
+  ],
+  "where": "Settings > Customize > Plugins > Browse > open a plugin > Permissions"
+ },
+ "S54.20": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Works with"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Desktop and CLI"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Not available on this surface"
+   }
+  ],
+  "needs": "none",
+  "note": "Owner decision is open on this item.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page.",
+   "Find the Works with row and read its chips.",
+   "Find the Desktop and CLI text if the plugin is not for this surface."
+  ],
+  "where": "Settings > Customize > Plugins > Browse > open a plugin > Works with"
+ },
+ "S54.21": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Install"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Uninstall"
+   }
+  ],
+  "needs": "none",
+  "note": "The earlier check did not perform an install.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page.",
+   "Click Install.",
+   "Read the confirmation title that starts with Install.",
+   "Confirm and check that the button changes to Uninstall."
+  ],
+  "where": "Settings > Customize > Plugins > Browse > open a plugin > Install"
+ },
+ "S54.22": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Enabled"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Use"
+   }
+  ],
+  "needs": "an installed plugin",
+  "note": "There is no button called Configure; settings are the Enabled switch and the per-skill Use switches.",
+  "reachable": "yes",
+  "steps": [
+   "Open an installed plugin's detail page.",
+   "Find the Enabled switch and the Use switches for its skills.",
+   "Change one Use switch.",
+   "Check the change stays after reopening the plugin."
+  ],
+  "where": "Settings > Customize > Plugins > open an installed plugin"
+ },
+ "S54.23": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Reconnect"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Connected"
+   }
+  ],
+  "needs": "an outside account for that service",
+  "note": "The sign-in step was not traced in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Open an installed plugin's detail page.",
+   "Click the Connectors tab under Includes.",
+   "Click Connect on a bundled connector.",
+   "Complete the sign-in and check the status shows Connected."
+  ],
+  "where": "Settings > Customize > Plugins > open an installed plugin > Includes > Connectors > Connect"
+ },
+ "S54.24": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Enabled"
+   }
+  ],
+  "needs": "an installed plugin",
+  "note": "If the server no longer runs the plugin, the row shows Not available on this surface instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open an installed plugin's detail page.",
+   "Turn the Enabled switch off.",
+   "Check the plugin is still listed as installed and Uninstall is still there.",
+   "Turn Enabled back on."
+  ],
+  "where": "Settings > Customize > Plugins > open an installed plugin > Enabled"
+ },
+ "S54.25": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Update available"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Switch version"
+   }
+  ],
+  "needs": "an installed plugin that has a newer version",
+  "note": "No separate Update button was found. The version switch is the update path.",
+  "reachable": "yes",
+  "steps": [
+   "Open an installed plugin that has a newer version.",
+   "Read the Update available badge and the Installed version row.",
+   "Click Choose a version, pick the newer version, then click Switch version.",
+   "Read the confirmation, then check the Installed version changed."
+  ],
+  "where": "Settings > Customize > Plugins > open an installed plugin > Installed version"
+ },
+ "S54.26": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Installed version"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Choose a version"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Switch version"
+   }
+  ],
+  "needs": "an installed plugin with more than one version",
+  "note": "No control named Pin was found. Choosing a version is the closest match and whether it stops automatic updates was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open an installed plugin's detail page.",
+   "Find the Installed version row.",
+   "Click Choose a version and pick a different version.",
+   "Click Switch version, read the confirmation, and check the Installed version row."
+  ],
+  "where": "Settings > Customize > Plugins > open an installed plugin > Installed version > Choose a version"
+ },
+ "S54.27": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Customize"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Edit plugin"
+   }
+  ],
+  "needs": "a plugin that allows customizing",
+  "note": "The Customize button shows only when the plugin is marked customizable.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page where Customize is shown.",
+   "Click Customize and read the confirmation that starts with Customize.",
+   "Confirm and open the copy that is made.",
+   "Edit one of its skills and check the change is kept."
+  ],
+  "where": "Settings > Customize > Plugins > open a plugin > Customize"
+ },
+ "S54.28": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Customize"
+   }
+  ],
+  "needs": "a plugin that allows customizing",
+  "note": "No visible button says Fork. Customize makes the copy.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin's detail page.",
+   "Click Customize to make an editable copy.",
+   "Check that a copy of the plugin appears with its own skills.",
+   "Check the original plugin is unchanged."
+  ],
+  "where": "Settings > Customize > Plugins > open a plugin > Customize"
+ },
+ "S54.29": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Uninstall"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Plugins"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Installed"
+   }
+  ],
+  "needs": "a plugin already installed (install one from Browse first)",
+  "note": "No confirmation dialog is shown for plugin uninstall; the code runs it directly (packages/ui/ui/src/directory/DirectoryPanel.tsx:549). On failure the text is 'Could not uninstall this plugin. Try again.' (apps/web/features/directory/constants.ts:250).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Customize, then Plugins.",
+   "Open a plugin whose header shows Installed.",
+   "Click Uninstall in the plugin header.",
+   "Look: the plugin should leave the installed list, as Expected says a user can uninstall it."
+  ],
+  "where": "Settings > Customize > Plugins > open an installed plugin > Uninstall"
+ },
+ "S54.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Plugins"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspacePlugins.tsx",
+    "text": "Required"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspacePlugins.tsx",
+    "text": "Choose a group"
+   }
+  ],
+  "needs": "a workspace admin account and a member account in the same workspace; a group if testing the group step",
+  "note": "I found no per-member picker; assignment is by install setting and by group only. The member check in step 5 is my own step, not a labelled screen. Groups must exist first (hint: 'Create a group under Roles', WorkspacePlugins.tsx:232).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a workspace admin, open the Workspace section and click Plugins.",
+   "Find a plugin the workspace publishes and open its install setting.",
+   "Choose Required, Installed by default or Available to install.",
+   "For a group setting, pick a group under Choose a group and check the row reads Setting for that group.",
+   "Sign in as a member of the same workspace, open Settings > Customize > Plugins, and compare the plugin's state with the setting you chose."
+  ],
+  "where": "Workspace > Plugins"
+ },
+ "S54.32": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Security scan"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Passed. No unsafe patterns were found."
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Not scanned. Scans run on plugins you upload or create and on registry versions."
+   }
+  ],
+  "needs": "none; a plugin with a scan result (check which plugins show a verdict)",
+  "note": "The Security scan section is drawn only when the plugin carries scan data (packages/ui/ui/src/directory/PluginDetailView.tsx:1068).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Customize, then Plugins.",
+   "Open a plugin's detail page.",
+   "Scroll below the Permissions section to the Security scan heading.",
+   "Compare the verdict text with Expected: Passed, Needs your review, or Blocked, with a Scanned date. If it reads Not scanned, the plugin has no scan yet."
+  ],
+  "where": "Settings > Customize > Plugins > open a plugin > Security scan"
+ },
+ "S54.33": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Not available on this surface"
+   },
+   {
+    "file": "apps/web/features/directory/constants.ts",
+    "text": "Desktop and CLI"
+   }
+  ],
+  "needs": "an installed plugin the server no longer runs (hard to get on demand); a web account",
+  "note": "The visible warnings I found are about the surface only. I found no version-specific warning text in the cited lines, so the version part of Expected is unconfirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Customize, then Plugins.",
+   "Open a plugin that is not installed. If it reads Desktop and CLI, it is set up from the desktop app or CLI on this surface.",
+   "Open an installed plugin the server no longer runs. Look for the warning Not available on this surface.",
+   "Read its hint: Still installed, but the server no longer runs it here. Compare with Expected."
+  ],
+  "where": "Settings > Customize > Plugins > open a plugin"
+ },
+ "S54.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/directory/constants.ts",
+    "text": "Reload skills"
+   },
+   {
+    "file": "apps/web/features/directory/constants.ts",
+    "text": "Its skills need the connector"
+   },
+   {
+    "file": "apps/web/features/directory/constants.ts",
+    "text": "Connect"
+   }
+  ],
+  "needs": "an installed plugin whose skill is missing or whose connector is not connected (hard to set up on demand)",
+  "note": "The repair list covers missing skills and missing connectors only. No repair for a missing plugin dependency was found; the dependency wording is only the install message (apps/web/features/directory/constants.ts:348).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Customize, then Plugins, and open an installed plugin.",
+   "Look for a repair row: These skills did not load: with a Reload skills button, or Its skills need the connector with a Connect button.",
+   "Click Reload skills or Connect.",
+   "Look: the row should clear, or the connector flow should open. Compare with Expected."
+  ],
+  "where": "Settings > Customize > Plugins > open an installed plugin"
+ },
+ "S54.35": {
+  "labels": [],
+  "needs": "none",
+  "note": "No plugin-creation assistant found. I searched 'assistant' in apps/web/features/directory, packages/ui/ui/src/directory and apps/web/features/plugins. The only creation path is a manual 'Create a plugin' form with Name, Description and Skills fields (packages/ui/ui/src/directory/constants.ts:429). apps/web/lib/services/user-skill-authoring.ts is only an on/off environment guard, not an assistant.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S54.36": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Submit to the directory"
+   },
+   {
+    "file": "apps/web/features/directory/constants.ts",
+    "text": "Submitted for review"
+   },
+   {
+    "file": "apps/web/features/admin/pages/PluginModerationPage.tsx",
+    "text": "Waiting for review"
+   }
+  ],
+  "needs": "a plugin you created or uploaded; a platform admin account for the review step",
+  "note": "The submit button shows when detail.submittable is set (packages/ui/ui/src/directory/DirectoryPanel.tsx:687). I did not check whether an approved submission is then listed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Customize, then Plugins, and open a plugin you created or uploaded. The button appears only when the plugin is submittable.",
+   "Click Submit to the directory, then Submit for review in the dialog.",
+   "Look for the status Submitted for review and a Withdraw button in the plugin detail.",
+   "Sign in as a platform admin, open Plugin moderation (/admin/plugins), and filter by Waiting for review to find the submission.",
+   "Compare with Expected: the publisher can see the review status."
+  ],
+  "where": "Settings > Customize > Plugins > open a plugin you created or uploaded > Submit to the directory"
+ },
+ "S54.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/admin/pages/AdminConsolePage.tsx",
+    "text": "Plugin moderation"
+   },
+   {
+    "file": "apps/web/features/admin/pages/PluginModerationPage.tsx",
+    "text": "Suspend"
+   },
+   {
+    "file": "apps/web/features/admin/pages/PluginModerationPage.tsx",
+    "text": "Deprecate"
+   }
+  ],
+  "needs": "a platform admin account; a test plugin version you can safely suspend",
+  "note": "I did not check whether the reason field is required before confirming.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a platform admin, open the admin console and click Plugin moderation (/admin/plugins). Other accounts get a not-found page.",
+   "Find a plugin and open its versions list.",
+   "Click Deprecate or Suspend next to a published version.",
+   "Confirm in the dialog (Suspend asks Suspend <name> <version>?).",
+   "Look: the version status should change to Deprecated or Suspended. Compare with Expected."
+  ],
+  "where": "Admin console > Plugin moderation > open a plugin > Deprecate or Suspend next to a version"
+ }
+}

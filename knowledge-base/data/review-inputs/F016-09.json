@@ -1,0 +1,722 @@
+{
+ "feature": {
+  "id": "F016-09",
+  "aliases": [
+   "Queued",
+   "Queued messages",
+   "follow-up queue",
+   "Steer",
+   "Sent to the running reply",
+   "Sending / Not sent (VS Code)",
+   "delivery state",
+   "draft",
+   "composer draft",
+   "unsent draft",
+   "Choose which draft to keep",
+   "S16.14",
+   "S16.17",
+   "S16.18"
+  ],
+  "summary": "While a reply is running, a message you type waits in a queue (shown as a Queued row with Edit and Cancel) and is sent when the reply ends. Unsent text is also kept as a draft per conversation. Web syncs drafts across devices. VS Code marks each message Sending, Queued, Running, Steered, Not sent or Cancelled.",
+  "purpose": {
+   "what_it_does": "Holds follow-up messages written during a running reply, shows them as waiting, and sends them when the turn ends. Keeps unsent composer text for each conversation so leaving and returning does not lose it (apps/web/features/chat/components/Composer/ChatComposerNew.tsx:3951-3972,4342-4420).",
+   "why_it_exists": "People think of the next question while the model is still answering. They also leave chats half-written. Without a queue and a draft the text is lost or the send is blocked. [inferred]",
+   "who_uses_it": "Everyone who chats; developers on VS Code, CLI and Chrome use the same ideas in their own forms.",
+   "problems_solved": [
+    "A second message typed during a reply is not lost.",
+    "Unsent text survives switching chats, reloads and, on web, other devices.",
+    "A failed or cancelled send is visible as its own state (VS Code)."
+   ],
+   "use_cases": [
+    "Type a follow-up while a long answer streams; it appears as 'Queued: <text>' and goes out when the answer ends.",
+    "Click Edit on a queued row to change it, or Cancel to drop it.",
+    "Half-write a message, open another chat, come back and find the text there.",
+    "Edit the same draft on two web tabs and choose which version to keep."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web composer: a list labelled 'Queued messages' above the input with rows 'Queued: <text>' (or 'Queued 1 of 2: <text>'), and buttons Edit and Cancel, and Steer when the running reply can take it (ChatComposerNew.tsx:5009-5063).",
+    "Hosted desktop: same as web (doc: AGENTS.md section 5). Tauri desktop: a section labelled 'Follow-up messages' with rows 'Queued', 'Steering' or 'Not sent' and buttons Edit, Send now, Remove (packages/ui/unified-chat/src/components/FollowUpQueue.tsx).",
+    "Mobile: rows with accessibility labels 'Queued message n of m: <text>', 'Edit queued message', 'Cancel queued message' (apps/mobile/src/features/chat/components/ChatInput.tsx:1857-1902).",
+    "VS Code: your message bubble has a dashed border and a caption Sending, Queued, Running, Steered, Not sent or Cancelled; queued ones have Edit and Cancel icons (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:624-690,5554-5591).",
+    "Chrome side panel: list 'Queued messages' with 'Queued: <text>', Edit, Cancel (apps/extension/src/side_panel.ts:15312-15364; apps/extension/_locales/en/messages.json).",
+    "CLI: the hint line shows '\u00b7 1 message queued' or 'N messages queued' while a turn runs (apps/cli/src/tui/tui_app.rs:2064-2075).",
+    "Drafts: web 'Choose which draft to keep' dialog with 'Here' and 'Elsewhere' and buttons 'Use the other version' and 'Keep this version' (apps/web/features/chat/components/DraftConflictDialog.tsx:67-93)."
+   ],
+   "prerequisites": [
+    "Queue: a reply must be running (isTurnActive).",
+    "Web draft sync: signed in, a stored (non-temporary) conversation, and no on-device model selected or used in that chat (use-conversation-draft-sync.ts:75-84)."
+   ],
+   "screens_and_controls": [
+    "Composer text box, send control (with a chip that a message is waiting), queued rows with Edit, Cancel, Steer.",
+    "Draft conflict dialog and toasts 'This draft changed elsewhere...' with action Compare; 'This draft couldn't sync to your other devices. Retry when ready.' with action Retry (use-conversation-draft-sync.ts:183-216)."
+   ],
+   "journey": [
+    "Send a message and, while it runs, type another and press send.",
+    "The text clears from the box and appears as 'Queued: <text>'.",
+    "Optionally press Edit (text returns to the box and the slot is replaced on resend) or Cancel.",
+    "When the reply ends, the first queued message is sent; the next waits for the following turn end (ChatComposerNew.tsx:4342-4385).",
+    "Draft: type text and leave the chat; the text is parked per conversation and restored on return; on web, after about 1.5 seconds it is also saved to the server and appears on other devices."
+   ],
+   "feedback_and_outputs": [
+    "Rows and labels as above; notice 'Your queued message was not sent: you switched chats before the reply finished. It was saved as a draft in the original chat.' when a queued message is stranded (ChatComposerNew.tsx:4405-4418).",
+    "Chrome notices 'Restored your unsent text.' and 'Chrome couldn\u2019t save your draft. Keep this panel open to retain your text.'",
+    "Toast errors for draft sync as listed."
+   ],
+   "settings": [
+    "Settings store option followUpBehavior chooses steer or queue for a message sent during a reply (ChatComposerNew.tsx:1791; packages/ui/unified-chat/src/queue/followUps.ts:88-95).",
+    "One-message override: invert the follow-up behaviour (Cmd or Ctrl plus Shift plus Enter) (followUps.ts comment line 84-87).",
+    "VS Code has a followUpBehavior test file, setting details not opened."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web composer holds a list of queued follow-ups in component state and flushes the first after the turn ends (ChatComposerNew.tsx:910-914,4342-4385).",
+    "Web queued rows with Edit, Cancel and Steer (ChatComposerNew.tsx:5009-5063).",
+    "Web draft saved as its own column draft with draft_updated_at, never moving updated_at; temporary chats store none (apps/web/app/api/chat/conversations/[id]/route.ts:208-263; migration apps/web/db/neon/0219_conversation_drafts.sql).",
+    "Web sync hook: debounce 1500 ms, up to 3 automatic attempts with growing delay, conflict toast and dialog (use-conversation-draft-sync.ts:23-24,161-216; packages/contracts/cloud-contracts/src/conversation-contract.json:4).",
+    "Web browser-side persistence of drafts in local storage (apps/web/features/chat/components/Composer/composer-draft-storage.ts:150-195).",
+    "Mobile: queue of follow-ups with edit and cancel; drafts, with attachments, in on-device storage keyed by conversation (ChatInput.tsx:383-391,940-956; apps/mobile/src/features/chat/draftStore.ts:137-203).",
+    "VS Code: per-message delivery states via data-delivery-state, queued controls, and per-thread composer drafts in webview state (webviewContent.ts:624-690,5001-5002,5772-5782,5957-5967).",
+    "CLI: queued_prompts list sent after the turn and put back in the composer if the turn stops; a cleared composer is parked per session and recalled with Up (tui_app.rs:611,7274-7275,8482,8756-8763,1133-1157).",
+    "Chrome side panel: queued list from followUpQueue and a per-conversation draft in chrome.storage.session (side_panel.ts:10103-10170,15312-15364).",
+    "Tauri desktop: FollowUpQueue component backed by useFollowUpStore with held state (packages/ui/unified-chat/src/queue/followUps.ts, components/FollowUpQueue.tsx)."
+   ],
+   "incomplete": [
+    "Web queue lives only in memory: reload or leaving the chat loses it, except that stranded text is saved as a draft and attachments are dropped (ChatComposerNew.tsx:4393-4418).",
+    "Only the first queued message is flushed per turn end; others wait for later turn ends (ChatComposerNew.tsx:4346-4385).",
+    "Web draft sync stops after 3 failed attempts until the person presses Retry (use-conversation-draft-sync.ts:30-31,176-216).",
+    "Tauri desktop keeps one global draftContent in the store rather than one per conversation (packages/ui/unified-chat/src/components/ChatInput.tsx:278-280); per-conversation draft there: unknown.",
+    "Brief status 'cli missing' and 'chrome missing' for queue and draft is not what the code shows; both have a queue and a draft of some form."
+   ],
+   "disconnected_or_disabled": [
+    "Web does not sync drafts when a local model is selected or the chat holds on-device turns (use-conversation-draft-sync.ts:75-84)."
+   ],
+   "not_available": [
+    "CLI and Chrome do not show 'pending/sending' per message states (only VS Code does).",
+    "CLI draft is device-memory only and not shared across devices (tui_app.rs:608)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "A message sent while a reply is still running is shown as queued (not yet sent) until it goes out.",
+     "source": "brief S16.17"
+    },
+    {
+     "statement": "While a user message is not yet accepted by the service, it shows a pending, sending or queued state.",
+     "source": "brief S16.14"
+    },
+    {
+     "statement": "Unsent composer text is kept as a draft per conversation, separate from sent messages, and a failed send returns to the composer as an unsent draft.",
+     "source": "brief S16.18"
+    },
+    {
+     "statement": "The composer holds a list of queued follow-ups and sends them when the stream ends.",
+     "source": "ChatComposerNew.tsx:302,910-914,359"
+    },
+    {
+     "statement": "The draft is saved as its own field, never as part of the message list, with a revision to detect conflicts; temporary chats store no draft.",
+     "source": "conversations/[id]/route.ts:208-263"
+    },
+    {
+     "statement": "Saves are debounced and retried up to 3 times; a conflict can be resolved by keeping mine or theirs.",
+     "source": "use-conversation-draft-sync.ts:24-27,37-41; DraftConflictDialog.tsx:90-93"
+    },
+    {
+     "statement": "Drafts are not synced for conversations that hold Local-model turns.",
+     "source": "use-conversation-draft-sync.ts:75-84"
+    },
+    {
+     "statement": "Local, own key and Cloud are separate trust boundaries; nothing may silently route a Local chat to another boundary.",
+     "source": "doc: AGENTS.md section 6"
+    }
+   ],
+   "acceptance_criteria": [
+    "Sending while a reply runs shows a 'Queued' row and the box clears.",
+    "Edit on a queued row puts its text back; sending again replaces that slot, not adds one.",
+    "Cancel removes the row and sends nothing.",
+    "When the reply ends the first queued message is sent exactly once.",
+    "Typing in a stored chat, waiting about 2 seconds, and opening the same chat on another device shows the same draft (web).",
+    "Editing the same draft on two devices produces the 'Choose which draft to keep' dialog with both versions.",
+    "A temporary chat never stores a draft on the server.",
+    "After 3 failed saves a persistent toast with Retry appears."
+   ],
+   "inferred": [
+    "[inferred] A failed send should return text to the composer, per brief S16.18; the code path for web failed sends was not opened.",
+    "[inferred] Drafts must be removed or cleared on sign-out; the mobile store clears account-scoped drafts (draftStore.ts:205)."
+   ],
+   "proposed": [
+    "[proposed] Persist the web queue so a reload keeps it.",
+    "[proposed] Give CLI, Chrome and Tauri the same per-message delivery caption as VS Code.",
+    "[proposed] Update the brief status for CLI and Chrome, since both have a queue."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "ChatComposerNew (queue)",
+    "path": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "role": "QueuedFollowUp type, queue state, flush effect, Edit, Cancel, Steer, queued list UI."
+   },
+   {
+    "kind": "hook",
+    "name": "useConversationDraftSync",
+    "path": "apps/web/features/chat/hooks/use-conversation-draft-sync.ts",
+    "role": "Debounced save, retry up to 3, conflict handling, local-model exclusion."
+   },
+   {
+    "kind": "service",
+    "name": "saveConversationDraft",
+    "path": "apps/web/features/chat/services/conversation-draft.ts",
+    "role": "PUT of draft and revision, per-session queue of saves."
+   },
+   {
+    "kind": "component",
+    "name": "DraftConflictDialog",
+    "path": "apps/web/features/chat/components/DraftConflictDialog.tsx",
+    "role": "Shows 'Here' versus 'Elsewhere' and the two buttons."
+   },
+   {
+    "kind": "service",
+    "name": "composer-draft-storage",
+    "path": "apps/web/features/chat/components/Composer/composer-draft-storage.ts",
+    "role": "Browser storage of drafts per owner and conversation."
+   },
+   {
+    "kind": "endpoint",
+    "name": "PUT /api/chat/conversations/[id]",
+    "path": "apps/web/app/api/chat/conversations/[id]/route.ts",
+    "role": "Writes draft and draft_updated_at; 409 conflict with current draft."
+   },
+   {
+    "kind": "table",
+    "name": "web_conversations.draft, draft_updated_at",
+    "path": "apps/web/db/neon/0219_conversation_drafts.sql",
+    "role": "Stores the server draft and its revision."
+   },
+   {
+    "kind": "config",
+    "name": "conversation-contract.json draftSaveDebounceMs",
+    "path": "packages/contracts/cloud-contracts/src/conversation-contract.json",
+    "role": "Debounce value 1500 shared by clients."
+   },
+   {
+    "kind": "store",
+    "name": "useFollowUpStore and resolveFollowUpState",
+    "path": "packages/ui/unified-chat/src/queue/followUps.ts",
+    "role": "Tauri and shared queue store; steer or queue decision."
+   },
+   {
+    "kind": "component",
+    "name": "FollowUpQueue (unified chat)",
+    "path": "packages/ui/unified-chat/src/components/FollowUpQueue.tsx",
+    "role": "Tauri follow-up rows with Edit, Send now, Remove."
+   },
+   {
+    "kind": "component",
+    "name": "ChatInput (mobile)",
+    "path": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "role": "Mobile queue rows, edit, cancel and draft saving."
+   },
+   {
+    "kind": "store",
+    "name": "draftStore (mobile)",
+    "path": "apps/mobile/src/features/chat/draftStore.ts",
+    "role": "Draft text and attachments in on-device storage with local or cloud-owner provenance."
+   },
+   {
+    "kind": "component",
+    "name": "VS Code webview delivery states",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "role": "data-delivery-state captions, queued controls, per-thread composer drafts."
+   },
+   {
+    "kind": "service",
+    "name": "ChatStateManager (VS Code)",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "role": "Extension side of queued messages and composer state."
+   },
+   {
+    "kind": "component",
+    "name": "TUI queued prompts and parked drafts",
+    "path": "apps/cli/src/tui/tui_app.rs",
+    "role": "queued_prompts, parked_drafts, composer hint."
+   },
+   {
+    "kind": "component",
+    "name": "Chrome side panel queue and draft",
+    "path": "apps/extension/src/side_panel.ts",
+    "role": "sp-queued-list and chrome.storage.session draft."
+   },
+   {
+    "kind": "config",
+    "name": "Chrome English strings",
+    "path": "apps/extension/_locales/en/messages.json",
+    "role": "Queued, Edit, Cancel, draft notices."
+   },
+   {
+    "kind": "store",
+    "name": "settings followUpBehavior",
+    "path": "packages/ui/unified-chat/src/stores/settingsStore.ts",
+    "role": "Steer-or-queue preference (referenced by the composer)."
+   },
+   {
+    "kind": "test",
+    "name": "Composer follow-up queue tests",
+    "path": "apps/web/features/chat/components/Composer/ChatComposerNew.followUpQueue.test.tsx",
+    "role": "Queue behaviour tests."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person presses send while a turn is active; the composer stores the send arguments with the conversation id and clears the box.",
+     "runs_on": "device",
+     "evidence": "ChatComposerNew.tsx:3951-3972"
+    },
+    {
+     "what_happens": "When the turn ends, the composer sends the first queued item in the same conversation; items for another conversation become a draft and a notice.",
+     "runs_on": "device",
+     "evidence": "ChatComposerNew.tsx:4342-4418"
+    },
+    {
+     "what_happens": "Draft text is parked in the web chat store and in browser storage as the person types.",
+     "runs_on": "device",
+     "evidence": "composer-draft-storage.ts:150-195; ChatComposerNew.tsx:900-913"
+    },
+    {
+     "what_happens": "After the debounce the sync hook PUTs the draft with its revision to the conversation route; the server writes draft and draft_updated_at or answers 409 with the current draft.",
+     "runs_on": "our servers",
+     "evidence": "use-conversation-draft-sync.ts:161-176; conversation-draft.ts:159-160; conversations/[id]/route.ts:208-263"
+    },
+    {
+     "what_happens": "A conflict opens a toast and dialog; the person keeps this version or the other.",
+     "runs_on": "device",
+     "evidence": "use-conversation-draft-sync.ts:196-216; DraftConflictDialog.tsx:67-93"
+    },
+    {
+     "what_happens": "Mobile saves drafts in on-device storage; Chrome in session storage; VS Code in webview state; CLI in memory.",
+     "runs_on": "device",
+     "evidence": "draftStore.ts:148-190; side_panel.ts:10104-10114; webviewContent.ts:5957-5966; tui_app.rs:1133-1141"
+    }
+   ],
+   "data": [
+    {
+     "what": "Web draft text and revision",
+     "where_stored": "web_conversations.draft and draft_updated_at; also browser local storage",
+     "synced": "Yes across devices on web; not for temporary chats or chats with on-device turns.",
+     "retained_or_deleted": "Overwritten by later drafts; an empty draft clears it; sign-out handling beyond identity checks: unknown."
+    },
+    {
+     "what": "Queued follow-ups on web",
+     "where_stored": "React state in the composer",
+     "synced": "No",
+     "retained_or_deleted": "Lost on reload; stranded text becomes a draft."
+    },
+    {
+     "what": "Mobile draft and attachments",
+     "where_stored": "on-device key-value store under 'composer-draft:' keys",
+     "synced": "No",
+     "retained_or_deleted": "Removed when empty; account-scoped drafts cleared on sign-out (draftStore.ts:205)."
+    },
+    {
+     "what": "Chrome draft",
+     "where_stored": "chrome.storage.session",
+     "synced": "No",
+     "retained_or_deleted": "Cleared when the browser session ends [inferred from session storage]."
+    },
+    {
+     "what": "VS Code draft and delivery state",
+     "where_stored": "webview state and DOM attributes",
+     "synced": "No",
+     "retained_or_deleted": "Per webview state."
+    }
+   ],
+   "models_and_providers": "No model is called to queue or draft. The queued message is later sent through the normal turn path with the same model and route settings captured at queue time (ChatComposerNew.tsx:3925-3945). Web draft sync is switched off when an on-device model is selected."
+  },
+  "access_and_usage": {
+   "account": "Web draft sync needs a signed-in session (use-conversation-draft-sync.ts:98,128). The queue and local drafts need no account on the device.",
+   "permissions": "The draft route filters by user, organization and non-deleted (route.ts:222-228).",
+   "subscription": "none found in the code for queue or draft. Sending a queued message later follows the normal plan and usage rules, which belong to SYS-subscriptions-entitlements-and-usage.",
+   "limits_and_metering": "Draft length cap MANAGED_CLOUD_MAX_DRAFT_LENGTH (conversation-draft.ts:3-6; value not opened); debounce 1500 ms; 3 automatic attempts; retry delay 3000 ms doubling (use-conversation-draft-sync.ts:30-31,204-206). Composer character cap from the message contract (ChatComposerNew.tsx:296).",
+   "flags": "none found in the code; followUpBehavior is a user setting.",
+   "model_compatibility": "Draft sync is excluded when the chat holds on-device model turns (use-conversation-draft-sync.ts:75-84). Steering needs a running cloud agent run id (ChatComposerNew.tsx:4430-4436).",
+   "provider_restrictions": "none found in the code.",
+   "local_mode": "Queue and draft work on the device. On web, a draft is not sent to the server when a local model is selected, which keeps Local text off Cloud storage (use-conversation-draft-sync.ts:75-84). Mobile marks drafts with local or cloud provenance (draftStore.ts:8)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Queue then switch chats",
+    "behaviour": "Queued message is not delivered to the wrong chat; its text is merged into the original chat's draft; attachments are dropped with a notice.",
+    "evidence": "ChatComposerNew.tsx:4393-4418"
+   },
+   {
+    "state": "Edit a queued message",
+    "behaviour": "Pending admission is cancelled, text and attachments return to the composer, resend replaces the slot.",
+    "evidence": "ChatComposerNew.tsx:4466-4481,3951-3971"
+   },
+   {
+    "state": "Save fails",
+    "behaviour": "Retry after delays 3 s, 6 s; third failure shows a persistent toast with Retry.",
+    "evidence": "use-conversation-draft-sync.ts:30-31,204-216"
+   },
+   {
+    "state": "Conflict (409)",
+    "behaviour": "Toast with Compare and dialog 'Choose which draft to keep'; text kept locally but not synced.",
+    "evidence": "use-conversation-draft-sync.ts:249-275; route.ts:248-258"
+   },
+   {
+    "state": "Chat not on server yet",
+    "behaviour": "Save returns not_saved_yet and waits until the conversation appears.",
+    "evidence": "use-conversation-draft-sync.ts:201-205"
+   },
+   {
+    "state": "Temporary chat",
+    "behaviour": "Server writes null draft; client does not dispatch.",
+    "evidence": "route.ts:213-216; use-conversation-draft-sync.ts:72-73"
+   },
+   {
+    "state": "Stopped or failed turn (CLI)",
+    "behaviour": "Queued prompts return to the composer.",
+    "evidence": "tui_app.rs:8744,8756-8763"
+   },
+   {
+    "state": "Mobile storage error",
+    "behaviour": "Draft errors are swallowed so rendering never fails.",
+    "evidence": "draftStore.ts:186-189"
+   },
+   {
+    "state": "Chrome storage error",
+    "behaviour": "Notice 'Chrome couldn\u2019t save your draft...' or restore failure notice.",
+    "evidence": "side_panel.ts:10113-10116,10163-10168"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Web list has aria-label 'Queued messages' and buttons have per-message labels; VS Code buttons have aria-labels; mobile has accessibility labels.",
+    "evidence": "ChatComposerNew.tsx:5010,5045,5053; webviewContent.ts:5561,5570; ChatInput.tsx:1857-1902"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "Draft sync fails and retries as above; queue itself needs no network until delivery.",
+    "evidence": "use-conversation-draft-sync.ts:197-216"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/chat/components/Composer/ChatComposerNew.followUpQueue.test.tsx",
+     "covers": "Keeps both follow-ups, marks queued sends, cancels one, edits in place."
+    },
+    {
+     "path": "apps/web/features/chat/components/Composer/ChatComposerNew.followUpSteer.test.tsx",
+     "covers": "Steering a queued follow-up."
+    },
+    {
+     "path": "apps/web/e2e/composer-follow-up-and-shortcuts.spec.ts",
+     "covers": "Follow-up and shortcut end-to-end spec (content not opened)."
+    },
+    {
+     "path": "apps/web/features/chat/hooks/useConversationDraftSync.test.tsx",
+     "covers": "Debounced save, temporary chat, local-turn chats, retries, clearing, unmount."
+    },
+    {
+     "path": "apps/web/features/chat/services/conversation-draft.test.ts",
+     "covers": "Draft save service."
+    },
+    {
+     "path": "apps/web/__tests__/api/chat-conversation-draft.test.ts",
+     "covers": "Draft route behaviour."
+    },
+    {
+     "path": "apps/web/db/neon/conversation-drafts-migration.test.ts",
+     "covers": "Migration 0219 content."
+    },
+    {
+     "path": "apps/mobile/src/features/chat/components/__tests__/ChatInput.followUpQueue.test.tsx",
+     "covers": "Mobile follow-up queue."
+    },
+    {
+     "path": "apps/mobile/src/features/chat/components/__tests__/ChatInput.draftAttachments.test.tsx",
+     "covers": "Mobile drafts with attachments."
+    },
+    {
+     "path": "apps/mobile/src/features/chat/__tests__/draft-store.test.ts",
+     "covers": "Mobile draft store."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/followUpBehavior.webview.test.ts",
+     "covers": "VS Code follow-up behaviour in the webview."
+    },
+    {
+     "path": "packages/ui/unified-chat/src/components/__tests__/FollowUpQueue.test.tsx",
+     "covers": "Tauri follow-up rows."
+    },
+    {
+     "path": "packages/ui/unified-chat/src/hooks/__tests__/useChat.followUps.test.tsx",
+     "covers": "Follow-up handling in the shared chat hook."
+    },
+    {
+     "path": "apps/cli/src/tui/tui_app.rs",
+     "covers": "Rust unit tests: stopped turn returns queued prompts; cleared draft recalled only in its session."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Queue on web",
+     "steps": [
+      "Send a long request.",
+      "While it streams type 'next' and send.",
+      "Watch the row and wait for the reply to end."
+     ],
+     "expected": "'Queued: next' shows with Edit and Cancel; after the reply 'next' is sent once and the row disappears."
+    },
+    {
+     "name": "Cancel and edit",
+     "steps": [
+      "Queue two messages.",
+      "Cancel the first; edit the second and resend."
+     ],
+     "expected": "First is gone, second keeps one slot with the new text."
+    },
+    {
+     "name": "Cross-device draft",
+     "steps": [
+      "On web device A type a draft in a saved chat and wait 3 seconds.",
+      "Open the chat on device B."
+     ],
+     "expected": "Draft text appears on B."
+    },
+    {
+     "name": "Conflict",
+     "steps": [
+      "Edit the draft differently on two tabs, one offline until both changed, then reconnect."
+     ],
+     "expected": "Toast 'This draft changed elsewhere...' with Compare, and the dialog offers the two versions."
+    },
+    {
+     "name": "Local model exclusion",
+     "steps": [
+      "Select an on-device model, type a draft in a stored chat, check the network."
+     ],
+     "expected": "No draft PUT is sent."
+    },
+    {
+     "name": "VS Code states",
+     "steps": [
+      "Send a message, then another while it runs; cancel the queued one."
+     ],
+     "expected": "Captions move Sending, Running, then Queued, then Cancelled."
+    }
+   ],
+   "diagnostics": [
+    "Toast ids 'draft-sync-<id>' and 'draft-conflict-<id>' on web.",
+    "HTTP 409 with {saved:false, conflict:true, current} from the draft route.",
+    "Column web_conversations.draft_updated_at.",
+    "Mobile storage keys starting 'composer-draft:'.",
+    "Chrome notices spDraftSaveFailed and spDraftRestoreFailed."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Brief says CLI lacks queue and draft, but the CLI has queued_prompts and a parked draft.",
+    "affects": "Brief accuracy, CLI testers",
+    "evidence": "apps/cli/src/tui/tui_app.rs:611,1133-1157,2064-2075",
+    "work_needed": "Correct the brief and decide if the CLI needs a per-message state."
+   },
+   {
+    "gap": "Brief says Chrome lacks queue and draft, but the side panel has both.",
+    "affects": "Brief accuracy, Chrome testers",
+    "evidence": "apps/extension/src/side_panel.ts:10103-10170,15312-15364",
+    "work_needed": "Correct the brief."
+   },
+   {
+    "gap": "Brief says VS Code lacks a draft, but the webview keeps per-thread drafts.",
+    "affects": "Brief accuracy",
+    "evidence": "webviewContent.ts:5957-5967",
+    "work_needed": "Correct the brief."
+   },
+   {
+    "gap": "Web queue is in memory only; reload loses queued messages.",
+    "affects": "Web and hosted desktop users",
+    "evidence": "ChatComposerNew.tsx:910-914",
+    "work_needed": "Persist or warn."
+   },
+   {
+    "gap": "Only VS Code shows a per-message sending or failed caption in the transcript.",
+    "affects": "Web, mobile, Chrome, CLI users",
+    "evidence": "webviewContent.ts:624-690",
+    "work_needed": "Decide whether to show delivery state elsewhere."
+   },
+   {
+    "gap": "Tauri desktop draft is one global value, not per conversation.",
+    "affects": "Tauri desktop users",
+    "evidence": "packages/ui/unified-chat/src/components/ChatInput.tsx:278-280",
+    "work_needed": "Confirm and fix if per-conversation is required."
+   },
+   {
+    "gap": "Draft sync is off for on-device model chats, so those drafts do not follow the person across devices.",
+    "affects": "Web users with local models",
+    "evidence": "use-conversation-draft-sync.ts:75-84",
+    "work_needed": "Intentional trust boundary; document it."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:vscode",
+   "surface:cli",
+   "surface:chrome",
+   "mode:local",
+   "mode:cloud",
+   "table:web_conversations",
+   "api:PUT /api/chat/conversations/[id]",
+   "store:composer-draft (mobile on-device key-value store)",
+   "SYS-chat-turn-pipeline",
+   "SYS-sync-and-continuity",
+   "SYS-execution-boundaries",
+   "SYS-memory-projects-and-context",
+   "SYS-authentication-and-identity"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "evidence": "queue state lines 302,910-914; flush 4342-4420; UI 5009-5063"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/hooks/use-conversation-draft-sync.ts",
+    "evidence": "hook useConversationDraftSync line 88"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:PUT /api/chat/conversations/[id]",
+    "evidence": "route.ts:591 export PUT; draft branch lines 208-263"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:web_conversations",
+    "evidence": "update web_conversations set draft (route.ts:216-231); migration 0219"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "store:composer-draft (mobile)",
+    "evidence": "PREFIX 'composer-draft:' in apps/mobile/src/features/chat/draftStore.ts:5"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "ChatComposerNew.tsx:5009"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "ChatInput.tsx:1857-1902"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "webviewContent.ts:624-690"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "tui_app.rs:2064-2075"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:chrome",
+    "evidence": "side_panel.ts:15312-15364"
+   },
+   {
+    "rel": "depends_on",
+    "to": "mode:local",
+    "evidence": "draft sync excluded when a local model is selected (use-conversation-draft-sync.ts:75-84)"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:packages/ui/unified-chat/src/queue/followUps.ts",
+    "evidence": "followUpBehavior steer or queue (lines 88-95)"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/chat/hooks/useConversationDraftSync.test.tsx",
+    "evidence": "describe of draft sync at line 118 onward"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/chat/components/Composer/ChatComposerNew.followUpQueue.test.tsx",
+    "evidence": "it() cases lines 43-117"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/src/features/chat/components/__tests__/ChatInput.followUpQueue.test.tsx",
+    "evidence": "file exists in mobile chat component tests"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "queued sends go through normal send admission (ChatComposerNew.tsx:3984-3990); no queue-specific gate found"
+   }
+  ],
+  "unknowns": [
+   "Value of MANAGED_CLOUD_MAX_DRAFT_LENGTH (not opened).",
+   "What the contents of apps/web/e2e/composer-follow-up-and-shortcuts.spec.ts assert.",
+   "Whether the Tauri desktop keeps drafts per conversation.",
+   "How a failed web send returns text to the composer (code path not opened).",
+   "Whether CLI or Chrome tests cover the queue (CLI has Rust unit tests; Chrome tests not located).",
+   "Retention of web_conversations.draft after sign-out or account deletion.",
+   "Which code makes the 'chip on the send control' that the web comment mentions."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "7 Account",
+   "claim": "Web draft sync needs a signed-in session (use-conversation-draft-sync.ts:98,128).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The sign-in guard is real: `if (!isLoaded || !isSignedIn || !session?.isCurrent()) return;`. It sits at line 138, and isLoaded/isSignedIn come from useSession() at line 86. Lines 98 and 128 hold neither.",
+   "evidence": "apps/web/features/chat/hooks/use-conversation-draft-sync.ts:86,138",
+   "correction": "Web draft sync needs a loaded, signed-in, current session (use-conversation-draft-sync.ts:86,138)."
+  },
+  {
+   "section": "7 Local mode / 3 Present but disconnected / 8 test scenario",
+   "claim": "Web does not sync drafts when a local model is selected or the chat holds on-device turns; 'No draft PUT is sent'.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "canDispatchDraft blocks a non-empty draft when a local model is selected or the chat holds local turns. An empty draft (`job.draft === ''`) is still dispatched, so a clear does reach the server. Temporary chats are also excluded. The cited lines 75-84 are correct for this function.",
+   "evidence": "use-conversation-draft-sync.ts:73-84",
+   "correction": "With a local model selected or on-device turns in the chat, non-empty drafts are never PUT. An empty draft (clearing) is still sent so a stale server draft is removed."
+  },
+  {
+   "section": "7 Limits and metering",
+   "claim": "Debounce 1500 ms; 3 automatic attempts; retry delay 3000 ms doubling (constants at use-conversation-draft-sync.ts:30-31,204-206).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The values are right. DRAFT_RETRY_DELAY_MS=3000 and MAX_AUTOMATIC_DRAFT_SAVE_ATTEMPTS=3 are at lines 25-26. The delay is `3000 * 2 ** (attempt-1)` at line 241, which gives 3 s then 6 s. The debounce is MANAGED_CLOUD_DRAFT_SAVE_DEBOUNCE_MS (line 308), which comes from conversation-contract.json draftSaveDebounceMs: 1500. The page's 'value not opened' draft cap is draftMaxLength: 20000 in the same JSON, exported as MANAGED_CLOUD_MAX_DRAFT_LENGTH (conversations.ts:60) and enforced by zod .max() at conversations.ts:191.",
+   "evidence": "use-conversation-draft-sync.ts:25-26,241,308; packages/contracts/cloud-contracts/src/conversation-contract.json:2-4; packages/contracts/cloud-contracts/src/conversations.ts:60,191",
+   "correction": "Constants are at lines 25-26 and the retry delay at line 241. The draft cap is 20,000 characters (conversation-contract.json), so it is not unknown."
+  },
+  {
+   "section": "8 Edit a queued message",
+   "claim": "Edit: pending admission is cancelled, text and attachments return to the composer, resend replaces the slot (ChatComposerNew.tsx:4466-4481,3951-3971).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Lines 4466-4481 are the steer handler, not Edit. The edit state is editingQueuedIdRef (lines 914, 3522-3563) and the resend path (3952-3953) consumes it. The behaviour is plausible but the first citation does not locate it.",
+   "evidence": "ChatComposerNew.tsx:914,3522-3563,3951-3953,4466-4476",
+   "correction": "Cite 3522-3563 and 3951-3971 for edit. 4466-4481 is steering."
+  },
+  {
+   "section": "7 Account / 6 Mobile",
+   "claim": "Mobile drafts on device under 'composer-draft:' keys; account-scoped drafts cleared on sign-out (draftStore.ts:205); local or cloud provenance (draftStore.ts:8).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "PREFIX = 'composer-draft:' is at line 5. Provenance type {scope:'local'} | {scope:'cloud', ownerId} is at line 9, not 8. clearAccountScopedDrafts begins at line 200 and iterates the prefixed keys. Whether it is called on sign-out was not shown by the cited lines. The page presents the clearing as established, but the call site is uncited.",
+   "evidence": "apps/mobile/src/features/chat/draftStore.ts:5,9,200-210",
+   "correction": "The function clearAccountScopedDrafts exists (draftStore.ts:200). The sign-out call site is not cited, so that part is unverified."
+  }
+ ],
+ "missing_facts": [
+  "An empty draft bypasses the local-model and on-device-turn block, so clearing a draft is still sent to the server (use-conversation-draft-sync.ts:80-83).",
+  "The server draft cap is 20,000 characters (conversation-contract.json:2, zod .max at conversations.ts:191), so the page's 'Unknown' entry for it can be closed.",
+  "Draft sync only runs for UUID conversation ids (isUuid check at use-conversation-draft-sync.ts:~158), and every save is rejected when the session or draft owner is no longer current (isCurrentDraft, lines 62-70). That is why the page's sign-out question has a partial answer."
+ ]
+}

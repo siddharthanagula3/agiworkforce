@@ -1,0 +1,280 @@
+{
+ "S79.01": {
+  "labels": [
+   {
+    "file": "packages/ai/model-registry/catalog/routing-policies.json",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Picks the best model for each message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The routing itself runs on the server; the side panel shows only the result.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI Chrome side panel.",
+   "Look at the button under the message box; it reads \"Auto\" when Auto is selected.",
+   "Click that button and read the first row, \"Auto\", with its line \"Picks the best model for each message\".",
+   "Send a short chat question, then a coding question.",
+   "Look under each answer for a small line with a model name; compare it with Expected: Auto picks a model per request."
+  ],
+  "where": "Composer model button (reads \"Auto\" by default) > first row \"Auto\" in the menu"
+ },
+ "S79.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recommended"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All models ($COUNT$)"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Models the plan does not include show a lock instead of being selectable.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the composer model button.",
+   "Under \"Recommended\", click a model name.",
+   "Confirm the composer button now shows that model instead of \"Auto\".",
+   "Send a message and read the model name under the answer.",
+   "Compare with Expected: the answer comes from the model you picked."
+  ],
+  "where": "Composer model button > \"Recommended\" list > click a model name, or \"All models ($COUNT$)\" for the full list"
+ },
+ "S79.04": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The task-to-profile map is in packages/ai/model-registry/catalog/routing-policies.json (autoProfileByTask). The premium profile has no menu row of its own (auto-premium is not selectable), so it is seen only through the answering model.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "With \"Auto\" selected, send a plain chat question, then a coding request.",
+   "Read the model name under each answer.",
+   "Compare with Expected: coding and reasoning requests get the premium profile."
+  ],
+  "where": "Task profiles are set in the model registry; the effect shows as which model answers under Auto"
+ },
+ "S79.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Quick"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Answers faster on a cheaper route, good for summaries and quick lookups"
+   }
+  ],
+  "needs": "a signed-in account whose plan includes the cheapest Auto route (the toggle is greyed out otherwise)",
+  "note": "The toggle is only enabled while Auto is selected. The UI wording says \"cheaper route\", weaker than Expected's \"cheapest eligible route\".",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and select \"Auto\" in the composer model button.",
+   "Open the model button and scroll to the \"Quick\" toggle, with its line \"Answers faster on a cheaper route, good for summaries and quick lookups\".",
+   "Switch \"Quick\" on and send a short question.",
+   "Read the model name under the answer and compare with the same question with \"Quick\" off.",
+   "Compare with Expected: Quick uses the cheaper route."
+  ],
+  "where": "Composer model button (with \"Auto\" selected) > \"Quick\" toggle below the \"Effort\" section"
+ },
+ "S79.09": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "Classification runs on the server (packages/ai/routing/src/classify.ts). Not visible directly.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "With \"Auto\" selected, send a greeting, then a request to write code.",
+   "Read the model name under each answer.",
+   "Compare with Expected: each request is routed by its task."
+  ],
+  "where": "Effect shows as a change of answering model between kinds of request"
+ },
+ "S79.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Web search"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The tool classification code cited (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts) is outside apps/extension, so it was not confirmed in the extension.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "With \"Auto\" selected, ask for information that needs a live web search.",
+   "Read the model name under the answer and check whether it names sources.",
+   "Open the model button > \"All models ($COUNT$)\" and use the \"Web search\" filter to see which models offer that capability.",
+   "Compare with Expected: the request is routed to a search-capable model."
+  ],
+  "where": "Effect shows as the answering model when a request needs tools; the capability names are in the model menu under \"All models ($COUNT$)\""
+ },
+ "S79.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a file to upload (an image) and a signed-in account",
+  "note": "The attach menu item is in apps/extension/src/side_panel.ts; the trigger button's visible text was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "With \"Auto\" selected, open the composer attach menu and choose \"Upload from device\".",
+   "Pick an image and ask a question about it.",
+   "Read the model name under the answer; open the model button > \"All models ($COUNT$)\" and filter by \"Vision\" to see which models accept images.",
+   "Compare with Expected: the answer comes from a model that can read images."
+  ],
+  "where": "Effect shows when an image is attached; attach menu > \"Upload from device\""
+ },
+ "S79.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Effort"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The classification is inner logic in packages/ai/routing/src/task-family.ts. The effort badge only shows once a model is resolved.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "With \"Auto\" selected, send a simple question and read the effort badge on the composer model button.",
+   "Send a hard multi-step problem and read the badge again.",
+   "Compare with Expected: the effort level changes with complexity."
+  ],
+  "where": "Effect shows in the composer model button's effort badge while Auto is selected"
+ },
+ "S79.13": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Web search"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Freshness detection is in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts, outside apps/extension.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "With \"Auto\" selected, ask a question about today's news.",
+   "Check whether the answer names sources or links.",
+   "Open the model button > \"All models ($COUNT$)\" and use the \"Web search\" filter to compare capable models.",
+   "Compare with Expected: a freshness request goes to search-capable handling."
+  ],
+  "where": "Effect shows when the question needs current information; answer carries sources"
+ },
+ "S79.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "All models ($COUNT$)"
+   }
+  ],
+  "needs": "a Free account, and a paid account to compare",
+  "note": "Filtering by capability, lifecycle, region and credentials runs in code; the tester sees only the resulting list.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the composer model button.",
+   "Click \"All models ($COUNT$)\" and scroll the list.",
+   "Look for rows with a lock label and the hint \"Opens plans in a new tab\".",
+   "Pick an unlocked model and send a message to confirm it is used.",
+   "Compare with Expected: only models the plan allows can be chosen."
+  ],
+  "where": "Composer model button > \"All models ($COUNT$)\""
+ },
+ "S79.15": {
+  "labels": [],
+  "needs": "none",
+  "note": "The answer footer shows the model, not the provider route, so the health, cost and cache ranking cannot be seen from the UI. Ranking is in packages/ai/routing/src/auto.ts.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Provider route is not shown; only the model name appears under each answer"
+ },
+ "S79.16": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Moved to $MODEL$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "apps/extension/src/features/cloud-bridge/managedModelPicker.ts reconcileManagedModelSelection drops a chosen model back to \"auto\" when the plan no longer lists it, which may be a silent switch to Auto.",
+  "reachable": "yes",
+  "steps": [
+   "Pick a specific model from the composer model button.",
+   "Send several messages, including a hard one, in the same chat.",
+   "Read the model name under each answer and check that no \"Moved to\" line appears.",
+   "Compare with Expected: the chosen model is never swapped."
+  ],
+  "where": "Composer model button > pick a model under \"Recommended\" or \"All models ($COUNT$)\""
+ },
+ "S79.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "Quota-aware choice is in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts. No visible effect could be confirmed from the extension UI.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Server rule on routing; no visible meter in the side panel"
+ },
+ "S79.20": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Moved to $MODEL$: $REASON$"
+   }
+  ],
+  "needs": "a signed-in account; a route outage cannot be forced from the UI",
+  "note": "Health fallback is in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts and route.ts. The reason phrase for it is in packages/contracts/types/src/auto-route-explanation.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "With \"Auto\" selected, send several messages in one chat.",
+   "Look under each answer for a line starting \"Moved to\" and read its reason.",
+   "Compare with Expected: an unhealthy route is replaced by a healthy one."
+  ],
+  "where": "Effect shows as a \"Moved to\" line under an answer when Auto avoids a model with trouble"
+ },
+ "S79.26": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Moved to $MODEL$: $REASON$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Auto chose this model: $REASON$"
+   }
+  ],
+  "needs": "a signed-in account; the \"Moved to\" line appears only when the model changes",
+  "note": "The line only appears when Auto actually moves to another model; forcing one may need a longer chat.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with \"Auto\" selected.",
+   "Send messages until Auto answers with a different model; a line reading \"Moved to ...\" appears under that answer.",
+   "Read the reason after the colon.",
+   "Hover the model name in the answer footer and read the tooltip \"Auto chose this model: ...\".",
+   "Compare with Expected: the user can see why Auto chose or moved to a model."
+  ],
+  "where": "Chat answer > \"Moved to\" line under the answer; hover the model name in the answer footer"
+ },
+ "S79.27": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The footer is built in apps/extension/src/features/side-panel/bubbles.ts (answerMetaLabel) and has no fixed visible words of its own.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and send a message.",
+   "Read the small line under the answer: a model name, then a time.",
+   "Open the composer model button and compare the name with the model you chose.",
+   "Compare with Expected: each answer names the model that produced it."
+  ],
+  "where": "Answer footer under each reply (model name \u00b7 duration)"
+ },
+ "S79.30": {
+  "labels": [],
+  "needs": "none",
+  "note": "Fallback on ambiguous classification is in packages/ai/routing/src/task-family.ts and the classification code; no visible control or message for it was found in the extension.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Effect shows as an answer that still arrives with a named model when routing is unsure"
+ }
+}

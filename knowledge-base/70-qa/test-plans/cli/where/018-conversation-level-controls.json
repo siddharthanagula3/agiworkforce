@@ -1,0 +1,330 @@
+{
+ "S18.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/sessions"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "Sessions"
+   }
+  ],
+  "needs": "none",
+  "note": "The title is inferred from the first user message in apps/cli/src/sessions.rs (infer_title); the code the audit cited in tui_app.rs was not found. Whether the title is visible before the first save was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and send a first message that has a clear topic, for example: Plan a birthday dinner for six people.",
+   "Send one or two more messages in the same conversation.",
+   "Type /sessions and press Enter.",
+   "Look at the row for this conversation: it should show a title made from your first message (cut at 50 characters, with ... if longer), with no naming step from you."
+  ],
+  "where": "agi, then type /sessions (or /history). Each row shows the date, the message count and a title taken from the first message."
+ },
+ "S18.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/rename"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "r rename"
+   }
+  ],
+  "needs": "none",
+  "note": "The picker's r key sends the side action complete:rename <id>; I did not trace how the prompt is filled, so the tester should check the exact prompt text on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Type /sessions and press Enter.",
+   "Move to a conversation with the arrow keys and press r.",
+   "Check what the prompt now shows (the code hands off a rename command with the session id filled in) and type the new title, then press Enter.",
+   "Type /sessions again and check that the row shows the new title.",
+   "Quit with agi and start it again, then type /sessions: the new title should still be there."
+  ],
+  "where": "agi, then type /sessions, select a row and press r (the hint reads r rename), or type /rename <id> <new title>."
+ },
+ "S18.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Unarchive with:"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List archived sessions instead."
+   }
+  ],
+  "needs": "a test conversation with a session id",
+  "note": "Archive and restore are terminal commands only; no archive control in the chat screen was found.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi session list and copy the session id of a test conversation.",
+   "Run agi session archive <session_id>; read the line Archived '<session_id>'. and the Unarchive with: hint.",
+   "Run agi session list: the conversation should be missing. Run agi session list --archived: it should be there.",
+   "Run agi session unarchive <session_id>; read Unarchived '<session_id>'.",
+   "Run agi session list again: the conversation should be back in the active list."
+  ],
+  "where": "Terminal, outside the chat: agi session archive <session_id>, then agi session unarchive <session_id>. List with agi session list, and agi session list --archived."
+ },
+ "S18.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Permanently delete session"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "This cannot be undone."
+   }
+  ],
+  "needs": "a disposable test conversation",
+  "note": "The code deletes the session file; I did not verify that it also disappears from the chat picker or from cloud history, and the key used to answer the prompt was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Pick a test conversation and run agi session show <session_id> to read its transcript.",
+   "Run agi session delete <session_id>.",
+   "Read the prompt Permanently delete session '<session_id>'? This cannot be undone. Answer no first; read Aborted. Session '<session_id>' was not deleted.",
+   "Run the delete again and confirm; read Deleted '<session_id>'.",
+   "Run agi session list and agi session show <session_id>: the conversation should no longer appear."
+  ],
+  "where": "Terminal, outside the chat: agi session delete <session_id> (add --force or --yes to skip the prompt)."
+ },
+ "S18.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/fork"
+   }
+  ],
+  "needs": "none",
+  "note": "No command named duplicate exists; /fork creates a second session file, titled (fork) plus the original title (apps/cli/src/sessions.rs). Whether the new conversation is fully independent was not traced beyond the file write.",
+  "reachable": "yes",
+  "steps": [
+   "Have a conversation with at least two exchanges.",
+   "Type /fork and press Enter and read the system message it shows.",
+   "Type /sessions: a new row titled (fork) followed by the original title should appear.",
+   "Open the new conversation and send a new message; then open the original and check it has no new message."
+  ],
+  "where": "agi, then type /fork (alias /branch) in a conversation with a few messages."
+ },
+ "S18.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Shift+Tab"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Mode:"
+   },
+   {
+    "file": "apps/cli/src/tui/mod.rs",
+    "text": "Default"
+   }
+  ],
+  "needs": "none",
+  "note": "The mode cycle changes the whole chat session; the code does not show it as a per-conversation setting separate from the session.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and read the Mode: label; it should read Default.",
+   "Press Shift+Tab and read the new mode label (Plan, then Auto, then Bypass, then FullAuto, cycling).",
+   "Set Plan, send a request that asks for a file change, and check that it is treated as a plan rather than an edit.",
+   "Send a second request in the same conversation and check that it follows the mode you set.",
+   "Compare the mode you set with the Mode: label each time."
+  ],
+  "where": "agi, then press Shift+Tab in the chat; the Mode: label is shown above the input. Plan mode is also /plan."
+ },
+ "S18.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Privacy settings"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Usage: /privacy-mode local | byok | managed"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "requires an explicit reviewable handoff."
+   }
+  ],
+  "needs": "a Local conversation; a signed-in account for Managed",
+  "note": "Switching an established session is refused with a message to start a new session; the flow is an explicit handoff rather than a plain switch.",
+  "reachable": "yes",
+  "steps": [
+   "Type /privacy-settings and read the Privacy settings screen and the current mode.",
+   "Type /privacy-mode managed in a Local conversation.",
+   "Read Privacy mode was not changed. and the line that says Local -> Managed Cloud requires an explicit reviewable handoff.",
+   "Read the hint to run /continue-with-cloud and check that it describes the preview and consent step before anything is sent."
+  ],
+  "where": "agi, then type /privacy-settings to read the mode, and /privacy-mode local, byok or managed to switch (also /trust-boundary)."
+ },
+ "S18.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Jump to the latest output"
+   },
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Ctrl-End"
+   }
+  ],
+  "needs": "a conversation long enough to scroll",
+  "note": "A Mac keyboard has no End key; the tester may need the terminal's own key mapping for Ctrl-End. This was not verified against a terminal.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that produces a long answer.",
+   "Scroll up with PageUp until the start of the answer is visible.",
+   "Press Ctrl-End (or End when the input is empty).",
+   "Check that the view returns to the newest message at the bottom."
+  ],
+  "where": "agi, then in the chat press Ctrl-End (also listed as Jump to the latest output in the keyboard help)."
+ },
+ "S18.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Exported the conversation to"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "already exists, so nothing was written"
+   }
+  ],
+  "needs": "none",
+  "note": "Formats are Markdown, JSON and answer (last answer only); no PDF export was found. Relative file names are written under the workspace root.",
+  "reachable": "yes",
+  "steps": [
+   "Have a conversation with several messages.",
+   "Type /export conversation.md and press Enter.",
+   "Read the message Exported the conversation to <path>. and open the file to check that it holds the whole conversation.",
+   "Type the same /export command again and read the message that says the file already exists and nothing was written."
+  ],
+  "where": "agi, then type /export, followed by a file name, for example /export conversation.md, /export json conversation.json or /export answer answer.md."
+ },
+ "S18.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/status"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Turns:"
+   }
+  ],
+  "needs": "none",
+  "note": "Partial: /status does not show created time, id or project; the id is only in the sessions picker prefix and agi session show. Expected lists more fields than any one screen shows.",
+  "reachable": "yes",
+  "steps": [
+   "Have a conversation with several messages.",
+   "Type /status and press Enter.",
+   "Read the Model, Mode, Turns and Tokens lines.",
+   "Type /sessions and read the row for this conversation: date and message count are shown."
+  ],
+  "where": "agi, then type /status."
+ },
+ "S18.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/context"
+   },
+   {
+    "file": "apps/cli/src/agent/history.rs",
+    "text": "In context:"
+   }
+  ],
+  "needs": "none",
+  "note": "The report shows the token budget and sizes; I did not confirm that it names source files, instructions or memory individually. /memory is a separate command.",
+  "reachable": "yes",
+  "steps": [
+   "Have a conversation with several turns and a file or two in context.",
+   "Type /context and press Enter.",
+   "Read the Context: bar with its percentage and token count, then the In context: breakdown.",
+   "Compare the breakdown with the expected items (files, instructions, memory, token budget)."
+  ],
+  "where": "agi, then type /context (or /ctx)."
+ },
+ "S18.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/usage"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Session estimate (priced locally, not the billed figure)"
+   }
+  ],
+  "needs": "none",
+  "note": "The figure is a local estimate labelled as not billed; the code totals come from the current session.",
+  "reachable": "yes",
+  "steps": [
+   "Have a conversation with several turns.",
+   "Type /usage and press Enter.",
+   "Read Input tokens, Output tokens and the cache lines.",
+   "Read the Session estimate line and compare it with the conversation so far."
+  ],
+  "where": "agi, then type /usage."
+ },
+ "S18.24": {
+  "labels": [],
+  "needs": "none",
+  "note": "No conversation-only instructions control was found. The cited apps/cli/src/lib.rs:237 is the --system-prompt startup flag for a whole run. Searched instruction in tui_app.rs, claude_parity.rs, repl/slash_commands.rs and repl/registry.rs; /output-style <name> --session is a style, not instructions.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S18.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "Only the startup flag --allowedTools (apps/cli/src/lib.rs:390) and /tools (list, a tool name, log, retry in apps/cli/src/claude_parity.rs) were found. No per-conversation enable or disable control was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S18.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/tasks"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/thread"
+   }
+  ],
+  "needs": "none",
+  "note": "I did not confirm that /tasks filters to tasks started from this conversation; it may list all tasks.",
+  "reachable": "yes",
+  "steps": [
+   "Type /thread followed by a short task, for example: /thread summarise the README in this folder.",
+   "Type /tasks and press Enter.",
+   "Read the list of tasks and their status for the task you started.",
+   "Wait for it to finish, type /tasks again and compare the status with the Expected."
+  ],
+  "where": "agi, then type /thread with a short task, then /tasks (alias /task)."
+ },
+ "S18.28": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/mod.rs",
+    "text": "Continue it on the web"
+   }
+  ],
+  "needs": "a signed-in account, a Managed privacy conversation, and a second device or browser",
+  "note": "The command is refused for Local and BYOK conversations (code gates on Managed privacy mode); the cross-device sync itself was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with agi login and use a conversation in Managed privacy mode.",
+   "Type /continue-elsewhere and read the link and the words Continue it on the web.",
+   "Type /continue-elsewhere open to open it in the browser, or open the web or desktop app chat list on another device.",
+   "Find the same conversation there and send a message; check that it appears in this conversation."
+  ],
+  "where": "agi, then type /continue-elsewhere (add open to open it in the browser)."
+ }
+}

@@ -1,0 +1,129 @@
+{
+ "S58.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "MCP servers"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show MCP Servers"
+   }
+  ],
+  "needs": "Signed in, with the AGI CLI available. At least one MCP server configured helps; none shows the empty message.",
+  "note": "The header button has tooltip \"More\" in the code, so the tester sees that word, not \"More actions\". The list also appears in Settings under \"MCP servers\".",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then open the AGI chat panel in the editor.",
+   "Click the \"...\" button in the panel header (tooltip \"More\").",
+   "Click \"MCP servers\" in the menu.",
+   "Look at the list titled \"Code, MCP servers\". Each configured server is a row with its name, status, transport and scope. With none configured it shows \"No MCP servers are configured yet\" and \"Add an MCP server\". Compare with Expected."
+  ],
+  "where": "Chat panel > More (the \"...\" button in the panel header) > MCP servers. Or Command Palette > Code: Show MCP Servers"
+ },
+ "S58.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Test connection"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "MCP servers"
+   }
+  ],
+  "needs": "A configured MCP server. A user-added server is needed for the row to offer actions when its status is not blocked or off.",
+  "note": "The \"Test connection\" action appears only when the server is not blocked or off. Success text comes from the \"mcp.connected\" message in apps/extension-vscode/packages/ui path (packages/ui/i18n/locales/en/vscode.json) and reads \"Code: {name} connected in {ms} ms and offers {count} tools.\".",
+  "reachable": "yes",
+  "steps": [
+   "Open the chat panel and click the \"...\" button in its header.",
+   "Click \"MCP servers\", then click a server row (not a Remove action).",
+   "In the \"Choose an action\" list, click \"Test connection\".",
+   "Watch for a notification such as \"connected in N ms and offers N tools\" (success), or a failure message saying the server \"did not connect\" with a reason. Compare with Expected."
+  ],
+  "where": "Chat panel > More > MCP servers > click a server row > Test connection"
+ },
+ "S58.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Show tools"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "MCP servers"
+   }
+  ],
+  "needs": "A configured MCP server that connects, so its tools can be listed.",
+  "note": "The code lists tools only when the person chooses \"Show tools\"; adding a server does not show its tools automatically, which differs from the wording of Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open the chat panel, click the \"...\" button in its header, then click \"MCP servers\".",
+   "Click a server row. In the \"Choose an action\" list, click \"Show tools\".",
+   "Look at the list titled with the server name. Under the \"Tools\" heading, each tool is shown with its name and description.",
+   "If the server has no tools, the list says \"This server offers no tools\". Compare with Expected."
+  ],
+  "where": "Chat panel > More > MCP servers > click a server row > Show tools"
+ },
+ "S58.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Server details"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Capabilities"
+   }
+  ],
+  "needs": "A configured MCP server that is not blocked or off, so the details action appears.",
+  "note": "The details show the server's advertised capabilities as a list, not a fixed list of tools, resources, prompts and extensions. Whether those names appear depends on what the server reports.",
+  "reachable": "yes",
+  "steps": [
+   "Open the chat panel, click the \"...\" button in its header, then click \"MCP servers\".",
+   "Click a server row, then click \"Server details\" (or use the info button on the row).",
+   "A text document named \"<server name> MCP server\" opens. Read its \"Protocol\", \"Server\" and \"Capabilities\" lines.",
+   "Compare the fields shown with Expected (protocol, tools, resources, prompts, extensions)."
+  ],
+  "where": "Chat panel > More > MCP servers > click a server row > Server details"
+ },
+ "S58.12": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Recent output"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Server details"
+   }
+  ],
+  "needs": "A configured MCP server that is not blocked or off.",
+  "note": "The code shows recent server output only. It has no call history, so the \"call history\" part of Expected is not in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the chat panel, click the \"...\" button in its header, then click \"MCP servers\".",
+   "Click a server row, then click \"Server details\".",
+   "Read the \"Health\" line in the document: \"Responding\", \"Connected, but it did not answer a ping\" or \"Did not connect\".",
+   "Scroll to the \"Recent output\" section. It shows server logs, or \"No output from this server yet.\" Compare with Expected."
+  ],
+  "where": "Chat panel > More > MCP servers > click a server row > Server details"
+ },
+ "S58.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "From this workspace"
+   }
+  ],
+  "needs": "A workspace with a project-scoped MCP server already configured outside the extension, since the extension cannot create one.",
+  "note": "The extension's \"Add an MCP server\" flow saves only user-scoped servers, with no project choice, so per-project configuration is not set from the UI; project servers are only shown as \"From this workspace\". Searched apps/extension-vscode for a project-scope setting or add option and found none.",
+  "reachable": "unsure",
+  "steps": [
+   "Open the MCP servers list from the chat panel's \"...\" menu, or run Code: Show MCP Servers.",
+   "Look for a server whose row description ends with \"project\" or whose Settings row says \"From this workspace\".",
+   "Compare with Expected: that server should load only in this project."
+  ],
+  "where": "Code: Show MCP Servers (Chat panel > More > MCP servers), then read the row description ending in \"project\"; Settings > MCP servers shows \"From this workspace\""
+ }
+}

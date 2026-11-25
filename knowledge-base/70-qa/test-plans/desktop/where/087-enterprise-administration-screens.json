@@ -1,0 +1,1024 @@
+{
+ "S87.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Overview"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspaceConsolePointer.tsx",
+    "text": "Workspace administration"
+   }
+  ],
+  "needs": "an owner or admin account in a workspace",
+  "note": "The overview shows the org name and posture groups; plan and seat totals are not on this page (they appear on Members, in Workspace details and Seats & billing).",
+  "reachable": "yes",
+  "steps": [
+   "Click your account menu and choose Settings.",
+   "Click Workspace, then click Workspace administration.",
+   "In the left column under Workspace, click Overview.",
+   "Read the workspace name at the top and the groups Identity, Provisioning, Access, AI controls, Data, Residency and keys, Audit.",
+   "Compare with Expected: name and security posture are shown here; check whether plan and seat counts are shown on this page (they are on Members, under Workspace details)."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Overview"
+ },
+ "S87.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Members"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Members"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspaceConsolePointer.tsx",
+    "text": "Workspace administration"
+   }
+  ],
+  "needs": "an owner or admin account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click your account menu and choose Settings.",
+   "Click Workspace, then click Workspace administration.",
+   "In the left column click Members.",
+   "Find the Members card and read each row.",
+   "Compare with Expected: each row shows a name, an email and a role line such as Member role or Admin role."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Members"
+ },
+ "S87.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Invite teammate"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Create invitation"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Pending invitations"
+   },
+   {
+    "file": "apps/web/features/teams/components/TeamInvitationAcceptance.tsx",
+    "text": "Accept invitation"
+   }
+  ],
+  "needs": "an owner or admin account, and a second account that uses the invited email address",
+  "note": "The invitee opens the private link at /invite, which is not reached from the admin screens.",
+  "reachable": "yes",
+  "steps": [
+   "In Members, find the Invite teammate card and type an address in Invitee email.",
+   "Pick Member role, Viewer role or Admin role in Invitation role, then click Create invitation.",
+   "Copy the private link with Copy link and open it in another browser that is signed in with the invited email.",
+   "Open the invited link, read Join the workspace, and click Accept invitation.",
+   "Back in Members, check Pending invitations: New link renews an invitation and Revoke removes it.",
+   "Compare with Expected: the invitee can join, and the pending list shows the invitation with its expiry."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Members > Invite teammate"
+ },
+ "S87.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Roles"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceRoles.tsx",
+    "text": "Groups"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceRoles.tsx",
+    "text": "Create group"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceRoles.tsx",
+    "text": "Save group"
+   }
+  ],
+  "needs": "an owner or admin account",
+  "note": "No sync button was found on this screen. Directory groups are replaced by the next identity-provider sync, set up under Identity > Directory sync (SCIM 2.0).",
+  "reachable": "yes",
+  "steps": [
+   "Click Roles in the Workspace administration left column.",
+   "Scroll to the Groups card and read each group row with its member count.",
+   "To add a group, type a name in New group name and click Create group.",
+   "Open a group, tick roles in its role list and click Save group.",
+   "Compare with Expected: groups show members, can be created, and roles can be granted to a group."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Roles > Groups"
+ },
+ "S87.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceRoles.tsx",
+    "text": "Roles"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Member role"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Members"
+   }
+  ],
+  "needs": "an owner or admin account, and a member account to change",
+  "note": "The member role drop-down's visible text is Viewer role, Member role and Admin role; the accessible name is Role for followed by the member name.",
+  "reachable": "yes",
+  "steps": [
+   "Click Roles in the Workspace administration left column.",
+   "Read the Roles card and click Edit on a role to see its permission boxes.",
+   "Click Members in the left column.",
+   "Open the Role for <member name> drop-down on a member row and choose another role.",
+   "Confirm in the dialog and check the row shows the new role line."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Roles, then Members > Role for <member name>"
+ },
+ "S87.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceRoles.tsx",
+    "text": "New role"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceRoles.tsx",
+    "text": "Create role"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceRoles.tsx",
+    "text": "Additional roles"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceRoles.tsx",
+    "text": "Save roles"
+   }
+  ],
+  "needs": "an owner or admin account",
+  "note": "The code has a rule that checks whether a role is held by members or groups before it can be deleted; the exact Delete rule was not read in full.",
+  "reachable": "yes",
+  "steps": [
+   "On Roles, click New role.",
+   "Type a Role name and an optional Description.",
+   "Tick permissions under Permissions. You can only grant what your own role holds, then click Create role.",
+   "To give the role to a member, go to Members, find Additional roles, tick the role and click Save roles.",
+   "To give it to a group, open the group under Groups, tick the role and click Save group.",
+   "Compare with Expected: the role's permissions apply to the member or group. Edit and Delete are on each role row."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Roles > New role"
+ },
+ "S87.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Seats & billing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Licensed"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "In use"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Change seats"
+   }
+  ],
+  "needs": "an owner or admin account in a paid workspace with seats",
+  "note": "Adding seats goes to the pricing page, not to a control inside the console; Seat type rows appear only when seat billing is on.",
+  "reachable": "yes",
+  "steps": [
+   "Click Members in the Workspace administration left column.",
+   "Find the Seats & billing card and read the Licensed, In use and Available figures.",
+   "In a member row, open the drop-down Seat type for <member name> and choose Standard seat or Premium seat.",
+   "Click Change seats to add seats (it opens the pricing page) or Manage billing.",
+   "Compare with Expected: the three seat figures change when a seat is taken or released, and seats can be added through Change seats."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Members > Seats & billing"
+ },
+ "S87.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Workspace ownership"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Transfer ownership"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Transfer ownership?"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Ownership was transferred. Your role is now"
+   }
+  ],
+  "needs": "an owner account and a second member account in the same workspace",
+  "note": "The confirm button text in the dialog was not read; the dialog title is Transfer ownership?.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as the workspace owner and go to Members.",
+   "Scroll to the Workspace ownership card (only the owner sees it).",
+   "Choose a name in Member to receive ownership and a role in Your role after the transfer.",
+   "Click Transfer ownership, then click the confirm button in the Transfer ownership? dialog.",
+   "Read the result line Ownership was transferred. Your role is now ..., then check your role on the Members list.",
+   "Compare with Expected: the new owner holds the owner role and you hold the role you chose."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Members > Workspace ownership"
+ },
+ "S87.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Identity"
+   },
+   {
+    "file": "apps/web/features/settings/sections/team/SSOPanel.tsx",
+    "text": "Single sign-on (SAML / OIDC)"
+   },
+   {
+    "file": "apps/web/features/settings/sections/team/SSOPanel.tsx",
+    "text": "Add connection"
+   },
+   {
+    "file": "apps/web/features/settings/sections/team/SSOPanel.tsx",
+    "text": "Verify domain"
+   },
+   {
+    "file": "apps/web/features/settings/sections/team/SSOPanel.tsx",
+    "text": "Domain not verified"
+   }
+  ],
+  "needs": "an owner account and a domain you control with DNS editing access",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Identity in the Workspace administration left column.",
+   "In Single sign-on (SAML / OIDC), type a company domain in Email domain and click Add connection.",
+   "On the new connection card, read Domain not verified and the values Record type, Record name and Record value.",
+   "Publish that TXT record in your DNS host (this step is outside the app), then click Verify domain.",
+   "Compare with Expected: the status changes to Domain verified, and sign-in for that domain is not routed until verification succeeds."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Identity > Single sign-on (SAML / OIDC) > Add connection"
+ },
+ "S87.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/team/SSOPanel.tsx",
+    "text": "Activate"
+   },
+   {
+    "file": "apps/web/features/settings/sections/team/SSOPanel.tsx",
+    "text": "Active"
+   },
+   {
+    "file": "apps/web/features/settings/sections/team/SSOPanel.tsx",
+    "text": "Paste these into your identity provider:"
+   }
+  ],
+  "needs": "an owner account, a verified domain, and an identity-provider test account (SAML or OIDC)",
+  "note": "The sign-in test through the identity provider happens outside the console and was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "On Identity, open the connection card for a verified domain.",
+   "Pick SAML 2.0 or OIDC when you add it, with IdP metadata URL or OIDC discovery URL filled in.",
+   "Copy the values under Paste these into your identity provider: (ACS URL, SP entity ID) into your identity provider.",
+   "Click Activate on the card.",
+   "Compare with Expected: the status reads Active with the text Users with an email address on this domain sign in through your identity provider.",
+   "Optionally sign in with a test identity-provider user on that domain to check."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Identity > Single sign-on (SAML / OIDC)"
+ },
+ "S87.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/admin/pages/DirectorySyncAdminPage.tsx",
+    "text": "Directory sync (SCIM 2.0)"
+   },
+   {
+    "file": "apps/web/features/admin/pages/DirectorySyncAdminPage.tsx",
+    "text": "Add connection"
+   },
+   {
+    "file": "apps/web/features/admin/pages/DirectorySyncAdminPage.tsx",
+    "text": "Mint token"
+   },
+   {
+    "file": "apps/web/features/admin/pages/DirectorySyncAdminPage.tsx",
+    "text": "Copy this now, it will not be shown again"
+   }
+  ],
+  "needs": "an Enterprise plan (the page says it requires an active Enterprise subscription) and an identity-provider test tenant",
+  "note": "The provider-side create, update and deprovision actions depend on the identity provider and were not verified.",
+  "reachable": "yes",
+  "steps": [
+   "On Identity, scroll to the Directory sync (SCIM 2.0) heading.",
+   "Under Connections, choose a Provider (Okta, Microsoft Entra ID, Google Workspace, OneLogin or Generic SCIM 2.0) and click Add connection.",
+   "Under SCIM tokens, choose a connection, type a Token name and click Mint token.",
+   "Copy the token shown with the note Copy this now, it will not be shown again, and enter it with the SCIM base URL in your identity provider.",
+   "Compare with Expected: users created, changed or removed in the identity provider appear, updated or removed here, and Recent IdP activity lists the sync events."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Identity > Directory sync (SCIM 2.0)"
+ },
+ "S87.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Audit"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceApiKeys.tsx",
+    "text": "Workspace API keys"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceApiKeys.tsx",
+    "text": "Create key"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceServicePrincipals.tsx",
+    "text": "Service principals"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceServicePrincipals.tsx",
+    "text": "Disable"
+   }
+  ],
+  "needs": "an owner or admin account",
+  "note": "Service principals are created with the first workspace API key, not from their own form.",
+  "reachable": "yes",
+  "steps": [
+   "Click Audit in the Workspace administration left column.",
+   "Scroll to Workspace API keys, type a name in Workspace API key name, pick an expiry, tick scopes and click Create key.",
+   "Copy the new key shown once.",
+   "Click Identity and find the Service principals card, which lists the principal created with the key.",
+   "Click Disable on that principal, then Enable to restore it; use Revoke on the key row under Audit to revoke the key.",
+   "Compare with Expected: the key keeps working after its creator leaves, and disabling or revoking stops it."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Audit > Workspace API keys > Create key; then Identity > Service principals"
+ },
+ "S87.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceModelPolicy.tsx",
+    "text": "Providers"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceModelPolicy.tsx",
+    "text": "Block"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceModelPolicy.tsx",
+    "text": "Save model policy"
+   }
+  ],
+  "needs": "an owner or admin account, and a chat model to test",
+  "note": "The refusal itself happens on the server during chat; the exact refusal message was not read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Models in the Workspace administration left column.",
+   "Under Providers, click Block beside a provider, or Approve on another.",
+   "Under Models, type in Filter models and click Block beside a model, or Approve.",
+   "Click Save model policy and read the Blocked badge beside the model.",
+   "Compare with Expected: then try that blocked model in chat and check that the request is refused."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Models"
+ },
+ "S87.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Policy"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx",
+    "text": "Features and defaults"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx",
+    "text": "Save features and defaults"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx",
+    "text": "Exceptions"
+   }
+  ],
+  "needs": "an owner or admin account, and a member account to test",
+  "note": "The card text says the workspace policy must be saved first; enforcement in the CLI is separate and not checked from this screen.",
+  "reachable": "yes",
+  "steps": [
+   "Click Policy in the Workspace administration left column.",
+   "Under Features and defaults, switch off a feature such as Work or Skills, then click Save features and defaults.",
+   "Under Exceptions, choose Exception applies to (A person, A directory group or A role), pick the subject, set the feature to Off and click Save exception.",
+   "Sign in as a member who is affected and try that feature.",
+   "Compare with Expected: the switched-off feature is refused for everyone without an exception, and the exception member is treated as set."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Policy > Features and defaults"
+ },
+ "S87.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Catalog connectors"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Read-only tools"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Needs approval"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Save policy"
+   }
+  ],
+  "needs": "an owner or admin account, and a deployment that has catalog connectors",
+  "note": "If no catalog connectors are configured, the card shows No catalog connectors are configured and there is nothing to set.",
+  "reachable": "yes",
+  "steps": [
+   "Click Connectors in the Workspace administration left column.",
+   "Under Catalog connectors, find a connector row.",
+   "Set Read-only tools and Write tools for that connector to Always allow, Needs approval or Blocked.",
+   "Click Save policy.",
+   "Compare with Expected: the connector's read-only and write tools follow the chosen level; try a write tool in chat to check the approval step."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Connectors > Catalog connectors"
+ },
+ "S87.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Catalog connectors"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Block"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Custom connectors"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Save policy"
+   }
+  ],
+  "needs": "an owner or admin account, and a deployment that has catalog connectors",
+  "note": "Connector rows show the connector id with dashes replaced by spaces; a blocked connector is refused on the server, not just hidden.",
+  "reachable": "yes",
+  "steps": [
+   "Click Connectors in the Workspace administration left column.",
+   "Under Catalog connectors, click Block beside a connector, or Approve to allow it.",
+   "Turn the Allow custom connectors switch off if you want custom connectors blocked.",
+   "Click Save policy.",
+   "Compare with Expected: a blocked connector shows as Blocked and is not offered in chat, schedules or agent runs."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Connectors"
+ },
+ "S87.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx",
+    "text": "Features and defaults"
+   },
+   {
+    "file": "packages/contracts/types/src/enterprise/workspace-controls.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Approved plugins"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
+    "text": "Blocked plugins"
+   }
+  ],
+  "needs": "an owner or admin account, and a member account to test",
+  "note": "There is no per-skill control in the code; skill control is by the Skills switch and plugin control is by plugin key.",
+  "reachable": "yes",
+  "steps": [
+   "On Policy, under Features and defaults, switch off Skills or Plugins and click Save features and defaults.",
+   "Sign in as a member and try to use or install a skill or plugin.",
+   "On Connectors, under Plugins, type a plugin key in Plugin key and click Approve or Block.",
+   "Read the lists Approved plugins and Blocked plugins.",
+   "Compare with Expected: the switched-off feature is refused, and a blocked plugin cannot be installed."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Policy > Features and defaults (Skills and Plugins switches); and Connectors > Plugins"
+ },
+ "S87.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Plugins"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspacePlugins.tsx",
+    "text": "Upload a plugin or skill"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspacePlugins.tsx",
+    "text": "Workspace plugins"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspacePlugins.tsx",
+    "text": "Available to install"
+   }
+  ],
+  "needs": "a plugin or skill .zip file, and an owner or admin account",
+  "note": "The separation from the public directory was not checked in code; this screen only publishes and sets install options for the workspace's own plugins.",
+  "reachable": "yes",
+  "steps": [
+   "Click Plugins in the Workspace administration left column.",
+   "Under Publish a plugin or a skill, click Upload a plugin or skill and choose a .zip file.",
+   "Wait for Scanning and publishing to finish, then read the Workspace plugins list.",
+   "Set the install option for a plugin (Required, Installed by default, Available to install or Not available), then check it.",
+   "Compare with Expected: members find the published plugin under Plugins; it is kept apart from the public directory."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Plugins"
+ },
+ "S87.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Sharing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/OrganizationSharingSection.tsx",
+    "text": "Shared projects"
+   },
+   {
+    "file": "apps/web/features/settings/sections/OrganizationSharingSection.tsx",
+    "text": "Stop sharing"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Can edit"
+   }
+  ],
+  "needs": "an owner or admin account, and a project already shared with the workspace",
+  "note": "The admin list is shared with the project sharing controls; the exact labels for per-member access come from that file.",
+  "reachable": "yes",
+  "steps": [
+   "Click Sharing in the Workspace administration left column.",
+   "Read the Shared projects card to see which projects are shared with the workspace.",
+   "Open a project's member list to set access per member (Can view, Can edit or No access).",
+   "Click Stop sharing on a project and confirm in the dialog.",
+   "Compare with Expected: every shared project is listed, per-member access changes, and a stopped project no longer appears to members."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Sharing"
+ },
+ "S87.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Public sharing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Allow public sharing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Save policy"
+   }
+  ],
+  "needs": "an owner or admin account, and a member account to test",
+  "note": "The code uses one switch for outside sharing and public publishing (see S87.21); no separate outside-sharing switch was found.",
+  "reachable": "yes",
+  "steps": [
+   "Click Policy in the Workspace administration left column.",
+   "Find the Public sharing card and its switch labelled Allow public sharing.",
+   "Switch it off and click Save policy.",
+   "Sign in as a member and try to create a new public or outside share link.",
+   "Compare with Expected: new share links are refused while the switch is off; existing links stay up until revoked."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Policy > Public sharing"
+ },
+ "S87.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Public sharing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Allow public sharing"
+   }
+  ],
+  "needs": "an owner or admin account, and a member account to test",
+  "note": "Same switch as S87.20; the card text reads Members may publish a chat or an artifact to an anonymous public link.",
+  "reachable": "yes",
+  "steps": [
+   "Click Policy in the Workspace administration left column.",
+   "In the Public sharing card, switch off Allow public sharing and click Save policy.",
+   "Sign in as a member and try to publish a chat or an artifact to a public link.",
+   "Compare with Expected: publishing is refused while the switch is off.",
+   "Switch it on again and check that publishing works."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Policy > Public sharing"
+ },
+ "S87.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Allow memory"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Save policy"
+   }
+  ],
+  "needs": "an owner or admin account, and a member account with memory",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Policy in the Workspace administration left column.",
+   "Find the Memory card and switch off Allow memory.",
+   "Click Save policy.",
+   "Sign in as a member whose personal setting has memory on, and check that memory is not used.",
+   "Compare with Expected: the card says Off for every member, whatever their personal setting."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Policy > Memory"
+ },
+ "S87.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Retention window"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Enforce retention"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Enforce the retention window"
+   }
+  ],
+  "needs": "an owner or admin account; use a test workspace only, because enforcement deletes chats",
+  "note": "The Data screen's Retention by data type covers other data (projects, files, artifacts), not chats; the legal-hold part is on Data.",
+  "reachable": "yes",
+  "steps": [
+   "Click Policy in the Workspace administration left column.",
+   "In the Retention window card, change Retention window in days and click Save policy.",
+   "Switch on Enforce the retention window in the Enforce retention card and confirm the dialog.",
+   "Read the line that says chats idle for N days are permanently deleted, except under legal hold.",
+   "Compare with Expected: the window is saved; after enforcement a nightly sweep deletes older chats, but chats under legal hold stay."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Policy > Retention window"
+ },
+ "S87.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Data"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceDataRegion.tsx",
+    "text": "Data region"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceDataRegion.tsx",
+    "text": "Choose a region\u2026"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceDataRegion.tsx",
+    "text": "Request move"
+   }
+  ],
+  "needs": "an Enterprise plan (the card says choosing a region requires an active Enterprise plan)",
+  "note": "The plan file says EU infrastructure is unfinished; an EU option may show (not available yet) and be disabled.",
+  "reachable": "yes",
+  "steps": [
+   "Click Data in the Workspace administration left column.",
+   "Find the Data region card and read Stored in <region>.",
+   "Open the drop-down with Choose a region\u2026 and pick another region, then click Request move and confirm.",
+   "Read the note that says data stays in the current region until the copy is verified.",
+   "Compare with Expected: the region is requested and data is kept in the chosen region once the move completes."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Data > Data region"
+ },
+ "S87.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEncryptionKey.tsx",
+    "text": "Encryption key"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEncryptionKey.tsx",
+    "text": "Connect key"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEncryptionKey.tsx",
+    "text": "Rotate"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEncryptionKey.tsx",
+    "text": "Key identifier"
+   }
+  ],
+  "needs": "an owner or admin account, and a cloud key (AWS KMS, Google Cloud KMS or Azure Key Vault) for a real connection",
+  "note": "The card shows a refusal message instead of the controls when the feature is not offered to this workspace; the exact refusal text was not read.",
+  "reachable": "yes",
+  "steps": [
+   "Click Data in the Workspace administration left column.",
+   "In the Encryption key card, choose a Provider (AWS KMS, Google Cloud KMS or Azure Key Vault), type the Key identifier and Region, then click Connect key.",
+   "Read the status sentence that says workspace data is sealed with your key.",
+   "Click Rotate and confirm Rotate key, or click Revoke, enter a reason and confirm Revoke key.",
+   "Compare with Expected: the key is connected, rotates or revokes from this card, and data follows the key status."
+  ],
+  "where": "Account menu > Settings > Workspace > Workspace administration > Data > Encryption key"
+ },
+ "S87.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspaceConsolePointer.tsx",
+    "text": "Workspace administration"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Policy"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "IP allow list"
+   }
+  ],
+  "needs": "An owner or admin account, and a second network (for example a phone hotspot) to test refusal",
+  "note": "The refusal is applied on the server (apps/web/lib/ip-allow-list-gate.ts); the screen only saves the list, so the refusal itself is seen by signing in from outside the list. The opening menu for Settings was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a workspace owner or admin, open Settings, choose Workspace, then click Workspace administration.",
+   "Click Policy in the left list and scroll down to the IP allow list row.",
+   "Type your own address, or a block such as 203.0.113.0/24, in the box and press Enter. Add your own address first so you do not lock yourself out.",
+   "Click Save policy.",
+   "From a network outside the listed addresses, try to sign in to the workspace and check that the sign-in is refused, as Expected says."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Policy > IP allow list"
+ },
+ "S87.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Audit"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspaceAuditSection.tsx",
+    "text": "Audit trail"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspaceAuditSection.tsx",
+    "text": "All actions"
+   }
+  ],
+  "needs": "An owner or admin account, and some audit events in the workspace (for example a role change or an invitation)",
+  "note": "The filters found in code are action, outcome and severity only; no time-range filter was found, although Expected lists time range.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as an owner or admin, open Settings, choose Workspace, then click Workspace administration.",
+   "Click Audit in the left list.",
+   "In the Audit trail card, open the Filter by action dropdown (it starts at All actions), then the Filter by outcome and Filter by severity dropdowns, and pick a value in each.",
+   "Look at the table with the headings When, Actor, Action, Resource, Surface and Outcome; the rows should match the filters. If nothing matches you see No events match these filters."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Audit > Audit trail"
+ },
+ "S87.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspaceAuditSection.tsx",
+    "text": "Export JSONL"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceAuditStreaming.tsx",
+    "text": "SIEM streaming"
+   },
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Audit export"
+   }
+  ],
+  "needs": "An owner or admin account, and a place to save a downloaded file",
+  "note": "No date-range picker was found for the export; it uses the filters only. SIEM streaming sits on the same Audit page (Audit destination endpoint, Start streaming). The Audit export switch on the Policy page turns export off. The recording of the export was not confirmed in the UI code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Workspace, click Workspace administration, then click Audit.",
+   "Optionally set the filters in the Audit trail card first, because the export follows them.",
+   "Click Export JSONL and wait for the file to download; open it and compare its lines with the rows on screen.",
+   "Go back to the Audit trail table and check that a new event for the export now appears, as Expected says it is recorded."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Audit > Audit trail > Export JSONL"
+ },
+ "S87.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceUsageAnalytics.tsx",
+    "text": "By member"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceUsageAnalytics.tsx",
+    "text": "Export daily CSV"
+   }
+  ],
+  "needs": "An owner or admin account, and some managed Cloud usage in the chosen period",
+  "note": "The figures are managed Cloud credits and settled requests only, as the page states.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Workspace, click Workspace administration, then click Usage.",
+   "Click 7 days, 30 days or 90 days (30 days is selected first).",
+   "Read the Managed cloud usage totals, then the tables By member, By product area, By model and By provider.",
+   "Click Export daily CSV to download the file.",
+   "Compare the totals, the tables and the CSV, as Expected says."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Usage"
+ },
+ "S87.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Monthly spend limit"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Cap (credits)"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Set limit"
+   }
+  ],
+  "needs": "An owner or admin account, and Cloud usage to reach a small test cap",
+  "note": "A second place exists: the Policy page has a Monthly spend cap row (aria label Monthly spend cap in credits) saved with Save policy. The alert percentage is the Alert at field.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Workspace, click Workspace administration, then click Usage.",
+   "Scroll to Monthly spend limit. Type a number in Cap (credits) and a percentage in Alert at.",
+   "Choose Off, Notify or Block in the enforcement dropdown, then click Set limit.",
+   "Read the bar and the line that says the credits used this month, which shows past the alert once the threshold is crossed.",
+   "With Block set, use Cloud turns until the cap is reached and check that new turns are refused, as Expected says."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Usage > Monthly spend limit"
+ },
+ "S87.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceBillingSummary.tsx",
+    "text": "Plan and seats"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceBillingSummary.tsx",
+    "text": "Billing settings"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Enterprise contract"
+   }
+  ],
+  "needs": "An owner or admin account; an enterprise contract is needed to see the contract and invoice parts",
+  "note": "The console shows plan and seats as read-only text; no add-seat or plan-change control was found in this file, and the page says payment and invoices are in billing settings. The contract section appears only for contract-priced plans.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Workspace, then click Workspace administration and Billing.",
+   "Read the Plan and seats card: Plan, Seats used and Members.",
+   "If the workspace has an enterprise contract, scroll to Enterprise contract and its Invoices section.",
+   "Click Billing settings to reach payment, invoices and plan changes, and compare what you find with Expected."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Billing"
+ },
+ "S87.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Data"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceDataControls.tsx",
+    "text": "Legal holds"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceDataControls.tsx",
+    "text": "Export records"
+   }
+  ],
+  "needs": "An owner or admin account and at least one legal hold",
+  "note": "The only export found is per legal hold. The e-discovery service lists conversation and message types; files and artifacts were not confirmed, and no entry in the trail for the export was confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Workspace, click Workspace administration, then click Data.",
+   "If no legal hold exists, place one as in S87.37 first.",
+   "On the hold row, click Export records and wait for the download.",
+   "Open the file and check that it holds the workspace conversations and messages, and compare with Expected."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Data > Legal holds > Export records"
+ },
+ "S87.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceDataControls.tsx",
+    "text": "Legal holds"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceDataControls.tsx",
+    "text": "Place hold"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceDataControls.tsx",
+    "text": "Release hold"
+   }
+  ],
+  "needs": "An owner or admin account; a second member account to test the One member scope",
+  "note": "Place a hold is a sub-heading above the form, not a button; the button is Place hold.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Workspace, click Workspace administration, then click Data.",
+   "Under Legal holds, fill in the Legal hold name and Legal hold scope (Whole workspace or One member), pick the person in Held member if needed, type a Legal hold reason, then click Place hold.",
+   "Check that the hold appears under active holds with a Placed date.",
+   "Click Release hold on that hold, then click Release hold in the confirmation box.",
+   "Check that the hold now shows Released and that the deletion figures under the backlog (Held from deletion) reflect it."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Data > Legal holds > Place hold"
+ },
+ "S87.39": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspacePolicyDiagnostics.tsx",
+    "text": "Feature to check (optional)"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspacePolicyDiagnostics.tsx",
+    "text": "Explain"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspacePolicyDiagnostics.tsx",
+    "text": "Country code (optional)"
+   }
+  ],
+  "needs": "An owner or admin account, and at least one member with a restricted policy to see a refusal",
+  "note": "The heading is written in the file as Explain a member&rsquo;s policy, which shows as a curly apostrophe.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Workspace, click Workspace administration, then click Policy.",
+   "Scroll to the section that asks Explain a member\u2019s policy (shown to admins only).",
+   "Choose a person in Member, optionally a feature in Feature to check (optional), choose a surface in From, and optionally a Country code (optional).",
+   "Click Explain.",
+   "Read the result: what this person may not use, which rule turned it off, and whether the request passes; compare with Expected."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Policy > Explain a member\u2019s policy"
+ },
+ "S87.40": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceApiKeys.tsx",
+    "text": "Workspace API keys"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceApiKeys.tsx",
+    "text": "Create key"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceApiKeys.tsx",
+    "text": "Revoke key"
+   }
+  ],
+  "needs": "An owner or admin account; Create key stays off until a name and at least one scope are set",
+  "note": "The API keys card sits on the Audit page (apps/web/app/workspace/audit/page.tsx). The API reference link and the endpoints the keys call were not tested or confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose Workspace, click Workspace administration, then click Audit, and scroll to Workspace API keys.",
+   "Type a name in Workspace API key name, tick one or more scopes, and choose an expiry in Workspace API key expiry (30 days, 90 days, 1 year or No expiry).",
+   "Click Create key and check the new row shows its scopes and an Expires date.",
+   "Click Revoke on that row, then click Revoke key in the confirmation box.",
+   "Check that the row now shows Revoked with a date, as Expected says."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Audit > Workspace API keys > Create key"
+ }
+}

@@ -1,0 +1,388 @@
+{
+ "S40.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "What should AGI call you?"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Personalization is stored for AGI Cloud answers only, per its picker placeholder; the reply check is server-side.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click What should AGI call you? and type a name, then press Enter.",
+   "Check the row now shows that name instead of Not set.",
+   "Send a new chat message and check the reply uses that name."
+  ],
+  "where": "Sidebar > Personalization > What should AGI call you?"
+ },
+ "S40.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "What do you do?"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "No separate free-text background field exists; the closest is this 120-character field, so it covers Expected only partly. Custom instructions in Settings is a further free-text option.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click What do you do? and type a short background, up to 120 characters, then press Enter.",
+   "Check the row shows that text instead of Not set.",
+   "Send a chat message that depends on that background and check the reply keeps it in mind."
+  ],
+  "where": "Sidebar > Personalization > What do you do?"
+ },
+ "S40.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "What do you do?"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Tailoring of replies happens on the server; the code only stores the text.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click What do you do? and type a role, such as a job title, then press Enter.",
+   "Check the row shows the role.",
+   "Send a question in that field of work and check the reply fits that role."
+  ],
+  "where": "Sidebar > Personalization > What do you do?"
+ },
+ "S40.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Style"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Response style"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Only one style can be chosen at a time, as Expected says.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click Style, then pick Concise, Explanatory, Learning, Formal or Default.",
+   "Check the Style row shows the chosen name.",
+   "Send a question and compare the reply with the style chosen."
+  ],
+  "where": "Sidebar > Personalization > Style"
+ },
+ "S40.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Formal"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Style"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "There is no separate more or less formal control; only the Formal style option exists, so the check is partial.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click Style and pick Formal.",
+   "Check the Style row shows Formal.",
+   "Send a question and check the reply uses a formal register."
+  ],
+  "where": "Sidebar > Personalization > Style > Formal"
+ },
+ "S40.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Style"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Learning"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The named presets are the Style choices; the Tone section holds separate on or off traits, not presets.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click Style and look at the named choices: Default, Concise, Explanatory, Learning, Formal.",
+   "Pick one preset, then check the Style row shows it.",
+   "Send a question and check the reply follows that one preset."
+  ],
+  "where": "Sidebar > Personalization > Style"
+ },
+ "S40.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Warmth"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Tone"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Only three settings exist (Default and the two ends), not a graded scale.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Under the Tone heading, click Warmth.",
+   "Pick Warm and personable, or Neutral and businesslike, or Default.",
+   "Check the Warmth row shows the choice, then send a question and compare the tone of the reply."
+  ],
+  "where": "Sidebar > Personalization > Tone > Warmth"
+ },
+ "S40.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Enthusiasm"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Tone"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Only three settings exist (Default and the two ends), not a graded scale.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Under the Tone heading, click Enthusiasm.",
+   "Pick Energetic and encouraging, or Measured, or Default.",
+   "Check the Enthusiasm row shows the choice, then send a question and compare the reply."
+  ],
+  "where": "Sidebar > Personalization > Tone > Enthusiasm"
+ },
+ "S40.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Formatting"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Headers and lists"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "A second setting, Tone > Headers and lists, also covers this; Formatting holds the fuller choice list.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click Formatting and pick Prose, or Headings and bullet lists, or another option.",
+   "Check the Formatting row shows the choice.",
+   "Send a question and compare whether the reply uses headings and lists or flowing prose."
+  ],
+  "where": "Sidebar > Personalization > Formatting"
+ },
+ "S40.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Emoji"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Tone"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Only the two ends and Default exist, not a graded scale.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Under the Tone heading, click Emoji.",
+   "Pick No emoji or Emoji welcome.",
+   "Check the Emoji row shows the choice, then send a question and check whether the reply uses emoji."
+  ],
+  "where": "Sidebar > Personalization > Tone > Emoji"
+ },
+ "S40.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Technical level"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click Technical level and pick Beginner, Intermediate or Expert.",
+   "Check the Technical level row shows the choice.",
+   "Send the same technical question and compare the depth of the reply."
+  ],
+  "where": "Sidebar > Personalization > Technical level"
+ },
+ "S40.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Language"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The language prompt is a free tag; leaving it empty returns to answering in the language the user writes in.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click Language, type a tag such as de, then press Enter.",
+   "Check the Language row shows de.",
+   "Send a question in English and check the reply is written in German."
+  ],
+  "where": "Sidebar > Personalization > Language"
+ },
+ "S40.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Custom instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Save host instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Instructions & editor"
+   }
+  ],
+  "needs": "none",
+  "note": "No on or off switch exists in the code: the only way to stop them is to clear the text and save, which deletes it, so Expected's switch-off without deleting is not met. The text is stored locally, not per account.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Code: Open Settings command (or Sidebar > Settings).",
+   "Click Instructions & editor in the left list.",
+   "Under Custom instructions, type a standing instruction in Host default, then click Save host instructions.",
+   "Open a new chat and check the reply follows it; the Effective turn prelude box should show the text."
+  ],
+  "where": "Settings > Instructions & editor > Custom instructions > Host default"
+ },
+ "S40.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Project instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one project",
+  "note": "Project instructions are cloud data set on a project; the Instructions & editor section shows only local repository files, which are a separate source.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Projects, then select a project.",
+   "In the project list under Edit, click Instructions.",
+   "Type project instructions in Project instructions and press Enter.",
+   "Open a new chat in that project and check the reply follows the instructions; the Instructions row should now show Set."
+  ],
+  "where": "Sidebar > Projects > (select a project) > Edit > Instructions"
+ },
+ "S40.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Explanatory"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Style"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click Style and pick Explanatory.",
+   "Check the Style row shows Explanatory.",
+   "Ask a how-to question and check the reply explains the reasoning and context."
+  ],
+  "where": "Sidebar > Personalization > Style > Explanatory"
+ },
+ "S40.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Concise"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/personalization/personalization.ts",
+    "text": "Style"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Length > Shorter is a related but separate setting in the same menu.",
+  "reachable": "yes",
+  "steps": [
+   "Open the sidebar menu and click Personalization.",
+   "Click Style and pick Concise.",
+   "Check the Style row shows Concise.",
+   "Ask a question and check the reply is short and direct."
+  ],
+  "where": "Sidebar > Personalization > Style > Concise"
+ },
+ "S40.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Effective turn prelude"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Runtime-discovered project sources"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Instructions & editor"
+   }
+  ],
+  "needs": "none",
+  "note": "The header line naming the scope (this VS Code host or this VS Code workspace) comes from apps/extension-vscode/src/features/instructions/customInstructions.ts; the Context panel's Custom instructions row also shows the scope.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Code: Open Settings command (or Sidebar > Settings).",
+   "Click Instructions & editor in the left list.",
+   "Read the Effective turn prelude box; it shows the exact instruction block added to new turns, with its scope in the header.",
+   "Read the Runtime-discovered project sources list and compare the named sources with Expected."
+  ],
+  "where": "Settings > Instructions & editor > Effective turn prelude"
+ }
+}

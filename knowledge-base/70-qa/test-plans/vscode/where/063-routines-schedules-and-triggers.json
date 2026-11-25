@@ -1,0 +1,210 @@
+{
+ "S63.19": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Work"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Run now"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/schedules/scheduleActions.ts",
+    "text": "Run it now"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with an active, enabled schedule",
+  "note": "The message after the click only reports that the run started; the finished result appears later in run history. The Run now icon also shows on paused schedules, where the click is refused with a message saying the schedule must be active and enabled.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the AGI Code sidebar.",
+   "Click More, then Work. In the Schedules part, hover an active schedule and click the play icon \"Run now\".",
+   "In the modal, click \"Run it now\".",
+   "Read the message that appears. Then click \"Show recent runs\" on the same schedule and check the newest run.",
+   "Compare with Expected: the run starts straight away and the run history shows it completing with a result."
+  ],
+  "where": "AGI Code sidebar > More > Work > Schedules row, click the play icon tooltipped \"Run now\" (also in the Command Palette as \"Code: Run Schedule Now\")"
+ },
+ "S63.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Work"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/schedules/schedulePresentation.ts",
+    "text": "no next run"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one schedule",
+  "note": "The next-run text is shown in the Work list rows, not in a separate tree view; the Command Palette command \"Code: Show Schedules\" opens the same list.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the AGI Code sidebar.",
+   "Click More, then Work.",
+   "Read the description line on each schedule row.",
+   "Look for the next-run part: a future time reads \"next in\" followed by a duration, a past one reads \"due\" with \"ago\", and a paused or completed schedule reads \"no next run\".",
+   "Compare with Expected: each routine shows when it will next run."
+  ],
+  "where": "AGI Code sidebar > More > Work > Schedules (each row's description line)"
+ },
+ "S63.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/schedules/schedulePresentation.ts",
+    "text": "last run failed"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Work"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with a schedule that has run at least once, and ideally one whose last run failed",
+  "note": "\"last run failed\" appears only when the schedule carries a last error; the failure text itself is in the hover tooltip.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the AGI Code sidebar.",
+   "Click More, then Work.",
+   "Read the description line on each schedule row for the last-run part.",
+   "Look for \"last ran\" followed by a time, \"never run\", or \"last run failed\".",
+   "Compare with Expected: each routine shows when it last ran and whether that run failed."
+  ],
+  "where": "AGI Code sidebar > More > Work > Schedules (each row's description line)"
+ },
+ "S63.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Show recent runs"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/schedules/schedulePresentation.ts",
+    "text": "Succeeded"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Work"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with a schedule that has past runs",
+  "note": "The list shows the newest 20 runs only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the AGI Code sidebar.",
+   "Click More, then Work.",
+   "Hover a schedule row and click the history icon \"Show recent runs\".",
+   "If the schedule has never run, read the message saying it has not run yet. Otherwise read the list titled \"Runs of\" followed by the schedule name.",
+   "Compare with Expected: each past run shows its status and time, such as \"Succeeded \u00b7 <time>\", newest first."
+  ],
+  "where": "AGI Code sidebar > More > Work > Schedules row, click the history icon \"Show recent runs\" (also \"Code: Show Schedule Runs\" in the Command Palette)"
+ },
+ "S63.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/schedules/scheduleActions.ts",
+    "text": "Pick a run to read its answer"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Show recent runs"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Work"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with a schedule that has a run with output",
+  "note": "The extension keeps a run's answer in memory for the session; if it is no longer held, the tab says \"This run's answer is no longer held here.\"",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the AGI Code sidebar.",
+   "Click More, then Work, then hover a schedule row and click \"Show recent runs\".",
+   "Pick a run that has an answer. The list placeholder reads \"Pick a run to read its answer\".",
+   "Read the text tab that opens. It has the schedule name as a heading, the run status line, and then the run's output text.",
+   "Compare with Expected: the run's output text is shown, not only its status. A run with no output opens nothing."
+  ],
+  "where": "AGI Code sidebar > More > Work > Schedules row, click \"Show recent runs\", then pick a run in the list"
+ },
+ "S63.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Pause this schedule"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Resume this schedule"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/schedules/schedulePresentation.ts",
+    "text": "Paused"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with an active schedule",
+  "note": "A schedule that cannot be paused or resumed in its current state shows the message \"this schedule cannot be paused or resumed in its current state.\" instead.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the AGI Code sidebar.",
+   "Click More, then Work. Hover an active schedule and click \"Pause this schedule\".",
+   "Read the progress message \"pausing\" and then check that the row description says \"Paused\".",
+   "Hover the same row and click \"Resume this schedule\".",
+   "Compare with Expected: the schedule pauses and resumes, and it stays in the list the whole time (nothing is deleted)."
+  ],
+  "where": "AGI Code sidebar > More > Work > Schedules row, click the icon \"Pause this schedule\" or \"Resume this schedule\" (also \"Code: Pause Schedule\" and \"Code: Resume Schedule\" in the Command Palette)"
+ },
+ "S63.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/schedules/schedulePresentation.ts",
+    "text": "Waiting for approval"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Show recent runs"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a schedule whose run has stopped to ask for a tool approval (produced by the server, not by a button in the app)",
+  "note": "The pause is decided on the server in apps/web (scheduled-agent-executor.ts and the tool-call gate), so the extension only shows and answers it; the extension does not show the resumed run itself, so the tester checks the run history.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the AGI Code sidebar and use a schedule whose run is waiting for approval (set up on the web).",
+   "Click More, then Work. Read the row description: it includes \"a run is waiting for your approval\".",
+   "Hover the schedule and click \"Show recent runs\". Pick the run whose status is \"Waiting for approval\".",
+   "In the modal that opens, read the request text and click \"Approve\".",
+   "Compare with Expected: the run resumes after approval. Check in \"Show recent runs\" that the run's status moves on from \"Waiting for approval\"."
+  ],
+  "where": "AGI Code sidebar > More > Work > Schedules row, click \"Show recent runs\", then pick the run labelled \"Waiting for approval\""
+ },
+ "S63.33": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/schedules/schedulePresentation.ts",
+    "text": "Skipped"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "text": "Ran late"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Show recent runs"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with a schedule that has missed or skipped a run (not something the app can create on demand)",
+  "note": "The explanation shows only when the run record holds missed-run details, which the extension reads and does not create; the reason appears in the run's detail text, not on the schedule row.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the AGI Code sidebar.",
+   "Click More, then Work. Hover a schedule that has a missed or skipped run and click \"Show recent runs\".",
+   "Find the run whose label starts with \"Skipped\" (or \"Ran late\" in its detail).",
+   "Read the detail text after the first dot separators. A missed run reads like \"Skipped the run scheduled for <time>: it was missed by <duration>, and this schedule skips missed runs.\" A late run reads \"Ran late: scheduled for <time>, started <duration> later.\"",
+   "Compare with Expected: the run history says that the occurrence was missed or skipped, and why."
+  ],
+  "where": "AGI Code sidebar > More > Work > Schedules row, click \"Show recent runs\""
+ }
+}

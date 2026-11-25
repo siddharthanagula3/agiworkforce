@@ -1,0 +1,158 @@
+{
+ "S41.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Usage: /privacy-mode local | byok | managed"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Privacy settings"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Local and BYOK sessions stay on this computer"
+   }
+  ],
+  "needs": "none",
+  "note": "The --no-session-persistence flag (apps/cli/src/lib.rs) turns off all saving to disk, which is a different control; the trace did not confirm that local chats are never uploaded.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal in any folder and run: agi",
+   "Type /privacy-mode local and press Enter",
+   "Type /privacy-settings and press Enter",
+   "Look for the line \"Active mode: local\" and the History line that says Local and BYOK sessions stay on this computer, and compare with Expected"
+  ],
+  "where": "agi, then type /privacy-mode local, then /privacy-settings"
+ },
+ "S41.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/files"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Local file access: explicit workspace roots only"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Attached files: never included in BYOK handoff drafts automatically"
+   }
+  ],
+  "needs": "a text file on this Mac",
+  "note": "The trace did not follow whether an attached file is sent to a provider when a chat runs; that depends on the route and was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi",
+   "Type /files and press Enter to see the current list of files",
+   "Type /files followed by the path of a text file on this Mac, then press Enter",
+   "Type /privacy-settings and press Enter, then compare the \"Local file access\" and \"Attached files\" lines with Expected"
+  ],
+  "where": "agi, then type /files, or /files <path> to attach a file, or /add-dir <directory> for a folder"
+ },
+ "S41.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/memories"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/memories_settings.rs",
+    "text": "Memory Settings"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/memories_settings.rs",
+    "text": "Auto-memory"
+   }
+  ],
+  "needs": "none",
+  "note": "The device-only storage rule is described in apps/cli/src/memory_pipeline.rs (raw_memories.md under ~/.agiworkforce/memories for Local sessions), but the screen does not say so; the quoted code cited at memory_pipeline.rs:475 was not found, and the storage path was not traced further.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi",
+   "Type /memories and press Enter",
+   "Look at the Memory Settings box with the lines Auto-memory, Decay threshold and Max facts; Enter toggles the highlighted line",
+   "Look for any line on this screen that says where memory is stored; none is shown, so compare with Expected"
+  ],
+  "where": "agi, then type /memories (TUI screen titled Memory Settings)"
+ },
+ "S41.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "History: a Managed Cloud chat stays in your account history until you delete it"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Model training: AGI Workforce does not train its own models on your prompts"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Retention: a deleted chat stays in Recently deleted for 30 days"
+   }
+  ],
+  "needs": "none",
+  "note": "There are no separate on or off controls for history or retention in the CLI; the training line points to Settings > Privacy, which is another surface.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi",
+   "Type /privacy-settings and press Enter",
+   "Find the three separate lines starting History:, Model training: and Retention:",
+   "Compare: each topic has its own line, as Expected says"
+  ],
+  "where": "agi, then type /privacy-settings (statement lines, not toggles)"
+ },
+ "S41.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Privacy settings"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Local -> Managed Cloud: explicit only with /continue-with-cloud"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Privacy mode was not changed."
+   }
+  ],
+  "needs": "none",
+  "note": "The Memory Settings screen shows labels only, with no explanations.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi",
+   "Type /privacy-settings and press Enter",
+   "Read the Active mode line, which has a description in brackets, and the lines after it",
+   "Type /privacy-mode cloud or another mode name that is not local while in local mode, press Enter, and read the explanation that begins Privacy mode was not changed; compare with Expected"
+  ],
+  "where": "agi, then type /privacy-settings (or /privacy-mode with no words)"
+ },
+ "S41.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Telemetry: CLI-local unless managed cloud features are enabled"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Sync: opt-in with agi sync"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "on-device & private"
+   }
+  ],
+  "needs": "none",
+  "note": "The disclosure is general, not per feature; memory, voice and attachment locations are not stated feature by feature on the screen.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi and look at the start screen line for the mode: on-device & private in Local mode, billed by your provider in BYOK, AGI cloud subscription in Managed",
+   "Type /privacy-settings and press Enter",
+   "Look at the lines Telemetry: CLI-local unless managed cloud features are enabled, Sync: opt-in with agi sync and Provider route",
+   "Compare: each route or service is named; per-feature storage places are not listed on this screen"
+  ],
+  "where": "agi, then type /privacy-settings; the TUI start screen also shows the mode word"
+ }
+}

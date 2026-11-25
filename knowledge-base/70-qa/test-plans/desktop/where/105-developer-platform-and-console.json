@@ -1,0 +1,467 @@
+{
+ "S105.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/ProjectsPanel.tsx",
+    "text": "New project"
+   },
+   {
+    "file": "apps/web/features/developers/components/ProjectsPanel.tsx",
+    "text": "Create project"
+   },
+   {
+    "file": "apps/web/features/developers/components/ProjectsPanel.tsx",
+    "text": "Monthly limit in credits"
+   }
+  ],
+  "needs": "a paid account with API access (other plans get no keys)",
+  "note": "Organizations are not created in this panel: a workspace is created in Settings > Workspace under 'Create your workspace' (apps/web/features/settings/sections/TeamSection.tsx). Projects belong to the active workspace.",
+  "reachable": "yes",
+  "steps": [
+   "Open /developers in the browser or the Desktop app.",
+   "Click New project in the Projects card.",
+   "Type Production in Name and 500 in Monthly limit in credits, then click Create project.",
+   "Look at the Projects list: the new project appears, with a spend line that ends in 'this month' and shows the limit you typed (or 'no monthly limit' if blank)."
+  ],
+  "where": "Type /developers after the site address (no menu link found) > Projects > New project"
+ },
+ "S105.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+    "text": "New Key"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+    "text": "Generate Key"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+    "text": "Delete Key"
+   }
+  ],
+  "needs": "a plan with API access (other plans see an upgrade message instead of the form)",
+  "note": "The screen says Delete, not Revoke. The same card also appears on /developers.",
+  "reachable": "yes",
+  "steps": [
+   "Click the account menu (labelled Account menu for your name), click Settings, then Account, then the API keys row.",
+   "Click New Key. Type a name, pick a project or keep Default project, choose Expires (Never, 30 days, 90 days or 1 year), and tick scopes (Read model catalog, Run inference, Read usage).",
+   "Click Generate Key, then Copy to Clipboard. The full key is shown only once.",
+   "Check the list: each key shows its prefix followed by '...', Created, Last used once used, and Expires or Never expires.",
+   "Click the trash icon labelled Delete <name>, then Delete Key, and check the key is gone from the list."
+  ],
+  "where": "Settings > Account > API keys > New Key"
+ },
+ "S105.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceServicePrincipals.tsx",
+    "text": "Service principals"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceApiKeys.tsx",
+    "text": "Workspace API keys"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceApiKeys.tsx",
+    "text": "Create key"
+   }
+  ],
+  "needs": "a workspace owner or admin on a Team or Enterprise plan (the create form shows only for accounts that can manage keys)",
+  "note": "The service principals panel has no create button; a principal is created with the first workspace API key. Principals can be disabled or enabled but not revoked there; revoke is on workspace keys.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Workspace, then Workspace administration.",
+   "Click Audit, scroll to Workspace API keys, type a name, pick an expiry, tick at least one scope and click Create key. Copy the key shown.",
+   "Click Identity and scroll to Service principals. Find the principal the key created.",
+   "Click Disable on a principal and check it now says Disabled and its button reads Enable.",
+   "Back on Audit, click Revoke on a workspace key, confirm Revoke key, and check the key shows Revoked."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Audit (Workspace API keys) and Identity (Service principals)"
+ },
+ "S105.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/models/components/ModelCatalogueBrowser.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/web/features/models/components/ModelCard.tsx",
+    "text": "Context"
+   },
+   {
+    "file": "apps/web/features/models/lib/model-filters.ts",
+    "text": "In your plan"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The catalogue lists models the account's plan can reach. No filter for what one specific API key can call was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open /developers and scroll to the Reference card.",
+   "Click Models. Check the page heading reads Models and a list of model cards appears.",
+   "Open a model card and read its Context line and its capability chips.",
+   "Click the Plan access filter 'In your plan' and check which models remain."
+  ],
+  "where": "Developer console (/developers) > Reference > Models"
+ },
+ "S105.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Custom commands"
+   },
+   {
+    "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
+    "text": "New command"
+   },
+   {
+    "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
+    "text": "Template"
+   }
+  ],
+  "needs": "a signed-in account (commands sync to the account)",
+  "note": "A command has one input slot ({{input}} in the template), not named arguments. The Prompts and evaluations card on /developers is a separate versioned-prompt feature.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click General, and scroll to Custom commands.",
+   "Click New command. Type a Name (lower case, no spaces), a Description, and a Template that contains the input token.",
+   "Click Create command and check it appears in the list.",
+   "Click into the chat box, type / and the command name, add some text and send.",
+   "Check the reply follows the template with your text in place of the input token."
+  ],
+  "where": "Settings > General > Custom commands > New command"
+ },
+ "S105.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Where your usage went"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Days"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "By model"
+   }
+  ],
+  "needs": "a paid plan (the history section is hidden on the Free plan)",
+  "note": "Usage is shown in credits. Cost in money is not shown on this screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Usage.",
+   "Scroll to Where your usage went and choose Days, Weeks or Months.",
+   "Read the tables By product area, By model and By project for the chosen period.",
+   "Compare: the By model table lists each model with its usage over time."
+  ],
+  "where": "Settings > Usage > Where your usage went"
+ },
+ "S105.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/RateLimitsPanel.tsx",
+    "text": "Rate limits"
+   },
+   {
+    "file": "apps/web/features/developers/components/RateLimitsPanel.tsx",
+    "text": "Request limits by endpoint"
+   }
+  ],
+  "needs": "an AGI API key and any HTTP client, to see the per-response headers",
+  "note": "The card shows the static limits only. The remaining count is in response headers, not on the page.",
+  "reachable": "yes",
+  "steps": [
+   "Open /developers and scroll to the Rate limits card.",
+   "Read the list 'Request limits by endpoint': each row gives an endpoint, a number of requests per window, and whether it counts per account or per IP for an API key.",
+   "Read the card text: each response carries X-RateLimit-Limit, X-RateLimit-Remaining and X-RateLimit-Reset.",
+   "Send a request with an AGI API key and read those headers to see how close you are to the limit. Compare with Expected."
+  ],
+  "where": "Developer console (/developers) > Rate limits"
+ },
+ "S105.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Monthly spend limit"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Spend limit enforcement"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Set limit"
+   }
+  ],
+  "needs": "a workspace owner or admin account for the workspace cap; a paid plan for the personal cap",
+  "note": "The enforcement choices are Off, Notify and Block. Whether the API refuses calls at the cap was not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Workspace, then Workspace administration, then Usage.",
+   "Scroll to Monthly spend limit. Type an amount, set Spend limit enforcement to Block, and click Set limit.",
+   "Check the card shows the cap you set and the enforcement choice.",
+   "For a personal cap, open Settings > Usage and find Monthly spend limit; set and check it the same way."
+  ],
+  "where": "Settings > Workspace > Workspace administration > Usage (Monthly spend limit); personal cap at Settings > Usage > Monthly spend limit"
+ },
+ "S105.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Add endpoint"
+   },
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Endpoint URL"
+   },
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Events"
+   }
+  ],
+  "needs": "a paid account with API access, and an HTTPS address you control to receive events",
+  "reachable": "yes",
+  "steps": [
+   "Open /developers, scroll to the Webhooks card and click Add endpoint.",
+   "Type an https address in Endpoint URL and optionally a Description.",
+   "Under Events, tick the events you want to receive.",
+   "Click Add endpoint and read the Copy the signing secret now dialog.",
+   "Check the new endpoint appears in the Webhook endpoints list."
+  ],
+  "where": "Developer console (/developers) > Webhooks > Add endpoint"
+ },
+ "S105.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Deliveries"
+   },
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Recent deliveries"
+   },
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Resend"
+   }
+  ],
+  "needs": "a registered endpoint that can receive HTTPS requests",
+  "reachable": "yes",
+  "steps": [
+   "Open /developers, scroll to Webhooks, and make sure an endpoint is listed.",
+   "Click Send test event on the endpoint, or use an event that already happened.",
+   "Click Deliveries on the endpoint row and read Recent deliveries: each row shows a status such as Delivered, Failed or Retrying after N attempts.",
+   "Click Resend on a delivery row and check its status updates."
+  ],
+  "where": "Developer console (/developers) > Webhooks > endpoint row > Deliveries"
+ },
+ "S105.23": {
+  "labels": [
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "SDKs."
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Python"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "API"
+   }
+  ],
+  "needs": "none",
+  "note": "The page states there is no AGI SDK, so the 'official client SDK' Expected is met only by OpenAI's libraries.",
+  "reachable": "yes",
+  "steps": [
+   "Open the API docs page (type /api-docs after the site address, or use the API entry in the site menu).",
+   "Scroll to the section titled SDKs.",
+   "Read it: it says there is no AGI SDK and that OpenAI's official libraries are the client.",
+   "Look at the Python and TypeScript tabs under it and check they show example code for the gateway.",
+   "Compare with Expected: the docs cover OpenAI's libraries, not a separate AGI SDK."
+  ],
+  "where": "API (site menu, apps/web/features/marketing/components/system/nav.ts) > SDKs."
+ },
+ "S105.24": {
+  "labels": [
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Reference."
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "OpenAPI bundle"
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Authentication and scopes"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open the API docs page and scroll to the section titled Reference.",
+   "Read the paragraph: the OpenAPI bundle describes every endpoint and the credential each one takes.",
+   "Click OpenAPI bundle and check a JSON document opens.",
+   "Scroll to the top, click Authentication and scopes, and read which credential each endpoint accepts."
+  ],
+  "where": "API docs page > Reference. > OpenAPI bundle"
+ },
+ "S105.25": {
+  "labels": [
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "curl"
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Python"
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "TypeScript"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether the samples have a copy button was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open the API docs page. The first example sits under the title 'One chat completion against the gateway'.",
+   "Click the tabs curl, Python and TypeScript in turn and read each sample.",
+   "Scroll to SDKs. and click the Python and TypeScript tabs there.",
+   "Compare with Expected: each tab shows a copyable request to the gateway."
+  ],
+  "where": "API docs page > code tabs curl, Python, TypeScript"
+ },
+ "S105.26": {
+  "labels": [
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Moving to the gateway."
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "From the OpenAI API"
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "From the Anthropic API"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open the API docs page and scroll to Moving to the gateway.",
+   "Read the three sub-headings: From the OpenAI API, From the Anthropic API and Between models.",
+   "Open the text under From the Anthropic API and read the steps to change the client.",
+   "Compare with Expected: there is a guide for each other provider and one for moving between models."
+  ],
+  "where": "API docs page > Moving to the gateway. > From the OpenAI API / From the Anthropic API / Between models"
+ },
+ "S105.27": {
+  "labels": [
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Deprecations."
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Scheduled model retirements"
+   },
+   {
+    "file": "apps/web/features/models/lib/model-presentation.ts",
+    "text": "Retiring"
+   }
+  ],
+  "needs": "none",
+  "note": "No retirement is scheduled today, so the table is not visible unless one is added.",
+  "reachable": "yes",
+  "steps": [
+   "Open the API docs page and scroll to Deprecations.",
+   "Read the text: each model carries a deprecation date, which is empty until a retirement is scheduled.",
+   "Read the table Scheduled model retirements if it appears; otherwise the page says No model retirements are scheduled.",
+   "Open /developers > Reference > Models and look for a model marked Retiring with a date.",
+   "Compare with Expected: retirements appear in advance with a date."
+  ],
+  "where": "API docs page > Deprecations. ; model cards on Developer console > Reference > Models"
+ },
+ "S105.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/HelpSection.tsx",
+    "text": "Contact support"
+   },
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Your support tickets"
+   },
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Raise ticket"
+   }
+  ],
+  "needs": "a signed-in account",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Help.",
+   "Click Contact support to open the support page and read the Raise a ticket button there.",
+   "Back in Help, scroll to Your support tickets and fill in Subject and What happened.",
+   "Click Raise ticket and check the new ticket appears in the list with its Raised date and priority."
+  ],
+  "where": "Settings > Help > Contact support, then Settings > Help > Your support tickets > Raise ticket"
+ },
+ "S105.29": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Upload plugin"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Add"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Installed"
+   }
+  ],
+  "needs": "a plugin .zip file with a skills folder (a manifest folder is optional)",
+  "note": "Create a plugin is the other option in the Add menu. Both appear only when the directory offers them to this account.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Plugins.",
+   "Click Add, then Upload plugin.",
+   "Choose a .zip of a plugin that has a skills folder, and submit the dialog.",
+   "Check the plugin shows under Installed and can be opened."
+  ],
+  "where": "Settings > Plugins > Add > Upload plugin"
+ },
+ "S105.30": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Submit to the directory"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Submit for review"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Submit this version"
+   }
+  ],
+  "needs": "a plugin you created; an admin must approve it in the plugin moderation page before it is listed",
+  "note": "Approval happens in the admin plugin moderation page, outside this tester path. A new version of an approved plugin uses Submit this version.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Plugins, and open a plugin you created.",
+   "Click Submit to the directory.",
+   "Read the confirmation text and click Submit for review.",
+   "Check the plugin shows a pending submission with a Withdraw action."
+  ],
+  "where": "Settings > Plugins > open your plugin > Submit to the directory"
+ }
+}

@@ -1,0 +1,439 @@
+{
+ "feature": {
+  "id": "F024-12",
+  "aliases": [
+   "Connected storage",
+   "Cloud drives in Library",
+   "External files",
+   "Drive, OneDrive and Dropbox in Library",
+   "S24.37",
+   "S24.38",
+   "S24.39",
+   "S24.40"
+  ],
+  "summary": "The Library cannot browse Drive, OneDrive or Dropbox, refresh external file metadata, save external content as a copy, or mark a row as an external reference. Every Library row is an owned stored file. Drive and OneDrive features exist elsewhere in the web app, in connectors and project knowledge, not in the Library.",
+  "purpose": {
+   "what_it_does": "Would let people browse connected cloud drives from the Library, refresh the details of linked files, save an external file as an owned copy and tell references from owned files.",
+   "why_it_exists": "The brief requires connected-file browsing and clear separation of owned and external files (S24.37 to S24.40), as leader products do. (doc: docs/product/competitive-guidance.md:178 notes connected storage expanding in a leader's Library)",
+   "who_uses_it": "People whose documents live in Drive, OneDrive or Dropbox. Nobody can use it in the Library yet.",
+   "problems_solved": [
+    "Planned: using cloud documents without manual download.",
+    "Planned: keeping linked file details current.",
+    "Planned: knowing which files are only linked."
+   ],
+   "use_cases": [
+    "Browse a Drive folder and add a doc to a chat.",
+    "Save a Drive file as an owned copy.",
+    "Refresh the title of a linked file.",
+    "See an 'external' badge on a linked file."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Not available in the Library on web, desktop, mobile, CLI, VS Code or Chrome.",
+    "Nearby but separate: a Google Drive picker endpoint and save-to-Drive and save-to-OneDrive endpoints for artifacts exist in the web app (apps/web/app/api/connectors/google-drive/picker/route.ts; apps/web/app/api/artifacts/save-to-drive/route.ts; apps/web/app/api/artifacts/save-to-onedrive/route.ts); where they appear in the UI: unknown."
+   ],
+   "prerequisites": [
+    "None for the Library; the feature does not exist there."
+   ],
+   "screens_and_controls": [
+    "Library filters are the tab and surface filters over owned files only; origin is 'uploaded' or 'generated' (packages/contracts/cloud-contracts/src/library.ts:5).",
+    "No connected-storage control in the Library header or New menu (New menu has Upload and Create folder: LibraryView.tsx:975-985, apps/web/features/library/components/LibraryView.tsx:147)."
+   ],
+   "journey": [
+    "Open the Library.",
+    "Look for a connected drive source: none appears.",
+    "Workaround: import a Drive file into a project through Projects (apps/web/app/api/projects/[id]/knowledge-files/[fileId]/refresh/route.ts shows a Drive refresh exists there)."
+   ],
+   "feedback_and_outputs": [
+    "No output in the Library."
+   ],
+   "settings": [
+    "Connector availability is controlled elsewhere (assertConnectorsReleased is called by the Drive picker route: apps/web/app/api/connectors/google-drive/picker/route.ts:19)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Every Library row is an owned media_assets row; origin is only 'uploaded' or 'generated' (apps/web/app/api/library/route.ts:66-89; library.ts:5).",
+    "Drive picker configuration route (returns 'not-configured' without the picker key and app id) (picker/route.ts:20-30).",
+    "Drive import and refresh for project knowledge exist in project knowledge code (apps/web/app/api/projects/[id]/knowledge-files/[fileId]/refresh/route.ts:1-20).",
+    "Save artifact to Drive or OneDrive endpoints exist (apps/web/app/api/artifacts/save-to-drive/route.ts, save-to-onedrive/route.ts)."
+   ],
+   "incomplete": [
+    "Connected-storage features live in Projects and Artifacts, not in the Library [inferred from the Library code reading no connector module]."
+   ],
+   "disconnected_or_disabled": [
+    "Connector routes call assertConnectorsReleased, so they depend on a release switch whose state: unknown (picker/route.ts:19)."
+   ],
+   "not_available": [
+    "Browsing Drive, OneDrive and Dropbox in the Library on all six apps (S24.37).",
+    "Refresh external metadata (S24.38).",
+    "Save external content as an owned copy from the Library (S24.39).",
+    "Marker for external references (S24.40).",
+    "Any Dropbox route: none found in the routes searched (apps/web/app/api)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Users can browse files in connected storage (Drive, OneDrive, Dropbox) from the product.",
+     "source": "S24.37 (area brief)"
+    },
+    {
+     "statement": "Users can refresh metadata of externally linked files.",
+     "source": "S24.38 (area brief)"
+    },
+    {
+     "statement": "Users can save external content as an owned copy in the Library.",
+     "source": "S24.39 (area brief)"
+    },
+    {
+     "statement": "The Library visibly distinguishes external references from owned files.",
+     "source": "S24.40 (area brief)"
+    },
+    {
+     "statement": "Connected storage expands in a leader's Library (September 10).",
+     "source": "docs/product/competitive-guidance.md:178"
+    }
+   ],
+   "acceptance_criteria": [
+    "A connected drive appears as a source in the Library after the account connects it.",
+    "Browsing lists the drive's files without copying them.",
+    "An external reference carries a visible marker; owned files do not.",
+    "Save as copy creates an owned Library row, counted in storage, with a normal file name.",
+    "Refresh updates the title and modified date of a reference and reports a clear error if access is revoked.",
+    "Disconnecting the drive removes its references or marks them unavailable."
+   ],
+   "inferred": [
+    "Local mode must not send a local file or chat to a connector without consent, per the trust-boundary rule [inferred from AGENTS.md section 6].",
+    "Stored copies need the storage allowance check [inferred from file-storage.ts:63-75]."
+   ],
+   "proposed": [
+    "[proposed] Reuse the project knowledge Drive import and refresh code for a Library 'Add from Drive' action.",
+    "[proposed] Add a 'source' value of 'external' to the item schema, with a link field."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "endpoint",
+    "name": "GET /api/library",
+    "path": "apps/web/app/api/library/route.ts",
+    "role": "Owned rows only (lines 66-89, 170-183)."
+   },
+   {
+    "kind": "schema",
+    "name": "LIBRARY_ORIGINS",
+    "path": "packages/contracts/cloud-contracts/src/library.ts",
+    "role": "Origins 'generated' and 'uploaded' only (line 5)."
+   },
+   {
+    "kind": "service",
+    "name": "listLibraryAssets",
+    "path": "apps/web/lib/server/media-assets.ts",
+    "role": "Queries media_assets only (396-451)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET /api/connectors/google-drive/picker",
+    "path": "apps/web/app/api/connectors/google-drive/picker/route.ts",
+    "role": "Drive picker configuration; not used by the Library."
+   },
+   {
+    "kind": "service",
+    "name": "google-drive-files connector",
+    "path": "apps/web/lib/connectors/google-drive-files.ts",
+    "role": "Drive access helpers (imported by the picker and refresh routes)."
+   },
+   {
+    "kind": "service",
+    "name": "oauth-access",
+    "path": "apps/web/lib/connectors/oauth-access.ts",
+    "role": "resolveConnectorAccessToken for connectors (picker/route.ts:9-12)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST project knowledge file refresh",
+    "path": "apps/web/app/api/projects/[id]/knowledge-files/[fileId]/refresh/route.ts",
+    "role": "Refresh of a Drive-imported project file; the nearest thing to S24.38."
+   },
+   {
+    "kind": "service",
+    "name": "importDriveFileIntoProject",
+    "path": "apps/web/lib/server/project-knowledge-files.ts",
+    "role": "Imports a Drive file into a project (named in the refresh route imports, line 17-19)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "save-to-drive and save-to-onedrive",
+    "path": "apps/web/app/api/artifacts/save-to-drive/route.ts",
+    "role": "Pushes artifacts out to Drive; export, not browse."
+   },
+   {
+    "kind": "component",
+    "name": "Web LibraryView host",
+    "path": "apps/web/features/library/components/LibraryView.tsx",
+    "role": "Transport with no connected-storage method (lines 128-264)."
+   },
+   {
+    "kind": "component",
+    "name": "Shared LibraryView",
+    "path": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "role": "LibraryTransport interface (line 254) has no external-source method."
+   },
+   {
+    "kind": "screen",
+    "name": "Mobile LibraryScreen",
+    "path": "apps/mobile/src/features/library/index.tsx",
+    "role": "No connected source."
+   },
+   {
+    "kind": "table",
+    "name": "media_assets",
+    "path": "apps/web/lib/server/media-assets.ts",
+    "role": "Owned file rows."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The Library requests owned files; the server queries media_assets for the user and workspace.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/server/media-assets.ts:396-447"
+    },
+    {
+     "what_happens": "No step contacts an outside drive from the Library.",
+     "runs_on": "device",
+     "evidence": "Library transport has no such call (apps/web/features/library/components/LibraryView.tsx:128-264)"
+    },
+    {
+     "what_happens": "Outside the Library, Drive files are fetched by the server with a connector token when a project import or refresh runs; the outside service is Google Drive.",
+     "runs_on": "outside service",
+     "evidence": "apps/web/app/api/projects/[id]/knowledge-files/[fileId]/refresh/route.ts:1-20; apps/web/app/api/connectors/google-drive/picker/route.ts:9-12"
+    }
+   ],
+   "data": [
+    {
+     "what": "Owned Library file rows",
+     "where_stored": "media_assets and object storage",
+     "synced": "Cloud",
+     "retained_or_deleted": "30-day recovery, see F024-09"
+    },
+    {
+     "what": "Connector tokens",
+     "where_stored": "Not opened; handled by connectors code",
+     "synced": "unknown",
+     "retained_or_deleted": "unknown"
+    }
+   ],
+   "models_and_providers": "No model or inference provider takes part in the Library. The external providers here are storage services (Google Drive, OneDrive), not model providers."
+  },
+  "access_and_usage": {
+   "account": "Signed-in account; connecting a drive needs the connector's own sign-in (picker route requires a user, line 18).",
+   "permissions": "Connector OAuth scopes: not opened.",
+   "subscription": "none found in the code for the Library part. Connector entitlement: unknown.",
+   "limits_and_metering": "none found in the code for the Library. An owned copy would count against file storage (file-storage.ts:63-75) [inferred].",
+   "flags": "Connector routes call assertConnectorsReleased (picker/route.ts:19); its value: unknown.",
+   "model_compatibility": "Not model dependent.",
+   "provider_restrictions": "Drive picker returns 'not-configured' when GOOGLE_PICKER_API_KEY or GOOGLE_PICKER_APP_ID is missing (names only; picker/route.ts:20-25).",
+   "local_mode": "Not available. A connector is an outside service reached through our servers; Local mode would need an explicit consent step before any such call [inferred from AGENTS.md section 6]."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Any state in the Library (loading, error, offline, revoked access)",
+    "behaviour": "not handled in the code",
+    "evidence": "No connected-storage code found in LibraryView.tsx or index.tsx"
+   },
+   {
+    "state": "Drive picker not configured",
+    "behaviour": "Route returns status 'not-configured'.",
+    "evidence": "apps/web/app/api/connectors/google-drive/picker/route.ts:20-25"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/app/api/library/__tests__/route.test.ts",
+     "covers": "Owned list only; nothing on external files."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "No external rows",
+     "steps": [
+      "Connect Google Drive in settings.",
+      "Open the Library."
+     ],
+     "expected": "Only owned files are listed; no drive source."
+    },
+    {
+     "name": "Origin values",
+     "steps": [
+      "Call GET /api/library and read each item's origin."
+     ],
+     "expected": "Only 'uploaded' or 'generated'."
+    },
+    {
+     "name": "Drive project import still works",
+     "steps": [
+      "Import a Drive file into a project.",
+      "Refresh it."
+     ],
+     "expected": "Refresh works from the Projects page, not from the Library (check the Projects UI)."
+    }
+   ],
+   "diagnostics": [
+    "Route 'not-configured' status for the picker.",
+    "Connector errors surface through connectorUnreachableMessage (picker/route.ts:9-12)."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No connected-storage browsing in the Library",
+    "affects": "All users, all apps",
+    "evidence": "Brief S24.37; LibraryTransport has no such method (LibraryView.tsx:254)",
+    "work_needed": "Define a source model and a browse API, then UI."
+   },
+   {
+    "gap": "No refresh of external metadata from the Library",
+    "affects": "All users",
+    "evidence": "Brief S24.38",
+    "work_needed": "Reuse the project refresh code path."
+   },
+   {
+    "gap": "No save-as-copy of external content",
+    "affects": "All users",
+    "evidence": "Brief S24.39",
+    "work_needed": "Server fetch into object storage with a storage allowance check."
+   },
+   {
+    "gap": "No external-reference marker and no 'external' origin",
+    "affects": "All users",
+    "evidence": "library.ts:5; brief S24.40",
+    "work_needed": "Extend the item schema and UI."
+   },
+   {
+    "gap": "No Dropbox support found",
+    "affects": "Users of Dropbox",
+    "evidence": "No Dropbox route found under apps/web/app/api in the search made",
+    "work_needed": "Decide scope, then build a connector."
+   }
+  ],
+  "depends_on": [
+   "F024-10",
+   "F024-08",
+   "SYS-connectors-plugins-and-skills",
+   "SYS-files-artifacts-and-storage",
+   "SYS-execution-boundaries",
+   "SYS-security-and-privacy",
+   "table:media_assets",
+   "surface:web",
+   "surface:mobile",
+   "mode:cloud"
+  ],
+  "relationships": [
+   {
+    "rel": "depends_on",
+    "to": "SYS-connectors-plugins-and-skills",
+    "evidence": "Drive connector routes under apps/web/app/api/connectors"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-execution-boundaries",
+    "evidence": "External drive access crosses to an outside service"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-security-and-privacy",
+    "evidence": "Token handling and consent [inferred]"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:media_assets",
+    "evidence": "Owned rows only (media-assets.ts:439-447)"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/connectors/google-drive/picker",
+    "evidence": "apps/web/app/api/connectors/google-drive/picker/route.ts"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "F024-10",
+    "evidence": "An external-original link needs the same item field work [inferred]"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "Status missing in the Library (brief S24.37-S24.40)"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "Status missing (brief)"
+   },
+   {
+    "rel": "configured_by",
+    "to": "mode:cloud",
+    "evidence": "Connectors run through our servers [inferred]"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/library/__tests__/route.test.ts",
+    "evidence": "Owned-only list tests"
+   }
+  ],
+  "unknowns": [
+   "Where in the web UI the Drive picker and save-to-Drive routes are used.",
+   "Whether assertConnectorsReleased currently allows connectors.",
+   "Whether Dropbox is planned anywhere in the repository.",
+   "Connector entitlement per plan."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3/5",
+   "claim": "Not available: 'Any Dropbox route: none found'; gap 'No Dropbox support found'",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "No Dropbox route under apps/web/app/api, but Dropbox is a catalog connector (oauth2 MCP) with an MCP endpoint https://mcp.dropbox.com/mcp. So Dropbox support exists as a connector, just not in the Library.",
+   "evidence": "apps/web/lib/connectors/catalog.ts:254; apps/web/lib/connectors/mcp-endpoints.ts:133-135",
+   "correction": "Dropbox is available as an OAuth MCP connector (catalog.ts:254, mcp-endpoints.ts:133); there is no Dropbox route or Library integration."
+  },
+  {
+   "section": "5",
+   "claim": "importDriveFileIntoProject is in apps/web/lib/server/project-knowledge-files.ts (named in the refresh route imports, lines 17-19)",
+   "verdict": "wrong",
+   "what_the_code_shows": "The function lives in project-drive-import.ts. The refresh route imports importDriveFileIntoProject, resolveDriveAccess, assertDriveImportableProject, driveImportLimits from '@/lib/server/project-drive-import' (route lines 15-20). Note the page's other citation of 'importDriveFileIntoProject' in the route imports is right on the name, wrong on the file.",
+   "evidence": "apps/web/lib/server/project-drive-import.ts:121; apps/web/app/api/projects/[id]/knowledge-files/[fileId]/refresh/route.ts:15-20",
+   "correction": "importDriveFileIntoProject is in apps/web/lib/server/project-drive-import.ts:121."
+  },
+  {
+   "section": "6",
+   "claim": "Drive files are fetched by the server with a connector token when a project import or refresh runs; cites picker/route.ts:9-12 as the source",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Import/refresh is server-side (refresh route uses project-drive-import and GoogleDriveFileError). But the picker route does not fetch files: it returns the Drive access token plus developerKey and appId to the caller (status 'ready'), so the browser talks to Google directly. Lines 9-12 are only imports.",
+   "evidence": "apps/web/app/api/connectors/google-drive/picker/route.ts:9-12, 44-52",
+   "correction": "The picker route hands a Google access token, picker key and app id to the client, so file selection runs in the browser against Google; the server fetches file content during project import/refresh."
+  },
+  {
+   "section": "7",
+   "claim": "Feature flags: assertConnectorsReleased value is unknown; Subscription: connector entitlement unknown",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The gate is checkable: assertConnectorsReleased throws connectorsComingSoonError (403, CONNECTORS_COMING_SOON_MESSAGE) unless connectorsReleased() from @agiworkforce/types is true. The same file ties connectors to a plan capability (canUseBillingPlanCapability(..., 'connectors')) and a kill switch 'canUseConnectors'.",
+   "evidence": "apps/web/lib/connectors/connector-capability.ts:23-33",
+   "correction": "Connectors are blocked with a 403 until connectorsReleased() is true; plan entitlement is checked by planIncludesConnectors and a canUseConnectors kill switch. The page should read the released value from packages/types rather than say unknown."
+  },
+  {
+   "section": "2/3",
+   "claim": "New menu has Upload and Create folder (LibraryView.tsx:975-985, web LibraryView.tsx:147)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Shared LibraryView 975-985 is a hidden file input, not the menu. Web host line 148 defines createFolder as router.push(PROJECTS_PATH); uploadFiles at 179-180 goes through uploadChatAttachments. Line 147 is blank.",
+   "evidence": "packages/ui/unified-chat/src/components/library/LibraryView.tsx:975-985; apps/web/features/library/components/LibraryView.tsx:148,179-180",
+   "correction": "Create folder navigates to Projects (web LibraryView.tsx:148); upload is wired at :179. Cite the shared file path explicitly and use line 148."
+  }
+ ],
+ "missing_facts": [
+  "Connectors are gated by plan and kill switch, not only a release flag: planIncludesConnectors uses canUseBillingPlanCapability(...,'connectors') and a canUseConnectors gate (apps/web/lib/connectors/connector-capability.ts:23-40). The page calls entitlement 'unknown'.",
+  "Dropbox exists as an OAuth MCP connector (apps/web/lib/connectors/catalog.ts:254; apps/web/lib/connectors/mcp-endpoints.ts:133-135), so the page's 'no Dropbox support' is misleading.",
+  "The Drive picker returns a live Google access token to the browser (apps/web/app/api/connectors/google-drive/picker/route.ts:44-52), a key Local-mode and trust-boundary fact the page misses; the page also never mentions that the Library's Add to project copies the file into project knowledge via readLibraryItemFile (apps/web/features/library/components/LibraryView.tsx:234-237)."
+ ]
+}

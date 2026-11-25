@@ -1,0 +1,585 @@
+{
+ "S35.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Planning research"
+   }
+  ],
+  "needs": "a paid account (a Free account sees the Upgrade to use Deep Research message)",
+  "note": "The visible name of the + button itself was not found in the code; the menu row label is confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the + menu under the chat box.",
+   "Click Deep Research so it is switched on.",
+   "Type a research question and press send.",
+   "Look for the Deep research status card in the reply, showing a phase such as Planning research."
+  ],
+  "where": "Composer > + menu > Deep Research, then send a question"
+ },
+ "S35.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPlan.tsx",
+    "text": "Research plan"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPlan.tsx",
+    "text": "Deliverable"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPlan.tsx",
+    "text": "Executive summary"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Deep Research and send a question.",
+   "When the Research plan card appears, find the Deliverable box.",
+   "Pick Executive summary or Full report.",
+   "Open the Format list and pick a format such as Bullet brief, then compare with the choices shown in Expected."
+  ],
+  "where": "Composer > + menu > Deep Research, send a question > Research plan card > Deliverable"
+ },
+ "S35.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPlan.tsx",
+    "text": "Add a step"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPlan.tsx",
+    "text": "Start research"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "The plan card only appears while the run is waiting for approval.",
+  "reachable": "yes",
+  "steps": [
+   "Send a Deep Research question and wait for the Research plan card.",
+   "Change the words in a step box (Research step 1, 2...).",
+   "Click Add a step, or click the X beside a step to remove it.",
+   "Click Start research and check that the searches follow the edited steps."
+  ],
+  "where": "Research plan card (shown after sending a Deep Research question) > Add a step / Remove this step / Start research"
+ },
+ "S35.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Add a source"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Sources for this run"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "My files"
+   }
+  ],
+  "needs": "a paid account; for Connected app, a connected work app",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "On the Research plan card, open the Add a source list.",
+   "Choose a kind: Only this site, Never this site, My files or Connected app.",
+   "Click Add.",
+   "Look for the chip under Sources for this run, or the text Searching the whole web. Add a source to narrow it. when the list is empty."
+  ],
+  "where": "Research plan card > Add a source > My files / Only this site / Never this site / Connected app > Add"
+ },
+ "S35.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Only this site"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Never this site"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "Enforcement happens on the server; the code I read does not show how a run is judged against the rule.",
+  "reachable": "yes",
+  "steps": [
+   "On the Research plan card, set Add a source to Only this site or Never this site.",
+   "Type a domain in the Site to add box (placeholder nature.com, who.int) and press Enter, or click Add.",
+   "Look for the chip, which reads Never plus the domain for a restricted site.",
+   "Start the run and compare the report's sources with the chosen site rule."
+  ],
+  "where": "Research plan card > Add a source > Only this site or Never this site, then type a site > Add"
+ },
+ "S35.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "My files"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Add a source"
+   }
+  ],
+  "needs": "a paid account, a file to upload",
+  "note": "The card adds a My files source, but I found no file picker in this component; where the files are chosen was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "On the Research plan card, set Add a source to My files.",
+   "Click Add.",
+   "Look for the My files chip under Sources for this run.",
+   "Start the run and check that the report cites your uploaded material."
+  ],
+  "where": "Research plan card > Add a source > My files > Add"
+ },
+ "S35.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Connected app"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Choose an app"
+   }
+  ],
+  "needs": "a paid account, a connected work app (such as Drive or Slack); the option only appears when an app is connected",
+  "note": "How an app gets connected was not confirmed in this file.",
+  "reachable": "yes",
+  "steps": [
+   "On the Research plan card, set Add a source to Connected app.",
+   "Open the Choose an app list and pick a connected app.",
+   "Click Add.",
+   "Look for the app's name as a chip under Sources for this run."
+  ],
+  "where": "Research plan card > Add a source > Connected app > Choose an app > Add"
+ },
+ "S35.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Searching the web"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Planning research"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "Counts only appear once they are above zero.",
+  "reachable": "yes",
+  "steps": [
+   "Start a Deep Research run and watch the status bar of the reply.",
+   "Read the phase text, such as Planning research, Searching the web or Writing report.",
+   "Read the counts on the right: searches and sources, and the elapsed time (m:ss).",
+   "Check that the counts go up while the run is working."
+  ],
+  "where": "Chat reply > Deep research status card (above the answer)"
+ },
+ "S35.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Not run"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Research plan"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "This is a step list with status words, not a dated timeline. The status words for running and queued come from runStatusLabel, which I did not open, so their exact wording is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Start a Deep Research run and let it work.",
+   "Look at the list under the status bar, labelled Research plan.",
+   "Read the status word on each step, and Not run on steps that were dropped.",
+   "Compare with the steps as they run."
+  ],
+  "where": "Deep research status card > Research plan step list under the status bar"
+ },
+ "S35.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Citations"
+   }
+  ],
+  "needs": "a paid account, a finished or running Deep Research answer",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Under a Deep Research answer, click the View N sources button.",
+   "In the side panel, check that the Sources tab is selected.",
+   "Read the Citations and More lists.",
+   "Compare the list with the sources the run visited."
+  ],
+  "where": "Under the answer, click View N sources (or the globe button titled Research sources) > Sources tab"
+ },
+ "S35.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Citations"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "More"
+   }
+  ],
+  "needs": "a paid account, a finished Deep Research answer",
+  "note": "Excerpts appear only when the source has one; I did not confirm the excerpt display in the row markup.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Sources tab of the research side panel.",
+   "Click or read a source row: the host, the Published and Retrieved dates, and the excerpt.",
+   "Compare the evidence excerpts with the report's statements."
+  ],
+  "where": "Research side panel > Sources tab (open from View N sources)"
+ },
+ "S35.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Planned questions"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Answered"
+   }
+  ],
+  "needs": "a paid account, a finished report with planned questions",
+  "note": "The code shows questions with their status, not findings grouped under each question.",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished report in the Report tab.",
+   "Find the section headed Planned questions.",
+   "Read each line marked Answered or Not answered, and the reason under open questions.",
+   "Compare with the report body."
+  ],
+  "where": "Research side panel > Report tab > Planned questions"
+ },
+ "S35.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Steer"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Add a focus, a question or a source to cover"
+   }
+  ],
+  "needs": "a paid account, a run that is still searching",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "While the run is searching, click Steer.",
+   "Type in the box Add a focus, a question or a source to cover.",
+   "Click Send.",
+   "Look for the line Your guidance is applied when the current step finishes, and the plan updates to follow it."
+  ],
+  "where": "Deep research status card > Steer"
+ },
+ "S35.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Pause"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Resume"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Research paused"
+   }
+  ],
+  "needs": "a paid account, a run that is still searching",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "While the run is searching, click Pause.",
+   "Wait for the label to read Pausing\u2026 and then the status to read Research paused.",
+   "Click Resume (optionally type guidance in the box next to it).",
+   "Check that the run continues from the step it stopped at."
+  ],
+  "where": "Deep research status card > Pause, then Resume"
+ },
+ "S35.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Stop the current response"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Research stopped"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "(stopped by you)"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "I did not confirm that the composer stop button also records the run as cancelled; the plan Cancel path does set the phase to interrupted.",
+  "reachable": "yes",
+  "steps": [
+   "Start a Deep Research run.",
+   "Click the stop button in the composer while the run works, or click Cancel on the Research plan card before it searches.",
+   "Look for the status Research stopped and the note (stopped by you).",
+   "Check that the run no longer adds searches."
+  ],
+  "where": "Composer > Stop the current response (tooltip Stop generation) during a run; or Research plan card > Cancel before searching starts"
+ },
+ "S35.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Research stopped"
+   }
+  ],
+  "needs": "a paid account, a run that is stopped before the report is written",
+  "note": "The partial-report banner text is built from the report status; the word partial was not found in the report view code, so the label wording is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Stop a Deep Research run after some searching has happened.",
+   "Open its report from the Report tab.",
+   "Read the banner under the title, which begins This report is followed by the report status.",
+   "Check that the report has the material gathered before the stop."
+  ],
+  "where": "Research side panel > Report tab (or Library) > report banner after a stopped run"
+ },
+ "S35.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Report"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Read report full screen"
+   }
+  ],
+  "needs": "a paid account, a finished report",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished report in the Report tab.",
+   "Check the title, the summary, the body and the sources.",
+   "Click Read report full screen to open the reader at full size."
+  ],
+  "where": "Under the answer, View N sources > Report tab (or Library > open a report) > Read report full screen"
+ },
+ "S35.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Contents"
+   }
+  ],
+  "needs": "a paid account, a finished report with three or more headings",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished report with at least three headings.",
+   "Look for the box titled Contents.",
+   "Click one heading in the list.",
+   "Check that the page scrolls to that section."
+  ],
+  "where": "Report reader > Contents box (above the body)"
+ },
+ "S35.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Citations"
+   }
+  ],
+  "needs": "a paid account, a finished report with citations",
+  "note": "The link format was read from the code, not seen on screen; the exact visible look of a citation number was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished report that has numbered citations in its text.",
+   "Click a citation number in the body.",
+   "Check that it takes you to or opens its source.",
+   "Compare the link with the matching source in the Citations list."
+  ],
+  "where": "Report reader > body, numbered citations; Research side panel > Sources tab"
+ },
+ "S35.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPlan.tsx",
+    "text": "Prose with comparison tables"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPlan.tsx",
+    "text": "Format"
+   }
+  ],
+  "needs": "a paid account",
+  "note": "Charts have no control of their own; they appear only when the model writes a chart block, so the tester cannot choose them.",
+  "reachable": "yes",
+  "steps": [
+   "Send a Deep Research question and wait for the Research plan card.",
+   "Under Deliverable, open Format and pick Prose with comparison tables.",
+   "Start research and open the finished report.",
+   "Check that tables render in the body. Charts written as chart blocks render inline in the body."
+  ],
+  "where": "Plan card > Deliverable > Format > Prose with comparison tables; then read the report body"
+ },
+ "S35.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Library"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportsGallery.tsx",
+    "text": "Load older reports"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportsGallery.tsx",
+    "text": "No reports yet"
+   }
+  ],
+  "needs": "a paid account, at least one past report (the empty state says No reports yet)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the research side panel and click the Library tab.",
+   "Read the list of reports, newest first.",
+   "Click a report title to reopen it.",
+   "Scroll to the end of the list and check for Load older reports."
+  ],
+  "where": "Research side panel > Library tab (open from View N sources or the Research sources button)"
+ },
+ "S35.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Run again"
+   }
+  ],
+  "needs": "a paid account, a finished report with a question",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished report.",
+   "Click Run again in the toolbar.",
+   "Look for a new Deep research status card in the chat.",
+   "Compare the new run's results with the old report."
+  ],
+  "where": "Report reader toolbar > Run again"
+ },
+ "S35.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Markdown"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "PDF"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Word"
+   }
+  ],
+  "needs": "a paid account, a finished report",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished report.",
+   "Click PDF in the toolbar and check that a file downloads.",
+   "Repeat with Word and Markdown.",
+   "Open each file and compare the title and body with the report."
+  ],
+  "where": "Report reader toolbar > Markdown, PDF or Word"
+ },
+ "S35.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Artifact"
+   }
+  ],
+  "needs": "a paid account, a finished report",
+  "note": "Whether the artifact becomes an interactive page depends on the model; the toolbar button only creates the artifact.",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished report.",
+   "Click Artifact in the toolbar.",
+   "Look for a new artifact opened from the report.",
+   "Check that it can be shown as an interactive web page."
+  ],
+  "where": "Report reader toolbar > Artifact"
+ },
+ "S35.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Enable"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Get a notification when this research finishes"
+   }
+  ],
+  "needs": "a paid account, a browser that allows notifications, a run that stays active",
+  "note": "The footer only shows while the run is active and browser permission is still default; push notifications were not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Start a Deep Research run in the browser while the card shows Searching the web.",
+   "Click Enable in the footer and allow notifications in the browser prompt.",
+   "Wait for the run to finish or fail.",
+   "Look for the browser notification and the completed status in the chat."
+  ],
+  "where": "Deep research status card > Get a notification when this research finishes > Enable"
+ },
+ "S35.34": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+    "text": "Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPlan.tsx",
+    "text": "Research plan"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPlan.tsx",
+    "text": "Start research"
+   }
+  ],
+  "needs": "a Free account or a paid account with managed credits; the research plan must be waiting for approval",
+  "note": "The Expected line says runs or credits; the screen shows only a credit amount (\"You have X available right now.\"), with no run count, and the line is hidden when usage data is missing. The item's \"Where to find it: not written yet\" is outdated because the code exists at apps/web/features/chat/components/research/ResearchCostEstimate.tsx and is used by ResearchActivity.tsx:805. The exact plus-button label was not found in the files read, so the menu opener is described by position only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has managed usage (a paid or Free plan with credits).",
+   "In the message box, open the plus (attachment) menu and choose \"Research\" so it is checked.",
+   "Type a research question and send it.",
+   "Wait until the \"Research plan\" card appears and asks you to approve the plan (it is not running yet).",
+   "Look under the plan steps for \"Estimated cost: up to about ...\" and the line \"You have ... available right now.\" Compare the credit amount with the remaining credits you expect."
+  ],
+  "where": "Composer plus button > Research (turn on), send a research question, then wait for the \"Research plan\" card to show its \"Start research\" button. The line \"You have ... available right now.\" sits above \"Start research\"."
+ }
+}

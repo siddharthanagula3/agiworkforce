@@ -1,0 +1,222 @@
+{
+ "S85.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/init.rs",
+    "text": "Add custom instructions here."
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Custom instructions:"
+   }
+  ],
+  "needs": "none",
+  "note": "The CLI reads this file from the home folder and from .agiworkforce/instructions.md in a project; the account-level instructions are edited only on the web page the CLI links to.",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, run \"agi init\" (it creates ~/.agiworkforce/instructions.md if it is missing).",
+   "Open ~/.agiworkforce/instructions.md and add a line under the heading, for example \"Always answer in one sentence.\" Save the file.",
+   "Run \"agi\", ask a simple question, and check that the reply follows the line.",
+   "Remove the line, save, start a new chat, ask the same question, and check the reply no longer follows it."
+  ],
+  "where": "Terminal: run \"agi init\", then open ~/.agiworkforce/instructions.md in a text editor. Account-level custom instructions are not in the CLI: \"/personalize show\" prints a web link to Settings > General."
+ },
+ "S85.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Response style"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Usage: /personalize [show]"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Personalization (your AGI account):"
+   }
+  ],
+  "needs": "a signed-in AGI account (Managed Cloud mode)",
+  "note": "The code says these settings apply to Managed Cloud chats only, not Local or BYOK sessions, which is narrower than \"on the surface\".",
+  "reachable": "yes",
+  "steps": [
+   "Start \"agi\" and type \"/personalize show\"; look for the line \"Response style\" with the value not set.",
+   "Type \"/personalize set style concise\"; look for \"Response style set to concise.\"",
+   "Type \"/personalize set length shorter\"; look for \"Length set to shorter.\"",
+   "Ask a question such as \"What is a closure?\" and compare the reply's tone, length and formatting with Expected."
+  ],
+  "where": "In an agi session, type \"/personalize show\", then \"/personalize set style concise\" (other fields: length, formatting, warmth, enthusiasm, headings, emoji)."
+ },
+ "S85.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Turn account memory on, so details are carried across conversations on every surface."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Memory is off for your account. Turn it on with `agi memory on`."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Your AGI account holds no memories in"
+   }
+  ],
+  "needs": "a signed-in AGI account (Managed Cloud mode)",
+  "note": "The in-app \"/memory\" command manages local memory files on this computer, not the saved account memories that \"agi memory\" manages.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"agi memory status\"; look for \"Memory is on:\" or \"Memory is off:\".",
+   "Run \"agi memory add Prefers short answers\", then \"agi memory list\"; look for the new memory in the list.",
+   "Run \"agi memory edit <id or text> Prefers detailed answers\", then \"agi memory list\" to see the new text.",
+   "Run \"agi memory forget <id or text>\", then \"agi memory list\"; the memory should be gone.",
+   "Run \"agi memory off\", start a chat, and compare with Expected: memories should not be used while memory is off."
+  ],
+  "where": "Terminal: \"agi memory\" with the subcommands list, add, edit, forget, on, off, status (\"agi memory list\" shows saved memories)."
+ },
+ "S85.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/config.rs",
+    "text": "Keep session history:"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Usage: /config [show|get <key>|set <key> <value>]"
+   }
+  ],
+  "needs": "none",
+  "note": "The code turns off session saving on this computer; the code does not show that the choice is synced to the account, so that part of Expected is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"/config get history\"; look for \"history = true\" or \"Unknown or unset key: 'history'\" if it was never set.",
+   "Type \"/config set history false\"; look for \"history = false (saved)\".",
+   "Start a new chat, send one message, quit, then run \"agi history\" in Terminal and check whether the new chat is listed.",
+   "Run \"agi --config\"; look for \"Keep session history: false\" and compare with Expected."
+  ],
+  "where": "In an agi session, type \"/config set history false\" (alias: \"/config set keep-history false\"). Check with \"/config get history\" and \"agi --config\"."
+ },
+ "S85.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Usage: /config set <key> <value>"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Usage: /config [show|get <key>|set <key> <value>]"
+   }
+  ],
+  "needs": "none to change the setting; a Managed Cloud account for reports to be sent",
+  "note": "Crash reports send only in Managed mode, and the AGI_CRASH_REPORTS environment variable overrides the saved choice; no on-screen confirmation of an upload was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type \"/config get crash-reports\"; look for \"crash-reports = false\", the default.",
+   "Type \"/config set crash-reports true\"; look for \"crash-reports = true (saved)\".",
+   "Type \"/config get crash-reports\" again and confirm the value is true; then set it back to false.",
+   "Type \"/config set product-analytics false\" and check with \"/config get product-analytics\"; compare with Expected."
+  ],
+  "where": "In an agi session, type \"/config set crash-reports true\" (or false) and \"/config set product-analytics false\". Read back with \"/config get crash-reports\"."
+ },
+ "S85.16": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/cli/src for temporary, incognito and temp-chat controls: found only help text about temporary chats in apps/cli/src/claude_parity.rs and the per-run --no-session-persistence flag, with no by-default setting; the nearest control is \"/config set history false\" (S85.11), which does not mention memory.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S85.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Archived sessions (agi session unarchive <id> restores one):"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Archive a session (hidden from active listings, kept on disk)."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "No archived sessions. `agi session archive <id>` archives one."
+   }
+  ],
+  "needs": "a saved session on this computer",
+  "note": "These commands cover sessions saved on this computer; no CLI command was found to list or restore archived cloud chats (\"agi history delete <id>\" only deletes a cloud conversation).",
+  "reachable": "yes",
+  "steps": [
+   "Run \"agi session list\" and note the id of one session.",
+   "Run \"agi session archive <id>\", then \"agi session list\"; the session should no longer appear in the active list.",
+   "Run \"agi session list --archived\"; look for \"Archived sessions (agi session unarchive <id> restores one):\" with the session in it.",
+   "Run \"agi session unarchive <id>\"; look for \"Unarchived\" and check the session is back in \"agi session list\".",
+   "Run \"agi session delete <id>\" and answer the confirmation; compare with Expected (the help text says it is permanent)."
+  ],
+  "where": "Terminal: \"agi session list\", \"agi session list --archived\", \"agi session archive <id>\", \"agi session unarchive <id>\", \"agi session delete <id>\"."
+ },
+ "S85.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/shares.rs",
+    "text": "Shared conversation links"
+   },
+   {
+    "file": "apps/cli/src/cloud/shares.rs",
+    "text": "agi shares revoke <token> turns a link off for everyone."
+   }
+  ],
+  "needs": "a signed-in AGI account with at least one shared chat link",
+  "note": "The CLI lists only chat share links; no CLI listing of shared published pages was found, and the code warns the list may be incomplete.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"agi shares\"; look for \"Shared conversation links\" and the token of each link.",
+   "Run \"agi shares revoke <token>\" and answer the confirmation (or add -y).",
+   "Run \"agi shares\" again; the revoked link should be gone.",
+   "Open the revoked link's address in a private browser window and check it no longer opens."
+  ],
+  "where": "Terminal: \"agi shares\" to list links and \"agi shares revoke <token>\" to turn one off."
+ },
+ "S85.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Export your account data: request an export, or download the one that is ready."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Your export is ready. Run `agi export-data` again to download it."
+   }
+  ],
+  "needs": "a signed-in AGI account; the export can take a while to prepare",
+  "note": "The CLI code downloads the archive but does not show its contents, so whether it includes all four kinds of data is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"agi export-data\"; the first run requests the export and reports that it is being prepared.",
+   "Wait, then run \"agi export-data\" again; look for \"Your export is ready. Run `agi export-data` again to download it.\"",
+   "Run \"agi export-data\" once more; look for \"Saved\" followed by the file path.",
+   "Open the saved file and check it holds chats, memory, files and settings, comparing with Expected."
+  ],
+  "where": "Terminal: \"agi export-data\" (optionally \"agi export-data --out <folder>\")."
+ },
+ "S85.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Import memories from a text or markdown file, such as another assistant's export."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Nothing new to import: every memory in that file is already in your account."
+   }
+  ],
+  "needs": "a signed-in AGI account and a text or markdown file with memories",
+  "note": "The CLI sends the file to the server for a preview and then a commit; how the server splits the file into single memories is not in the CLI code.",
+  "reachable": "yes",
+  "steps": [
+   "Create a plain text file of memories in your own words, for example memories.txt on the Desktop.",
+   "Run \"agi memory import ~/Desktop/memories.txt --source \"Other assistant\"\"; look for the line that starts \"Imported\" and reports the count.",
+   "Run \"agi memory list\" and find the imported memories.",
+   "Run the same import command again; look for \"Nothing new to import: every memory in that file is already in your account.\""
+  ],
+  "where": "Terminal: \"agi memory import <file>\" with an optional \"--source <name>\" (the default source is Other)."
+ }
+}

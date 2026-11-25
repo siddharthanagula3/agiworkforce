@@ -1,0 +1,435 @@
+{
+ "feature": {
+  "id": "F059-02",
+  "aliases": [
+   "Batch approval (S59.02)",
+   "Approve all",
+   "Deny all",
+   "Allow All / Deny All (CLI)",
+   "Pending approval for a run"
+  ],
+  "summary": "A run can pause on several tool calls at once. The server only resumes when it gets one decision for every pending call, then resumes once. Tasks screens apply one Approve or Deny to all calls. The CLI has Allow All and Deny All for the rest of a turn.",
+  "purpose": {
+   "what_it_does": "Lets the person answer all pending calls of one run together so the run resumes a single time (apps/web/lib/services/cloud-agent-run-service.ts:1964-1972).",
+   "why_it_exists": "A model can ask for several tools in one step; asking one by one would need many resumes, and the server refuses a partial answer.",
+   "who_uses_it": "People managing background work on Web, Desktop, Mobile, VS Code and the CLI.",
+   "problems_solved": [
+    "No half-answered step: the server rejects a decision set that does not match the pending set (cloud-agent-run-service.ts:1964).",
+    "No repeated prompts for the rest of a CLI turn (apps/cli/src/tui/approval_broker.rs:325-326)."
+   ],
+   "use_cases": [
+    "Tasks page: a run waits on three calls; the person presses Approve once.",
+    "Mobile run detail: Reject all pending calls.",
+    "CLI: press t (Allow All) to allow the rest of the turn except high-risk calls.",
+    "VS Code: command 'Approve and continue' on a cloud task."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web, Desktop (hosted web app) and shared Tasks page: 'Waiting for your approval' card, buttons 'Approve' and 'Deny' (TasksPage.tsx:891-900).",
+    "Mobile: Tasks screen run detail sheet with approve and reject, store action resolveApproval (apps/mobile/src/features/tasks/store.ts:311, apps/mobile/src/features/tasks/CloudTasksScreen.tsx:840).",
+    "CLI: 'd Deny All' and 't Allow All' buttons (approval_overlay.rs:5-21, :95-118).",
+    "VS Code: commands agi-workforce.approveCloudTask and agi-workforce.rejectCloudTask, confirmation 'Approve and continue' (apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:38-41).",
+    "Web chat card: calls of one step are answered one by one on their cards; the request is sent when the last one is decided (useChatStream.ts:5494)."
+   ],
+   "prerequisites": [
+    "A signed-in account with a paused cloud run.",
+    "For CLI: an interactive terminal."
+   ],
+   "screens_and_controls": [
+    "The list of calls with a short preview of each (argsPreview) (TasksPage.tsx:892-896).",
+    "Optional guidance box 'Add guidance to steer this run (optional)' (TasksPage.tsx, after line 891)."
+   ],
+   "journey": [
+    "1. Open Tasks and filter to runs that need you.",
+    "2. Read the list of pending calls.",
+    "3. Press Approve or Deny; one decision is applied to every call (TasksPage.tsx:471-480).",
+    "4. The list reloads; the run shows running or done."
+   ],
+   "feedback_and_outputs": [
+    "The Approve button shows pending while sending (TasksPage.tsx:901).",
+    "On a race: 'Another device already answered this approval.' (TasksPage.tsx:178).",
+    "VS Code: 'your decision could not be sent, another device already answered this one' (cloudRunApproval.ts:30-32, :157)."
+   ],
+   "settings": [
+    "none specific; CLI Allow All respects the high-risk exception in code (approval_broker.rs:196)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Server accepts 1 to 32 decisions and demands the exact pending set (cloud-agent-run-service.ts:1920-1972; packages/contracts/cloud-contracts/src/tool-approval-resume.ts:34).",
+    "The Tasks page sends the same decision for every call in the run (TasksPage.tsx:476-480); Mobile does the same (apps/mobile/src/features/tasks/store.ts:326-332); VS Code does the same (cloudRunApproval.ts:22-26).",
+    "Web and Mobile chat gather per-call decisions and send once when all are decided (useChatStream.ts:5494; chatExecutionStore.ts:4358).",
+    "A saved Deny in the permission store overrides an approval in the batch (approve/route.ts:516-523).",
+    "A tool no longer available gets a 'not available and was not executed' result instead of failing the batch (tool-loop.ts:6580-6600).",
+    "CLI broker supports deny_all and allow_all for a turn (approval_broker.rs:325-326, :401, :437); Allow All excludes high-risk and some kinds (approval_broker.rs:196-215)."
+   ],
+   "incomplete": [
+    "Tasks, Mobile and VS Code cannot mix decisions in one answer (all approve or all reject); mixed decisions are possible only on chat cards (TasksPage.tsx:476, useChatStream.ts:5494).",
+    "Chrome: brief says unverified; per-call buttons exist (bubbles.ts:1004) but no batch control was found."
+   ],
+   "disconnected_or_disabled": [
+    "none found"
+   ],
+   "not_available": [
+    "Batch control in the Chrome side panel was not found."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The user can approve or deny several pending tool calls of a run in one action.",
+     "source": "S59.02"
+    },
+    {
+     "statement": "All pending calls of one run are decided together and the run resumes once.",
+     "source": "S59.02 (brief) and cloud-agent-run-service.ts:1964"
+    },
+    {
+     "statement": "The brief does not say what happens when one call in the batch fails; not verified.",
+     "source": "S59.02"
+    }
+   ],
+   "acceptance_criteria": [
+    "One Approve on Tasks resumes the run once with all calls approved.",
+    "One Deny marks every call rejected and the model gets the denied result for each.",
+    "A decision set missing a pending call is refused with 400.",
+    "A second device answering gets 409.",
+    "CLI Allow All does not auto-allow a high-risk call."
+   ],
+   "inferred": [
+    "A mixed answer (allow some, deny others) should be possible on Tasks screens; the server allows it [inferred from schema in tool-approval-resume.ts:34]."
+   ],
+   "proposed": [
+    "[proposed] Per-call checkboxes on the Tasks card.",
+    "[proposed] Define and show what happens when an approved call fails."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "endpoint",
+    "name": "POST /api/llm/v1/chat/completions/approve",
+    "path": "apps/web/app/api/llm/v1/chat/completions/approve/route.ts",
+    "role": "One request carries all decisions."
+   },
+   {
+    "kind": "service",
+    "name": "claimCloudAgentApprovalCheckpoint",
+    "path": "apps/web/lib/services/cloud-agent-run-service.ts",
+    "role": "Exact match of decision ids to pending ids (line 1964)."
+   },
+   {
+    "kind": "schema",
+    "name": "ToolApprovalResumeRequestSchema",
+    "path": "packages/contracts/cloud-contracts/src/tool-approval-resume.ts",
+    "role": "tool_approvals array 1..max per step."
+   },
+   {
+    "kind": "component",
+    "name": "TasksPage handleApproval",
+    "path": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "role": "One decision for all calls (line 471)."
+   },
+   {
+    "kind": "component",
+    "name": "TasksBoard",
+    "path": "packages/ui/unified-chat/src/components/tasks/TasksBoard.tsx",
+    "role": "Board layout with onApprove and onDeny."
+   },
+   {
+    "kind": "hook",
+    "name": "useResolveToolApproval",
+    "path": "apps/web/lib/hooks/useChatStream.ts",
+    "role": "Waits until all calls are decided (line 5494)."
+   },
+   {
+    "kind": "store",
+    "name": "cloud task store resolveApproval",
+    "path": "apps/mobile/src/features/tasks/store.ts",
+    "role": "Mobile batch answer (line 311)."
+   },
+   {
+    "kind": "screen",
+    "name": "CloudTasksScreen",
+    "path": "apps/mobile/src/features/tasks/CloudTasksScreen.tsx",
+    "role": "Mobile Tasks list and detail (line 840)."
+   },
+   {
+    "kind": "service",
+    "name": "cloudRunApproval",
+    "path": "apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts",
+    "role": "VS Code approve or reject all pending calls."
+   },
+   {
+    "kind": "service",
+    "name": "ApprovalBroker deny_all/allow_all",
+    "path": "apps/cli/src/tui/approval_broker.rs",
+    "role": "Turn-wide Allow All and Deny All (lines 325, 401, 437)."
+   },
+   {
+    "kind": "component",
+    "name": "ApprovalChoice DenyAll/AllowAll",
+    "path": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "role": "d and t keys."
+   },
+   {
+    "kind": "service",
+    "name": "managed cloud runs client",
+    "path": "packages/contracts/cloud-contracts/src/managed-cloud-agent-runs-client.ts",
+    "role": "resumeRun used by Tasks surfaces (line 403)."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Run pauses with several pending calls saved in one checkpoint.",
+     "runs_on": "our servers",
+     "evidence": "tool-loop.ts:7867"
+    },
+    {
+     "what_happens": "Client builds the decision list for all pending calls and posts it detached.",
+     "runs_on": "device",
+     "evidence": "managed-cloud-agent-runs-client.ts:403-413"
+    },
+    {
+     "what_happens": "Server claims the checkpoint only if the ids match exactly, then resumes once.",
+     "runs_on": "our servers",
+     "evidence": "cloud-agent-run-service.ts:1964-1990"
+    },
+    {
+     "what_happens": "CLI turn grant resolves the pending and future requests of that turn on the device.",
+     "runs_on": "device",
+     "evidence": "approval_broker.rs:401-450"
+    }
+   ],
+   "data": [
+    {
+     "what": "Pending call list with arguments preview",
+     "where_stored": "cloud_agent_approval_checkpoints, projected into run.pendingApproval",
+     "synced": "Yes, read by any device through the runs API",
+     "retained_or_deleted": "unknown"
+    },
+    {
+     "what": "CLI turn grant flags",
+     "where_stored": "In memory in the broker",
+     "synced": "No",
+     "retained_or_deleted": "Dropped with the process"
+    }
+   ],
+   "models_and_providers": "The resumed step calls the same model; batch size does not change routing."
+  },
+  "access_and_usage": {
+   "account": "Signed-in account for Tasks surfaces.",
+   "permissions": "Run owner only (tenant-scoped claim).",
+   "subscription": "No batch-specific entitlement found; resume passes the same managed gates as F059-01 (approve/route.ts:167-197).",
+   "limits_and_metering": "At most 32 decisions per request (cloud-agent-run-service.ts:1920 region).",
+   "flags": "none found in the code.",
+   "model_compatibility": "none found in the code.",
+   "provider_restrictions": "Managed Cloud only for the HTTP batch; the CLI broker is local.",
+   "local_mode": "CLI Allow All and Deny All work locally. Web, Desktop, Mobile Tasks are Cloud features; no Local batch was found."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Partial decision set",
+    "behaviour": "400 'Approval decisions do not match the pending tool calls.'",
+    "evidence": "approve/route.ts:141"
+   },
+   {
+    "state": "Already resumed elsewhere",
+    "behaviour": "409",
+    "evidence": "cloud-agent-run-service.ts:1957"
+   },
+   {
+    "state": "Expired",
+    "behaviour": "410",
+    "evidence": "approve/route.ts:144"
+   },
+   {
+    "state": "A call blocked after the question was asked",
+    "behaviour": "Its approval is flipped to rejected, the others proceed.",
+    "evidence": "approve/route.ts:516-523"
+   },
+   {
+    "state": "A call's tool is gone",
+    "behaviour": "Gets a 'not available and was not executed' result.",
+    "evidence": "tool-loop.ts:6580-6600"
+   },
+   {
+    "state": "An approved call fails when run",
+    "behaviour": "unknown; not read.",
+    "evidence": "not established"
+   },
+   {
+    "state": "Empty list",
+    "behaviour": "Tasks returns early; server requires at least one decision.",
+    "evidence": "TasksPage.tsx:473, tool-approval-resume.ts:34"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "packages/ui/unified-chat/src/components/tasks/__tests__/TasksPage.approvals.test.tsx",
+     "covers": "One decision for every pending call because the server rejects a partial answer; explicit rejection; reload after decision."
+    },
+    {
+     "path": "apps/web/app/api/llm/v1/chat/completions/approve/route.test.ts",
+     "covers": "Forged decision sets are rejected."
+    },
+    {
+     "path": "apps/mobile/src/features/tasks/__tests__/CloudRunDetailSheetApproval.test.tsx",
+     "covers": "Mobile detail sheet names each tool and lists parameters."
+    },
+    {
+     "path": "apps/cli/src/tui/approval_broker.rs",
+     "covers": "Inline tests: deny_all resolves future requests and cancels the pending one (lines 668, 681)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Approve three calls",
+     "steps": [
+      "Start a run that asks for three tools",
+      "Open Tasks",
+      "Press Approve"
+     ],
+     "expected": "Run resumes once, all three execute, one audit row per call."
+    },
+    {
+     "name": "Partial body",
+     "steps": [
+      "Send POST approve with two of three ids"
+     ],
+     "expected": "HTTP 400."
+    },
+    {
+     "name": "Deny all on phone",
+     "steps": [
+      "Open run detail on Mobile",
+      "Reject"
+     ],
+     "expected": "All calls rejected; model told."
+    },
+    {
+     "name": "CLI Allow All",
+     "steps": [
+      "Trigger two shell approvals in one turn",
+      "Press t on the first"
+     ],
+     "expected": "Second call runs without a prompt unless it is high risk."
+    }
+   ],
+   "diagnostics": [
+    "HTTP codes 400/404/409/410 from approve route.",
+    "Log 'Tool approval overridden: the resumed tool is blocked by the user permission store' (approve/route.ts, near line 530)."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No way to mix allow and deny from Tasks, Mobile or VS Code.",
+    "affects": "Tasks users on Web, Desktop, Mobile, VS Code",
+    "evidence": "TasksPage.tsx:476",
+    "work_needed": "Per-call controls on the Tasks card."
+   },
+   {
+    "gap": "Chrome batch status unverified; no batch control found.",
+    "affects": "Chrome users",
+    "evidence": "bubbles.ts:1004",
+    "work_needed": "Verify and either add or mark n/a."
+   },
+   {
+    "gap": "Behaviour when one approved call fails is not defined in the brief or confirmed in code.",
+    "affects": "All",
+    "evidence": "S59.02 'not verified'",
+    "work_needed": "Read the runner and state the rule."
+   }
+  ],
+  "depends_on": [
+   "F059-01",
+   "SYS-api-and-contracts",
+   "SYS-sync-and-continuity",
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:cli",
+   "surface:vscode",
+   "mode:cloud",
+   "table:cloud_agent_approval_checkpoints"
+  ],
+  "relationships": [
+   {
+    "rel": "depends_on",
+    "to": "F059-01",
+    "evidence": "Same endpoint and checkpoint (approve/route.ts:220)"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/llm/v1/chat/completions/approve",
+    "evidence": "approve/route.ts:706"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:cloud_agent_approval_checkpoints",
+    "evidence": "cloud-agent-run-service.ts:1927"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "evidence": "TasksPage.tsx:471"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "apps/mobile/src/features/tasks/store.ts:311"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "cloudRunApproval.ts:22"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "approval_broker.rs:325"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "mode:local",
+    "evidence": "connector-tool-session-grants.ts:21"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/ui/unified-chat/src/components/tasks/__tests__/TasksPage.approvals.test.tsx",
+    "evidence": "describe at line 52"
+   }
+  ],
+  "unknowns": [
+   "Behaviour when one approved call fails.",
+   "Whether Desktop (Electron) adds anything beyond the hosted web Tasks page.",
+   "Brief citations TasksPage.tsx:728 and CloudTasksScreen.tsx:573 land on different code than approval; not traced.",
+   "Chrome batch behaviour."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Web and Mobile chat gather per-call decisions and send once when all are decided (useChatStream.ts:5494; chatExecutionStore.ts:4358)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The logic exists, but the cited lines are only the hook declaration (useChatStream.ts:5494) and the function header (apps/mobile/stores/chat/chatExecutionStore.ts:4358). The gather is at useChatStream.ts:~5565-5590 (return while decisions.size < calls.length, otherwise send) and mobile chatExecutionStore.ts:4420. A desktop copy of the store also exists.",
+   "evidence": "useChatStream.ts:5564-5585; apps/mobile/stores/chat/chatExecutionStore.ts:4420",
+   "correction": "Web and Mobile chat cards collect one decision per call and send the request once decisions.size equals calls.length (useChatStream.ts:~5565-5585; chatExecutionStore.ts:4420). The send loop treats any undecided call as 'rejected' (useChatStream.ts:~5592)."
+  },
+  {
+   "section": "3 / 8",
+   "claim": "A tool no longer available gets a 'not available and was not executed' result (tool-loop.ts:6580-6600)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The file is apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts, not a bare tool-loop.ts. The message applies only to an approved call whose tool is not offered (:6576-6588). Rejected calls get the denied message.",
+   "evidence": "lib/tool-loop.ts:6575-6600",
+   "correction": "An approved call whose tool is no longer offered gets 'Tool X is not available and was not executed.' and the batch continues."
+  }
+ ],
+ "missing_facts": [
+  "Chat cards treat any call left undecided as 'rejected' when the request is finally sent (apps/web/lib/hooks/useChatStream.ts:~5592, turn.decisions.get(...) ?? 'rejected'). The page does not say this.",
+  "Approvals expire: the pending checkpoint is only claimable within APPROVAL_CHECKPOINT_TTL_HOURS, and a later attempt returns 410 (cloud-agent-run-service.ts:1930-1945; approve/route.ts:142-144). Section 6 lists retention as unknown.",
+  "CLI Deny All resolves requests as Cancel, not as a per-call denial. It also latches for the rest of the turn, because the broker is per-turn and discarded at turn end (approval_broker.rs:429-445, 325)."
+ ]
+}

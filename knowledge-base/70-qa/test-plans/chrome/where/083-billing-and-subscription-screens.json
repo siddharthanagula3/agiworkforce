@@ -1,0 +1,25 @@
+{
+ "S83.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Manage billing"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Update billing to restore Managed Cloud chat."
+   }
+  ],
+  "needs": "a paid account whose subscription is past due (a Free account cannot reach this)",
+  "note": "The extension only handles past_due and other non-active subscription statuses in the chat gate (side_panel.ts around line 13434). I found no wording for a failed checkout payment in apps/extension/src or _locales/en/messages.json (searched for payment failure, checkout error and card declined), so the checkout part of Expected is not covered in the extension. The Code line's freeTrialClient.ts:269 is the managed-access request that raises the refusal; it has no user-visible payment text.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI side panel with an account whose paid subscription is past due (payment failed at renewal).",
+   "Open the chat in the side panel and look at the composer area where the Managed Cloud gate appears.",
+   "Read the message. It should say \"Update billing to restore Managed Cloud chat.\" (for other non-active statuses it says \"Your subscription is <status>. Update billing to restore Managed Cloud chat.\").",
+   "Click the \"Manage billing\" button.",
+   "Check that a new browser tab opens on the billing settings page (/settings/billing) so the user can fix the payment, and that the message matches Expected."
+  ],
+  "where": "Side panel > chat composer gate (shown when the paid subscription is past due or otherwise not active) > Manage billing"
+ }
+}

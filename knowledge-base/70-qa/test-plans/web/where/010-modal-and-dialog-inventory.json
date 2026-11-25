@@ -1,0 +1,907 @@
+{
+ "S10.01": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/page.tsx",
+    "text": "New project"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
+    "text": "Create project"
+   }
+  ],
+  "needs": "none",
+  "note": "The sidebar button has only an aria-label of New project, so it shows as an icon.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and look at the left sidebar.",
+   "Click the New project button (icon only, no visible text in the sidebar).",
+   "In the Create project dialog, type a name in the Project name field.",
+   "Click Create project.",
+   "Look for the new project in the sidebar Projects list and on the Projects page."
+  ],
+  "where": "Sidebar > New project (icon button), or Projects > New project"
+ },
+ "S10.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Conversation options"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Rename"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open any chat.",
+   "Click the Conversation options control in the chat title area.",
+   "Click Rename.",
+   "Type a new title and press Enter.",
+   "Check that the header and the sidebar row show the new title."
+  ],
+  "where": "Chat header > Conversation options > Rename (also sidebar row > More options > Rename)"
+ },
+ "S10.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Move to project"
+   }
+  ],
+  "needs": "at least one project",
+  "note": "The item only appears when at least one project exists. The menu item, not a dialog, is the picker.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure at least one project exists.",
+   "Open a chat and click Conversation options.",
+   "Click Move to project and pick a project name.",
+   "Check that the chat now appears inside that project."
+  ],
+  "where": "Chat header > Conversation options > Move to project (also sidebar row > More options > Move to project)"
+ },
+ "S10.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Duplicate as branch"
+   }
+  ],
+  "needs": "none",
+  "note": "The visible label says branch, not duplicate. I did not confirm that the result is an independent copy or what message names its location (WebChatPage.tsx:7422 not checked).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with some messages.",
+   "Click Conversation options.",
+   "Click Duplicate as branch.",
+   "Look for the new copy and for any message that says where it is."
+  ],
+  "where": "Chat header > Conversation options > Duplicate as branch"
+ },
+ "S10.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Archive"
+   },
+   {
+    "file": "apps/web/shared/components/layout/sidebar-session-actions.ts",
+    "text": "View archived"
+   },
+   {
+    "file": "apps/web/shared/components/layout/sidebar-session-actions.ts",
+    "text": "Undo"
+   }
+  ],
+  "needs": "none",
+  "note": "Archive does not ask first. It offers Undo and View archived in a notice instead, as the code shows.",
+  "reachable": "yes",
+  "steps": [
+   "Click More options on a chat row in the sidebar.",
+   "Click Archive.",
+   "No confirm question is expected. Look for the notice with Undo and View archived.",
+   "Click View archived and check that the chat is there.",
+   "Click Undo on a second chat and check that it returns to the list."
+  ],
+  "where": "Sidebar > chat row > More options > Archive (also chat header > Conversation options > Archive)"
+ },
+ "S10.06": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/sidebar-session-actions.ts",
+    "text": "Delete conversation?"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Delete"
+   }
+  ],
+  "needs": "a test chat you can delete",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat or use the sidebar row menu.",
+   "Click Delete.",
+   "Read the dialog title, which names the chat.",
+   "Click Cancel first and check that nothing is removed.",
+   "Repeat and confirm only if you are willing to delete a test chat."
+  ],
+  "where": "Chat header > Conversation options > Delete (also sidebar row > More options > Delete)"
+ },
+ "S10.07": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Recently deleted"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Delete permanently"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "an item already in Recently deleted (delete one in Library first)",
+  "note": "The chat delete dialog says it cannot be undone but is one step; the permanent path with Delete permanently is in Library. Two LibraryView files exist; I read the unified-chat one.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the sidebar.",
+   "Click Recently deleted.",
+   "Click the three-dot or action control on an item and click Delete permanently.",
+   "Read the dialog title and text, which say it cannot be undone and asks for a second confirmation.",
+   "Cancel first and check the item is still in Recently deleted."
+  ],
+  "where": "Sidebar > Library > Recently deleted > pick an item > Delete permanently"
+ },
+ "S10.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Share\u2026"
+   },
+   {
+    "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+    "text": "Create public link"
+   }
+  ],
+  "needs": "a chat with messages; creating a link makes a real public link",
+  "note": "The earlier app check of this item created no link. Creating one is a real public action.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and click Conversation options, then Share\u2026.",
+   "Read the dialog text: read-only snapshot, who can open it, and the expiry choices.",
+   "Check the Link expires after choices (1, 7 or 30 days).",
+   "Click Create public link only if you accept that a real public link is created, then copy it.",
+   "Check the dialog states that anyone with the link can read the snapshot."
+  ],
+  "where": "Chat header > Conversation options > Share\u2026  (also sidebar row > More options > Share)"
+ },
+ "S10.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Share with workspace"
+   }
+  ],
+  "needs": "a test artifact; publishing makes a live link",
+  "note": "No take-down or unpublish label was found in ArtifactPreview.tsx, so the 'can take it down' part of Expected is unconfirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact (a document or page) in the artifact preview.",
+   "Click Publish.",
+   "Read the confirm dialog: Share with workspace or the public text about anyone holding the link.",
+   "Confirm only on a test artifact, then copy the link from the bar or the toast.",
+   "Check that the published link opens."
+  ],
+  "where": "Chat > open an artifact in the artifact panel > Publish"
+ },
+ "S10.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   }
+  ],
+  "needs": "a generated app or page; publishing makes a live link",
+  "note": "Same publish path as S10.10.",
+  "reachable": "yes",
+  "steps": [
+   "Open a generated app or page in the artifact preview.",
+   "Click Publish.",
+   "Confirm when the dialog asks.",
+   "Read the toast and the link bar, which give the live URL.",
+   "Open the URL in a new tab."
+  ],
+  "where": "Chat > open a generated app or page artifact > Publish"
+ },
+ "S10.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/SharedLinksSection.tsx",
+    "text": "Shared links"
+   },
+   {
+    "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+    "text": "Revoke share"
+   }
+  ],
+  "needs": "a shared link you made",
+  "note": "The settings nav label for this section was not found in settings-nav.ts or SettingsModal.tsx, so the path name is from the section heading.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to Shared links.",
+   "Read each link's title and access.",
+   "Click Revoke on a test link.",
+   "Read the confirm dialog Revoke this public link? and click cancel first.",
+   "Confirm and check the link is gone from the list."
+  ],
+  "where": "Settings > Shared links > Revoke (also chat > Conversation options > Share\u2026 > Revoke share)"
+ },
+ "S10.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Invite teammate"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Create invitation"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Pending invitations"
+   }
+  ],
+  "needs": "a workspace owner or admin account with a free seat",
+  "note": "The Members page at Workspace console > People > Members also exists (apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Workspace.",
+   "In Invite teammate, type an email in Invitee email and pick a role.",
+   "Click Create invitation.",
+   "Check the Pending invitations list shows the email.",
+   "Click Renew invitation or Revoke on a test invite."
+  ],
+  "where": "Settings > Workspace > Invite teammate"
+ },
+ "S10.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Change member role?"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Change role"
+   }
+  ],
+  "needs": "an admin account and a second test member",
+  "note": "Server enforcement was not checked here. The Members page has a separate role editor in WorkspaceRoles.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Workspace as an owner or admin.",
+   "Find another member and open the role choice on their row.",
+   "Pick a different role.",
+   "Read the dialog Change member role? and click Change role.",
+   "Check that the role label on the row changed."
+  ],
+  "where": "Settings > Workspace > change a member's role (role on the member row)"
+ },
+ "S10.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Transfer ownership?"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TeamSection.tsx",
+    "text": "Transfer ownership"
+   }
+  ],
+  "needs": "an owner account and a second test member",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Workspace as the owner.",
+   "Find the card with the text Hand the owner role to another member while keeping your own seat.",
+   "Pick another member and click Transfer ownership.",
+   "Read the dialog Transfer ownership? and confirm only with a test member.",
+   "Check that the owner label moved to that member."
+  ],
+  "where": "Settings > Workspace > Transfer ownership"
+ },
+ "S10.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Sources for this run"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Add a source"
+   }
+  ],
+  "needs": "a research run",
+  "note": "I found the source controls but not the exact trigger that opens the research plan, and the picker is not a dialog in the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Start a research run in chat.",
+   "Read the text above the list: Searching the whole web. Add a source to narrow it. or Sources for this run.",
+   "Click Add a source and pick a source.",
+   "Click the remove control on a source to take it out.",
+   "Check the list changes and the run uses the chosen sources."
+  ],
+  "where": "Chat > a research run > Sources for this run > Add a source"
+ },
+ "S10.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "The shortcut for this action is defined in the same file as findShortcut('composer-add-files').",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, click the + button at the left of the message box.",
+   "Click Add photos & files.",
+   "Pick a file in the device file chooser.",
+   "Check that the file chip appears in the message box before you send.",
+   "Send and check the file is attached to the message."
+  ],
+  "where": "Composer + button > Add photos & files"
+ },
+ "S10.18": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Connect"
+   }
+  ],
+  "needs": "an outside account (for example Google) to sign in with",
+  "note": "The Connect label constant was found; I did not confirm which element renders it on the connector card.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Click a service that is not connected yet.",
+   "Click Connect.",
+   "Complete the sign-in page of the service in the browser.",
+   "Return to the app and check the service shows as connected."
+  ],
+  "where": "Settings > Connectors > pick a service > Connect"
+ },
+ "S10.19": {
+  "labels": [],
+  "needs": "a connection with a revoked or expired grant (for example Google Drive)",
+  "note": "Searched ConnectorDetailView.tsx for Reconnect: the only hits were a copy function (connectorReconnectCopy in packages/ui/ui/src/directory/constants.ts) and no button label. The message reads Name needs reconnecting. Its tools stop until you do; its settings are kept. The code is partial per the ledger.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.20": {
+  "labels": [],
+  "needs": "two or more connected accounts for one service",
+  "note": "ConnectorAccountSummary.tsx lists accounts, but I found no default or account-switch label in packages/ui or apps/web/features/connectors.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.21": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Plugins"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Install"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Plugins.",
+   "Open a plugin from the list.",
+   "Click Install.",
+   "Read the confirm dialog titled Install <plugin name>? and click Cancel first.",
+   "Install a test plugin and check it shows as Installed."
+  ],
+  "where": "Settings > Plugins > pick a plugin > Install"
+ },
+ "S10.22": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "a plugin that lists permissions",
+  "note": "The install confirm uses a notice field (entry.installNotice); I did not confirm it lists the permissions itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Plugins and open a plugin.",
+   "Scroll to the Permissions heading.",
+   "Read the copy: What this plugin says it needs. Installing it agrees to these; you can remove it at any time.",
+   "Click Install and read the confirm dialog.",
+   "Check the dialog lists the permissions, then cancel if you do not agree."
+  ],
+  "where": "Settings > Plugins > pick a plugin > Permissions (before Install)"
+ },
+ "S10.23": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Switch version"
+   }
+  ],
+  "needs": "an installed plugin with another version",
+  "note": "The code uses the version picker for updates; I did not locate the exact control that holds Switch version on the page.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Plugins and open an installed plugin.",
+   "Click Switch version and pick a different version.",
+   "Read the confirm dialog Switch to version <version>? and any It also asks for: or What changed text.",
+   "Cancel first, then confirm on a test plugin.",
+   "Check the installed version label changed."
+  ],
+  "where": "Settings > Plugins > an installed plugin > Switch version"
+ },
+ "S10.24": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "New skill"
+   },
+   {
+    "file": "apps/web/features/skills/components/SkillEditorDialog.tsx",
+    "text": "Import a SKILL.md"
+   },
+   {
+    "file": "apps/web/features/skills/components/SkillEditorDialog.tsx",
+    "text": "Create skill"
+   }
+  ],
+  "needs": "a SKILL.md file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Skills.",
+   "Click New skill.",
+   "Click Import a SKILL.md and choose a SKILL.md file.",
+   "Check that Name, Description and Instructions fill in.",
+   "Click Create skill and check the skill is in the list."
+  ],
+  "where": "Settings > Skills > New skill > Import a SKILL.md"
+ },
+ "S10.25": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Edit"
+   },
+   {
+    "file": "apps/web/features/skills/components/SkillEditorDialog.tsx",
+    "text": "Save changes"
+   }
+  ],
+  "needs": "a skill you created",
+  "note": "The Edit control was found in SettingsModal.tsx; the dialog title Edit skill is in SkillEditorDialog.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Skills.",
+   "Click Edit on a skill you made.",
+   "In the Edit skill dialog, change Name, Description or Instructions.",
+   "Click Save changes.",
+   "Reopen the skill and check the new values stay."
+  ],
+  "where": "Settings > Skills > pick a skill > Edit"
+ },
+ "S10.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Switch anyway"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Keep"
+   }
+  ],
+  "needs": "a model that lacks a capability in use (for example images), which depends on the model catalog",
+  "note": "The switch dialog appears only when the compatibility check finds a blocking issue. Which model is incompatible depends on the live catalog.",
+  "reachable": "yes",
+  "steps": [
+   "Attach an image or turn on a feature the chosen model cannot handle.",
+   "Open the model picker at the bottom of the message box.",
+   "Pick a model that does not support it.",
+   "Read the dialog that starts Switch to <model>? and its findings.",
+   "Click Keep to stay, or Switch anyway to switch, and check which model is selected."
+  ],
+  "where": "Chat > composer model picker > pick a model that cannot take the chat content"
+ },
+ "S10.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/model-compatibility.ts",
+    "text": "Older messages will be left out of the next reply."
+   }
+  ],
+  "needs": "a long conversation near the model's context limit",
+  "note": "The warning text says older messages will be left out; the code gives no trim, compact or new-chat action, so Expected's 'what to do' is not in the code. The picker trigger's visible words were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a conversation that is long (near the model's context limit), or paste a very long message into a new chat",
+   "Open the model picker under the message box",
+   "Read the warning at the bottom of the open picker",
+   "Compare the warning with Expected: it should say the conversation is near or over the limit and what to do (trim, compact, new chat)"
+  ],
+  "where": "Message box > model picker (open the model name under the message box) > look at the bottom of the open list"
+ },
+ "S10.28": {
+  "labels": [
+   {
+    "file": "apps/web/lib/services/managed-usage-request-service.ts",
+    "text": "Usage budget exhausted for this billing period. Upgrade your plan or add credits."
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Usage details"
+   }
+  ],
+  "needs": "a Free account that has used its allowance",
+  "note": "The reset date line was not confirmed in the code read; the card's reset label comes from a prop that was not traced to a visible string.",
+  "reachable": "yes",
+  "steps": [
+   "Use a Free account until its usage allowance is used up",
+   "Send a message in a chat",
+   "Read the limit card in the chat: it should name the limit, say when it resets and offer a next step",
+   "Compare with Expected: the code text is 'Usage budget exhausted for this billing period. Upgrade your plan or add credits.'"
+  ],
+  "where": "Chat > keep sending messages until a usage limit is reached; the limit card appears in the chat. For the usage screen: the 'Usage details' button in the composer status line > Settings > Usage"
+ },
+ "S10.29": {
+  "labels": [],
+  "needs": "a Free account, and the owner must have opened paid upgrades (the billing waitlist is on by owner decision)",
+  "note": "No credit-purchase dialog was found. Searched apps/web for credit purchase and top-up dialogs; the only code found is the billing waitlist gate in apps/web/lib/server/billing-waitlist-access.ts, whose message is 'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.' (the file says the top-up panel exists in apps/web/features/billing/components/TopUpPanel.tsx but its opening control was not traced).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/dialogs/UpgradePlanDialog.tsx",
+    "text": "See all plans"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The upgrade comparison dialog exists (UpgradePlanDialog.tsx, opened through apps/web/features/billing/hooks/useUpgradePlanFlow.tsx), and 'See all plans' is its button, but the control that opens it was not found, so the path is unknown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Cancel plan"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Settings > Billing"
+   }
+  ],
+  "needs": "a paid account billed by Stripe",
+  "note": "Cancellation is confirmed in Stripe's portal, not in an app dialog, so the in-app statement of the end date may not appear. The label 'Settings > Billing' is a path in the nav, not a button; 'Billing' is the nav key in packages/ui/i18n/locales/en/settings.json.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid plan billed by Stripe (not Apple or Google)",
+   "Open Settings, then Billing",
+   "Click Cancel plan (it is not shown when the plan is already set to end)",
+   "Look at where you land: the code opens Stripe's billing portal in a new page with the cancel flow",
+   "Compare with Expected: Expected asks for an in-app cancel dialog that says when access ends; the code sends the user to Stripe's portal instead"
+  ],
+  "where": "Settings > Billing > Cancel plan"
+ },
+ "S10.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Add payment method"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Manage cards"
+   }
+  ],
+  "needs": "a paid account billed by Stripe",
+  "note": "The card change happens in Stripe's billing portal, not an in-app dialog.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a paid account billed by Stripe",
+   "Open Settings, then Billing",
+   "Find the Payment heading and click Add payment method (or Manage cards)",
+   "Look at where you land: the code opens Stripe's billing portal, not a card form in the app",
+   "Compare with Expected: a payment-method dialog in the app that adds or replaces the card"
+  ],
+  "where": "Settings > Billing > Payment > Add payment method (or Manage cards when a card is saved)"
+ },
+ "S10.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/StepUpDialog.tsx",
+    "text": "Confirm it is you"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Security"
+   }
+  ],
+  "needs": "a second factor or passkey set up on the account",
+  "note": "The dialog is opened by the step-up hook used by the security panel (apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx); the exact action in that panel that triggers it was not identified.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Security",
+   "Start a sensitive action in the advanced account security panel",
+   "When asked, read the dialog titled 'Confirm it is you'",
+   "Choose a sign-in method (code, passkey or password) and check that the action only continues after the check passes"
+  ],
+  "where": "Settings > Security > (a sensitive action in the advanced account security panel)"
+ },
+ "S10.34": {
+  "labels": [],
+  "needs": "a microphone, live-web",
+  "note": "No explanation shown before the first microphone request was found. Searched apps/web and packages/ui for microphone copy. Found only messages shown after access is refused: 'Microphone permission denied. Please allow access in your browser settings.' (apps/web/features/chat/stores/voice-input-store.ts) and 'Microphone access was denied. Allow the microphone to use voice mode.' (apps/web/features/chat/lib/live-voice-session.ts).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.35": {
+  "labels": [],
+  "needs": "a browser that offers screen capture, and a microphone is not needed",
+  "note": "The screen capture call is navigator.mediaDevices.getDisplayMedia in packages/ui/unified-chat/src/components/AttachmentMenu.tsx (line 613, the screenshot action), and the live source name 'Live screen' is in the same file (line 346). The menu item words that start this were not found, so the path is unknown. The browser's own screen picker is what the user sees before capture, not an app dialog.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S10.38": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a connected tool or connector",
+  "note": "'Allow for this chat' is also shown on the card, which Expected does not mention; 'Allow once' is defined but not used on this card.",
+  "reachable": "yes",
+  "steps": [
+   "Connect a tool or connector, then ask the chat to use it",
+   "When the card appears, read 'This tool requires approval before execution.'",
+   "Click Allow, or Deny to refuse this one call (Allow for this chat appears when the action is not high risk)",
+   "Check that only that one call runs or stops, as Expected says"
+  ],
+  "where": "Chat > ask for a tool action that needs approval (a connector or plugin tool) > the approval card in the chat"
+ },
+ "S10.39": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Private data from this chat could be sent outside AGI. Check where it goes before you allow it."
+   },
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+    "text": "Could send private data from this chat to a search engine"
+   }
+  ],
+  "needs": "web search or an outside connector",
+  "note": "The destination sentence is built in tool-loop.ts; the code read does not prove the same sentence is shown on the card.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on web search or connect an outside tool, then ask for something that uses it",
+   "When the approval card appears, read the high-risk warning",
+   "Read what it says goes where (the destination text)",
+   "Click Deny if the destination is not wanted, and check that nothing is sent"
+  ],
+  "where": "Chat > ask for an action that would send private data to a website, a search engine or a connector > the approval card in the chat"
+ },
+ "S10.41": {
+  "labels": [
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Project settings"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "text": "Your changes to this project have not been saved. If you leave now, they will be lost."
+   }
+  ],
+  "needs": "a project you can edit",
+  "note": "The word 'Projects' in the path comes from apps/web/app/chat/projects/page.tsx, not from a checked visible label. The same guard also covers the memory editor (packages/ui/unified-chat/src/components/MemoryEditor.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open a project and then Project settings",
+   "Change the name or instructions, but do not save",
+   "Close the dialog or click a link to another page",
+   "Look for the warning: 'Your changes to this project have not been saved. If you leave now, they will be lost.' with a choice to keep editing or discard"
+  ],
+  "where": "Projects > (open a project) > Project settings"
+ },
+ "S10.42": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/DraftConflictDialog.tsx",
+    "text": "Choose which draft to keep"
+   },
+   {
+    "file": "apps/web/features/chat/components/DraftConflictDialog.tsx",
+    "text": "Keep this version"
+   }
+  ],
+  "needs": "two browser tabs or two devices signed in to the same account",
+  "note": "The dialog is triggered by sync, not by a control; timing of the trigger is not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the same conversation in two tabs",
+   "Type a draft in one tab",
+   "Type a different draft in the other tab, then go back to the first tab",
+   "Look for the dialog 'Choose which draft to keep' with 'Here' and 'Elsewhere' versions",
+   "Click Keep this version or Use the other version and check the draft matches your choice"
+  ],
+  "where": "No menu: open the same conversation in two browser tabs (or two devices), type an unsent draft in one, then change the draft in the other"
+ },
+ "S10.43": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Export\u2026"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+    "text": "Export Chat History"
+   }
+  ],
+  "needs": "a conversation with messages",
+  "note": "The title menu's trigger words were not confirmed. The export button reads 'Export ' followed by the format name (EnhancedExportDialog.tsx line 286).",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation that has messages",
+   "Open its title menu and choose Export\u2026",
+   "In 'Export Chat History', pick a format (Markdown, PDF, Word Document, HTML or JSON)",
+   "Click Export Markdown (or the chosen format name) and check the file downloads with the conversation in it"
+  ],
+  "where": "Conversation title menu > Export\u2026, then the 'Export Chat History' dialog"
+ },
+ "S10.44": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Report this response"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Reported"
+   }
+  ],
+  "needs": "a chat with at least one answer",
+  "note": "The answer menu's trigger words were not confirmed. The report is sent to /api/content-report; no reason field is offered in this menu item, so Expected's 'with a reason' is not in this path.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for the answer",
+   "Open the menu on that answer",
+   "Choose Report this response",
+   "Check the item changes to Reported (or Reporting\u2026 while sending) and that the report is recorded"
+  ],
+  "where": "Open the menu on an assistant answer > Report this response"
+ },
+ "S10.45": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Send feedback"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx",
+    "text": "Share feedback"
+   }
+  ],
+  "needs": "none",
+  "note": "The account menu trigger's visible words were not confirmed; the menu item is in apps/web/shared/components/layout/AccountMenuItems.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu",
+   "Click Send feedback",
+   "Pick a feedback type (General feedback, Something is broken or Feature request) and write a message",
+   "Click Send feedback in the dialog and check the success message appears"
+  ],
+  "where": "Account menu > Send feedback, then the 'Share feedback' dialog"
+ },
+ "S10.46": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+    "text": "Share crash and error reports"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Privacy"
+   }
+  ],
+  "needs": "none",
+  "note": "No dialog before data leaves the device was found; the switch line is the only in-app explanation found, and a longer note about browser crash reports is at PrivacySection.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Privacy",
+   "Read the switch 'Share crash and error reports' and its line: 'Send error reports, with sensitive fields removed.'",
+   "Turn the switch on, then off",
+   "Check the switch state persists after reloading the page"
+  ],
+  "where": "Settings > Privacy > Share crash and error reports"
+ },
+ "S10.47": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/DataExportRow.tsx",
+    "text": "Export data"
+   },
+   {
+    "file": "apps/web/features/settings/components/DataExportRow.tsx",
+    "text": "Download a copy of your account data and files."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No confirmation dialog is in this row; Expected asks for a dialog, the code starts the download directly.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Privacy",
+   "Find the row 'Export data' with 'Download a copy of your account data and files.'",
+   "Click Export data (it shows Preparing\u2026 while it works)",
+   "Check a file downloads and that it contains your account data"
+  ],
+  "where": "Settings > Privacy > Export data"
+ },
+ "S10.48": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Delete your account?"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "Schedule deletion"
+   }
+  ],
+  "needs": "an account that can schedule deletion (some paid plans are blocked)",
+  "note": "Deletion is scheduled with a cancellation deadline, not done at once. The Delete button is disabled when the plan blocks deletion.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Account",
+   "Find the row Delete account and click Delete",
+   "Read the dialog 'Delete your account?' and what it deletes",
+   "Type DELETE in the box and read the button Schedule deletion (do not click it unless you want to schedule deletion)"
+  ],
+  "where": "Settings > Account > Delete account > Delete"
+ }
+}

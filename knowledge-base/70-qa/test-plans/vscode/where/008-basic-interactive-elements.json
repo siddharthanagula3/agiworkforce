@@ -1,0 +1,593 @@
+{
+ "S8.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Open config.toml"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "The button uses the class primary-button. I did not check the colours or the label contrast.",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon named Settings in the chat header.",
+   "Click Runtime in the left list.",
+   "Look at the Open config.toml button and compare it with the other buttons on the page: it should look like the main action."
+  ],
+  "where": "Chat header > Settings (gear) > Runtime > Open config.toml"
+ },
+ "S8.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Choose"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Model preference"
+   }
+  ],
+  "needs": "none",
+  "note": "The button uses the class secondary-button. I did not check how its outline looks.",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon named Settings in the chat header.",
+   "Stay on General and find the row labelled Model preference.",
+   "Look at the Choose button beside the model box. It should look less strong than the main buttons, such as Open config.toml under Runtime."
+  ],
+  "where": "Chat header > Settings (gear) > General > Model preference > Choose"
+ },
+ "S8.03": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a workspace folder open; an AGI runtime that is set up so the agent asks for approval",
+  "note": "The danger style is the class approval-card__action--danger (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts line 982). Abort turn is also set to the danger style. Whether a card shows depends on the approval setting, which I did not check.",
+  "reachable": "yes",
+  "steps": [
+   "Open a workspace folder in VS Code and type a task that makes AGI change a file, such as creating a new text file, in the message box at the bottom of the chat.",
+   "Press Enter and wait for an approval card to appear in the chat.",
+   "Look at the Deny button. It should look red (a warning colour) and be clearly different from the approve button."
+  ],
+  "where": "Chat > send a task that needs a tool approval > Deny on the approval card"
+ },
+ "S8.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More actions"
+   }
+  ],
+  "needs": "none; VoiceOver for the name check",
+  "note": "Each icon button has an aria-label and a title in webviewContent.ts (lines 2928 to 2942).",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat view in the sidebar.",
+   "Look at the row of icon-only buttons at the top right of the chat header.",
+   "Turn on VoiceOver (Cmd+F5), move it over each icon, and listen for the name: Sessions, Settings, New chat, More actions."
+  ],
+  "where": "Chat header, top right: the icon buttons Sessions (clock), Settings (gear), New chat (plus), and More actions (three dots)"
+ },
+ "S8.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Integrations"
+   }
+  ],
+  "needs": "none",
+  "note": "These are navigation groups (role group, labelled by their heading), not a toolbar. I did not find a separate button group in the chat header.",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon named Settings in the chat header.",
+   "Look at the left list. Under the label Workspace there are General, Runtime, Instructions & editor and Usage & billing.",
+   "Under Integrations there are MCP servers, Hooks, Plugins and Skills. Under Account there is Cloud account. Each group has its own label."
+  ],
+  "where": "Chat header > Settings (gear) > left list with the group labels Workspace, Integrations and Account"
+ },
+ "S8.08": {
+  "labels": [],
+  "needs": "a reply that contains a link (the agent decides this)",
+  "note": "Links are made by markdown-it with linkify on (apps/extension-vscode/src/webview/render.ts line 18). I did not check the click handler that opens the link.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that asks AGI for a web page address with a link in the answer.",
+   "Look at the reply. A link should be underlined or coloured like a link.",
+   "Click the link and check that the browser opens the page."
+  ],
+  "where": "Chat > a reply that contains a web address shown as a link"
+ },
+ "S8.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Model preference"
+   }
+  ],
+  "needs": "none",
+  "note": "The only labelled single-line text box found in the settings is the Model preference box, and the code marks it readonly (settingsWebviewContent.ts lines 1346 to 1357). Expected asks for an input, so a readonly box may not match.",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon named Settings in the chat header.",
+   "Stay on General and look at the box under the label Model preference.",
+   "Compare with Expected: the box is a single-line text box with a visible label. Click into it and try to type."
+  ],
+  "where": "Chat header > Settings (gear) > General > Model preference (text box beside the Choose button)"
+ },
+ "S8.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "Which key adds a new line depends on the Enter setting (composerKeys in webviewContent.ts lines 5088 to 5094). By default Enter sends the message; I did not check the default setting value.",
+  "reachable": "yes",
+  "steps": [
+   "Click in the message box, which says Describe a task\u2026.",
+   "Type one line of text, then press Cmd+Enter.",
+   "Type a second line and look for it on a new line in the box. The box should grow up to a limit."
+  ],
+  "where": "Chat > message box at the bottom (placeholder Describe a task\u2026)"
+ },
+ "S8.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Search sessions"
+   }
+  ],
+  "needs": "a few saved chats",
+  "note": "The box is type search with a placeholder and aria-label. I did not check whether it filters as you type or only on Enter.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions icon in the chat header.",
+   "Click the box named Search sessions at the top of the sheet.",
+   "Type part of the title of an older chat and look at the list. Only matching sessions should stay."
+  ],
+  "where": "Chat header > Sessions (clock) > search box Search sessions"
+ },
+ "S8.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Set API Key"
+   }
+  ],
+  "needs": "none; use a test string, not a real key",
+  "note": "The input uses password true (apps/extension-vscode/src/core/commandSetup.ts line 1267), so the typed text should be masked.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette with Cmd+Shift+P.",
+   "Type Set API Key and choose Code: Set API Key.",
+   "Type a short test string (not a real key) and look at the box. The typed characters should be hidden."
+  ],
+  "where": "Command Palette (Cmd+Shift+P) > Code: Set API Key"
+ },
+ "S8.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Extended thinking"
+   }
+  ],
+  "needs": "none",
+  "note": "The control is a checkbox given role switch (settingsWebviewContent.ts line 2437).",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon named Settings in the chat header.",
+   "Stay on General and find the row labelled Extended thinking.",
+   "Click its switch once. Look at the switch: it should slide to the other state. Close and reopen Settings to see whether the new state stayed."
+  ],
+  "where": "Chat header > Settings (gear) > General > Extended thinking"
+ },
+ "S8.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Local"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a Cloud account to see Cloud sessions (I did not check what the Cloud list shows without one)",
+  "note": "The same two buttons are also used as tabs in S8.31.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions icon in the chat header.",
+   "Look at the two joined buttons Local and Cloud at the top.",
+   "Click Cloud, then look at which one looks selected and at the list below. Click Local to go back."
+  ],
+  "where": "Chat header > Sessions (clock) > Local | Cloud at the top of the sheet"
+ },
+ "S8.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Agent mode"
+   }
+  ],
+  "needs": "none",
+  "note": "The same choice is also available from the Command Palette as Code: Choose Agent Mode (apps/extension-vscode/package.json line 133).",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon named Settings in the chat header.",
+   "Stay on General and find the row labelled Agent mode.",
+   "Click its dropdown, choose a different mode, and check that the shown value changes. Close and reopen Settings to see whether it stayed."
+  ],
+  "where": "Chat header > Settings (gear) > General > Agent mode"
+ },
+ "S8.19": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Workspace files and symbols"
+   }
+  ],
+  "needs": "a workspace folder open",
+  "note": "The @ trigger is in webviewContent.ts around line 8540. I did not check the keyboard behaviour beyond the arrow and Escape keys in the handler near line 5906.",
+  "reachable": "yes",
+  "steps": [
+   "Open a workspace folder and click the message box.",
+   "Type @. A list with the title Workspace files and symbols opens above the box.",
+   "Type a few letters to narrow the list, press the Down arrow to move, and press Enter to pick one. Check that the picked item appears in the message."
+  ],
+  "where": "Chat > message box at the bottom > type @"
+ },
+ "S8.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Context lines"
+   }
+  ],
+  "needs": "none",
+  "note": "The input is type number with min 0 and max 500 (settingsWebviewContent.ts lines 1481 to 1495).",
+  "reachable": "yes",
+  "steps": [
+   "Click the gear icon named Settings in the chat header.",
+   "Stay on General and find the box labelled Context lines.",
+   "Click the box, then use the Up and Down arrow keys or the small spinner arrows. The number should change, and it should stop at 0 and at 500."
+  ],
+  "where": "Chat header > Settings (gear) > General > Context lines"
+ },
+ "S8.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach workspace files"
+   }
+  ],
+  "needs": "a workspace folder open; a file to attach",
+  "note": "Expected says choose files from the device, but the menu item says workspace files. The code also has an Attach file\u2026 action that posts openFilePicker (webviewContent.ts line 6601), and I did not confirm which one shows a native file dialog. No HTML file input was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open a workspace folder, then click the + button named Attach or use tools.",
+   "Look at the menu titled Add context and click Attach workspace files.",
+   "Check that a way to choose files opens (a file dialog or a list). Compare with Expected: choosing files from the device."
+  ],
+  "where": "Chat > + (Attach or use tools) at the bottom left of the message box > Attach workspace files"
+ },
+ "S8.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Describe a task\u2026"
+   }
+  ],
+  "needs": "a file to upload; a workspace folder open",
+  "note": "The drag-over style is composer-card dragover (webviewContent.ts lines 2817 to 2820); the drop handler is near line 7720.",
+  "reachable": "yes",
+  "steps": [
+   "Open a file in Finder and slowly drag it over the message box.",
+   "Look for the box border to turn teal and the box to get a thicker ring while the file is over it.",
+   "Drop the file and look for a file chip in the strip above the box."
+  ],
+  "where": "Chat > drag a file from Finder onto the message box at the bottom (placeholder Describe a task\u2026)"
+ },
+ "S8.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Local"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a Cloud account for the Cloud list to have content",
+  "note": "The tab group has role tablist and each button has role tab with aria-selected (webviewContent.ts lines 3036 to 3038). I did not check the arrow-key behaviour.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Sessions icon in the chat header.",
+   "Look at the Local and Cloud tabs at the top of the sheet.",
+   "Click Cloud and check that the selected tab looks active and that the list changes. Click Local to go back."
+  ],
+  "where": "Chat header > Sessions (clock) > Local and Cloud tabs"
+ },
+ "S8.33": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Details"
+   }
+  ],
+  "needs": "an error message in the chat (I did not find a fixed way to cause one)",
+  "note": "The Details row appears only when an error has extra detail (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts lines 4569 to 4580). The toggle is a button with aria-expanded.",
+  "reachable": "yes",
+  "steps": [
+   "Find a chat message that shows an error with extra text.",
+   "Click the row labelled Details and check that the extra text opens below it.",
+   "Click it again and check that the text hides and the arrow turns back."
+  ],
+  "where": "Chat > a message that shows an error > Details"
+ },
+ "S8.34": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Add context"
+   }
+  ],
+  "needs": "a workspace folder open",
+  "note": "The menu has role menu and menu items (webviewContent.ts lines 3198 to 3221). I did not check the keyboard behaviour in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button named Attach or use tools.",
+   "Check that a menu titled Add context opens above the box with items such as Attach workspace files, Selection and Open editors.",
+   "Press Escape or click outside the menu and check that it closes."
+  ],
+  "where": "Chat > + (Attach or use tools) at the bottom left of the message box"
+ },
+ "S8.35": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Explain Selection"
+   }
+  ],
+  "needs": "a code file open with text selected; an AGI runtime set up for a real answer",
+  "note": "The menu entry is in the editor/context group of apps/extension-vscode/package.json (around line 980). I did not check what happens without a runtime.",
+  "reachable": "yes",
+  "steps": [
+   "Open a code file in the editor and select a few lines.",
+   "Right-click (or Control-click on a Mac trackpad) inside the selection.",
+   "Look for Code: Explain Selection in the menu and click it. Check that the chat opens with an explanation request."
+  ],
+  "where": "Editor > select some code > right-click the selection > Code: Explain Selection"
+ },
+ "S8.37": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a mouse or trackpad",
+  "note": "The tooltips come from title attributes, so they show on hover only; the code does not add focus tooltips.",
+  "reachable": "yes",
+  "steps": [
+   "Move the mouse over the gear icon in the chat header and wait about one second.",
+   "Check that a small label Settings appears.",
+   "Repeat on the plus icon (New chat) and the clock icon (Sessions)."
+  ],
+  "where": "Chat header > hover over the icon buttons Sessions, Settings and New chat"
+ },
+ "S8.38": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Select model"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Mode and reasoning effort"
+   }
+  ],
+  "needs": "none",
+  "note": "The popover has role menu and aria-expanded on its trigger (webviewContent.ts lines 3288 and 3361). I did not confirm the Escape and outside-click dismissal in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model name button, which shows Auto by default.",
+   "Check that a menu labelled Select model opens above the box.",
+   "Press Escape, then click outside the menu, and check that it closes each time."
+  ],
+  "where": "Chat composer, bottom row > the model name button (default Auto) and the Mode and reasoning effort button"
+ },
+ "S8.40": {
+  "labels": [],
+  "needs": "a running task that sets the attention state",
+  "note": "The badge is VS Code's view badge set in apps/extension-vscode/src/features/sidebar-webview/sidebarProvider.ts (around line 188). I did not check which events set it (attentionBadge.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Hide the AGI chat view, or open another Activity Bar view so the AGI view is not visible.",
+   "Start a task that needs your attention, such as one that ends or asks for approval.",
+   "Look at the AGI icon in the Activity Bar for a small count badge, then open the AGI view and check that the badge clears."
+  ],
+  "where": "Activity Bar (left edge of VS Code) > the AGI chat icon, which can show a count badge"
+ },
+ "S8.42": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "You said:"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "AGI replied:"
+   }
+  ],
+  "needs": "VoiceOver turned on",
+  "note": "I found no visible avatar in the code. The only author marker is visually hidden text (prependAuthor, webviewContent.ts line 4934), so Expected's visual part may not be met.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver (Cmd+F5).",
+   "Send a short message in the chat, then wait for the reply.",
+   "Move VoiceOver over your message and then the reply. Listen for You said: and AGI replied: before each message text."
+  ],
+  "where": "Chat messages, heard with VoiceOver (no visible avatar found)"
+ },
+ "S8.43": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Code Review"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Running Code Review"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Usage & billing"
+   }
+  ],
+  "needs": "none; the review may ask for sign-in first (not checked in code)",
+  "note": "The Plan usage bar only shows when the account has plan usage data; that was not verified at runtime.",
+  "reachable": "yes",
+  "steps": [
+   "Open any code file and select a few lines.",
+   "Right-click the selection and choose Code: Code Review.",
+   "Look at the notification titled Code: Running Code Review\u2026 in the corner: it should show progress and a cancel option.",
+   "Optional: open the settings with Code: Open Settings, click Usage & billing, and look at the Plan usage bar."
+  ],
+  "where": "Select code in an editor, right-click the selection > Code: Code Review (also in the Command Palette as Code: Code Review). While it runs, a notification titled Code: Running Code Review\u2026 shows progress. A second progress bar is at Code: Open Settings > Usage & billing > Plan usage (role progressbar, aria-label \"AGI Cloud plan usage\")."
+ },
+ "S8.45": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Reject All Diffs (All Files)"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Restore discarded"
+   }
+  ],
+  "needs": "a pending change from the assistant",
+  "note": "The notification text comes from describeDiffScope, whose wording was not read. Whether it auto-dismisses is decided by VS Code, not this code. Another toast (memory off) also exists at commandSetup.ts line 254, not tested.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the assistant has a pending change waiting for review in a file.",
+   "Open the Command Palette and run Code: Reject All Diffs (All Files).",
+   "Confirm the dialog that asks about the reject.",
+   "Look for a transient notification with the message about the discarded changes and a Restore discarded button; it should go away on its own and not block the editor."
+  ],
+  "where": "Command Palette > Code: Reject All Diffs (All Files), then confirm; a notification with a Restore discarded button appears."
+ },
+ "S8.46": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Older messages may be dropped; start a new chat to keep full context."
+   }
+  ],
+  "needs": "a long chat that reaches the context warning level",
+  "note": "The exact warning percent comes from configuration and was not checked; the error block at webviewContent.ts line 4569 is a disclosure inside an error, not this alert.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar and open Chat.",
+   "Keep sending messages in one chat until it uses a large share of the model's context.",
+   "Look just above the message box for the note that starts with: This chat has used N% of the model's context.",
+   "Check that the note is announced as a status message (it has role status) and that it disappears when the chat is cleared."
+  ],
+  "where": "AGI Code (Activity Bar icon) > Chat > the note above the message box, once a chat is long."
+ },
+ "S8.47": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Upgrade"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Upgrade for Cloud"
+   }
+  ],
+  "needs": "an account at its Managed Cloud limit or on a plan without Cloud access",
+  "note": "The strip is hidden unless the plan state triggers it, and the Upgrade button label changes to Manage billing when a paid plan needs attention. The exact trigger was not tested.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar and open Chat.",
+   "Find the full-width usage strip with a cloud icon, meter and an Upgrade button.",
+   "Check that the strip shows the plan usage text and the Upgrade button, and that its text matches the account's plan state.",
+   "Optional: collapse it with its close control and check that it becomes a small pill."
+  ],
+  "where": "AGI Code (Activity Bar icon) > Chat > the usage strip with the cloud icon, meter text and an Upgrade button."
+ },
+ "S8.49": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Start a conversation"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Ask about your code or describe a change."
+   }
+  ],
+  "needs": "none",
+  "note": "A variant class empty-state--has-recents exists for chats with recent history; what it shows was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar.",
+   "Open Chat with no messages yet (start a new chat).",
+   "Look in the message area for the heading Start a conversation.",
+   "Read the line under it: Ask about your code or describe a change."
+  ],
+  "where": "AGI Code (Activity Bar icon) > Chat, with no messages in a new chat."
+ },
+ "S8.50": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a way to switch off the network connection",
+  "note": "Retry shows only when the error is marked retryable and a send exists; the headline comes from the error type, so its exact wording is not fixed in the code. The view-level Try again button (runtimeRetryBtn in webviewContent.ts) is a separate recovery action.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar and open Chat.",
+   "Turn off the Wi-Fi or network connection.",
+   "Type a short message and send it.",
+   "Look in the transcript for an error block with a headline and a Retry button; turn the network back on, press Retry and compare with Expected."
+  ],
+  "where": "AGI Code (Activity Bar icon) > Chat > send a message while the connection is down; an error block appears in the transcript with a Retry button."
+ }
+}

@@ -1,0 +1,142 @@
+{
+ "S109.03": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/tray.ts",
+    "text": "New Chat"
+   },
+   {
+    "file": "apps/desktop/electron/garnishCore.ts",
+    "text": "Quick Ask"
+   },
+   {
+    "file": "apps/desktop/electron/garnishCore.ts",
+    "text": "Screenshot to Chat"
+   }
+  ],
+  "needs": "macOS with the desktop app running",
+  "note": "The tray menu is built from a template in tray.ts, and the Menu bar toggle label is in apps/web/features/desktop-host/components/DesktopSettingsSection.tsx. I did not confirm whether the icon is shown when that toggle is off, and the Desktop label in the Open item comes from PRODUCT_NAMES, so I left it out.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on the menu bar icon: Settings > General desktop settings > Menu bar (the toggle, which is on by default in the code is not confirmed).",
+   "Click the Desktop icon in the macOS menu bar.",
+   "Look for the items New Chat, Quick Ask, Screenshot to Chat, Window to Chat and Dictation, each with its shortcut shown beside it.",
+   "Click New Chat and check that a new chat opens; compare with the one-click quick actions in Expected."
+  ],
+  "where": "Menu bar icon (Desktop) > New Chat, Quick Ask, Screenshot to Chat, Window to Chat, Dictation"
+ },
+ "S109.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Pair a phone"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Remote Control"
+   },
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a paid account, a phone with AGI Mobile, a camera on the phone to scan the QR code",
+  "note": "The section appears on the Capabilities settings tab (confirmed by WebSettingsModal tests). The code says Remote Control needs a paid plan, and the phone side labels come from pairing.ts. I did not read the phone app's behaviour for starting or approving work.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on the desktop app and open Settings, then the Capabilities tab.",
+   "Scroll to the Remote Control section and click Pair a phone.",
+   "Confirm the on-screen pairing code and scan the QR code with the phone (in AGI Mobile: AGI Code > Add device).",
+   "Watch the status in the Remote Control section: it should show the phone as connected; use Disconnect phone to stop. Compare with the phone pairing in Expected."
+  ],
+  "where": "Settings > Capabilities > Remote Control > Pair a phone"
+ },
+ "S109.05": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Quick Ask"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Message AGI from anywhere on your desktop."
+   }
+  ],
+  "needs": "none (a signed-in account is needed to get a reply)",
+  "note": "The Quick Ask shortcut hint text is in apps/web/features/desktop-host/components/DesktopSettingsSection.tsx; the label above is the File menu item in appMenu.ts. Sending a prompt from the panel was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open another app or web page so it is in front.",
+   "Press Alt+Shift+Space (the default Quick Ask chord; it can be changed in Settings > General desktop settings > Quick Ask shortcut).",
+   "A small panel (about 480 by 620 pixels, always on top) appears over the other content; type a prompt into it.",
+   "Check that the prompt is accepted from the panel without the full main window opening; press Escape to hide the panel again."
+  ],
+  "where": "Press Alt+Shift+Space (Quick Ask shortcut, from any app), or File > Quick Ask"
+ },
+ "S109.07": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/garnishCore.ts",
+    "text": "Dictation"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "Dictate into the app you are using"
+   }
+  ],
+  "needs": "a microphone, Desktop app permission for the microphone",
+  "note": "A system voice command was not found: I searched apps/desktop/electron and packages/contracts for Dictat and Voice Shortcut and found only the shortcut and menu route. The Settings nav name for the desktop section was not found, so the path uses its heading instead.",
+  "reachable": "yes",
+  "steps": [
+   "Click into a text field in another app (for example Notes) so it has focus.",
+   "Press Alt+Shift+V to start dictation.",
+   "Speak, then press Alt+Shift+V again to finish.",
+   "Check that the spoken words reach AGI (the main window or Quick Ask) or are typed into the app in front when Settings > General desktop settings > Dictate into the app you are using is on."
+  ],
+  "where": "Press Alt+Shift+V (Dictation shortcut, from any app), or menu bar icon > Dictation"
+ },
+ "S109.09": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Screenshot to Chat"
+   },
+   {
+    "file": "apps/desktop/electron/screenshot.ts",
+    "text": "Screen & System Audio Recording"
+   }
+  ],
+  "needs": "macOS Screen & System Audio Recording permission for the desktop app",
+  "note": "The chord and default come from packages/contracts/local-runtime/src/host-bridge.ts; the on-screen notices are in screenshot.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the content you want to capture on the screen and leave it visible.",
+   "Press Cmd+Shift+2 (the default; the first listed option for this shortcut).",
+   "Wait for the app to hide briefly, then open the AGI chat (main window or Quick Ask) and check that the screenshot is attached to the composer.",
+   "If the composer was not ready, look for the notice Screenshot copied to clipboard and paste with Cmd+V into the composer. On a permission problem look for the notice Screenshot failed."
+  ],
+  "where": "Press Cmd+Shift+2 (Screenshot to Chat shortcut, from any app), or File > Screenshot to Chat, or menu bar icon > Screenshot to Chat"
+ },
+ "S109.10": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/garnishCore.ts",
+    "text": "Window to Chat"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "Window to chat shortcut"
+   }
+  ],
+  "needs": "macOS Screen & System Audio Recording permission; a second app window to capture",
+  "note": "The Settings path to change this chord is in DesktopSettingsSection.tsx (row labelled Window to chat shortcut), but the nav label for that section was not found, so the path uses its heading instead.",
+  "reachable": "yes",
+  "steps": [
+   "Bring one app window (not the AGI window) to the front, and click it so it is the frontmost window.",
+   "Press Cmd+Shift+1 (the default Window to Chat chord).",
+   "Check the AGI chat composer: it should hold an image of only that window, not the whole screen.",
+   "If no other window is in front, look for the notice No other app window is in front to capture."
+  ],
+  "where": "Bring another app's window to the front, press Cmd+Shift+1 (Window to Chat shortcut), or menu bar icon > Window to Chat"
+ }
+}

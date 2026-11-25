@@ -1,0 +1,110 @@
+{
+ "S85.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & Usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Edit your profile on Web"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "In the editor, profile editing is only a link that opens /settings/profile in the browser; the extension itself has no name, photo or email editor.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud in the editor, then open the Command Palette and run \"Code: Account & Usage\".",
+   "Find the row \"AGI Cloud connected\" in the list that opens.",
+   "Click \"Edit your profile on Web\".",
+   "Your browser opens the account profile page on the AGI web app. Check that name, photo and email can be edited there and saved, and compare with Expected."
+  ],
+  "where": "Command Palette > Code: Account & Usage > AGI Cloud connected row > Edit your profile on Web"
+ },
+ "S85.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Settings"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Instructions & editor"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Save host instructions"
+   }
+  ],
+  "needs": "none",
+  "note": "The page says these instructions apply to developer sessions on this host; I did not find a separate on/off switch, only the text boxes, so switching off is presumably clearing the text, which I did not confirm.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Open Settings\" from the Command Palette.",
+   "Click \"Instructions & editor\" in the left list.",
+   "In the \"Custom instructions\" card, type into the \"Host default\" box (or the workspace override box below it).",
+   "Click \"Save host instructions\" (or \"Save workspace override\"). Then start or open a developer chat and check that the instruction applies, and that clearing the box or changing it stops or changes it, as Expected says."
+  ],
+  "where": "Command Palette > Code: Open Settings > Instructions & editor > Custom instructions"
+ },
+ "S85.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Memory"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "List & remove facts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Edit this fact"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The memory rows and edit/delete icons are sidebar row actions; I did not confirm the exact sidebar view name where they appear, and I did not verify that saved facts are used in chats beyond the code path.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud, then run \"Code: Memory\" from the Command Palette.",
+   "Choose \"Add a memory fact\", type a fact, and confirm; then run \"Code: Memory\" again and choose \"List & remove facts\" to see it listed.",
+   "In the Memory list in the sidebar, hover a fact and use the edit icon (tooltip \"Edit this fact\") to change it, then use the trash icon (tooltip \"Delete this fact\") to remove one.",
+   "Run \"Code: Memory\" and choose \"Turn account memory off\" (it reads \"Turn account memory on\" when off), and check the placeholder line reads \"Account memory off\"/\"on\". Compare with Expected: memory on sends saved facts with chats, off stops them. The same switch is \"Use saved memory facts\" under Code: Open Settings > Instructions & editor > Memory."
+  ],
+  "where": "Command Palette > Code: Memory > List & remove facts (also Add a memory fact and Turn account memory on or off)"
+ },
+ "S85.14": {
+  "labels": [],
+  "needs": "none",
+  "note": "No crash-report or diagnostic-sharing choice found: a search for \"crash\" in apps/extension-vscode/src found nothing. Nearest controls: the Telemetry card in Settings (\"Share usage events\", apps/extension-vscode/src/features/settings/settingsWebviewContent.ts), which covers usage events only, and the manual \"Code: Export Diagnostics\" command (apps/extension-vscode/package.json), which creates a redacted report and is not a sharing choice. The cited line 1969 is the usage-events toggle, not crash reports.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S85.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Archived Sessions"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Archived sessions"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Delete permanently"
+   }
+  ],
+  "needs": "a workspace with at least one archived chat",
+  "note": "The same list is also reached from \"Code: Show Sessions History\" through its \"Archived sessions\" entry.",
+  "reachable": "yes",
+  "steps": [
+   "Run \"Code: Archived Sessions\" from the Command Palette. A list titled \"Archived sessions\" opens; if there are none, the message \"Code: there are no archived sessions in this workspace.\" appears.",
+   "Select one or more sessions in the list, then click the \"Restore\" button (tooltip \"Restore\") or \"Restore all listed sessions\". Check that the session leaves the archived list and shows back in your sessions.",
+   "Select a session and click \"Delete permanently\" (the delete button), then confirm in the dialog. Check that the session is removed from the list and the message \"Code: ... was deleted.\" appears.",
+   "Compare with Expected: list, restore and delete all work."
+  ],
+  "where": "Command Palette > Code: Archived Sessions"
+ }
+}

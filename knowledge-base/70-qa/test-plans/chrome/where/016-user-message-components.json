@@ -1,0 +1,161 @@
+{
+ "S16.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "You said:"
+   }
+  ],
+  "needs": "none",
+  "note": "The code shows no visible avatar or name on the user's bubble; the only author cue for a person is a visually hidden \"You said:\" heading, so the visible part of Expected may not be met. Only the bubble and its right-aligned actions are styled differently.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Extension side panel from its toolbar icon.",
+   "Click the box that shows \"How can I help you today?\", type \"Hello\", and click Send.",
+   "Look at your message in the transcript. It sits in its own bubble, separate from the reply.",
+   "With VoiceOver on, move to your message and listen for \"You said:\" before the text is read."
+  ],
+  "where": "AGI Extension side panel > type in the box that shows \"How can I help you today?\" > Send"
+ },
+ "S16.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Extension side panel from its toolbar icon.",
+   "Click the box that shows \"How can I help you today?\", type \"Hello from QA\", and click Send.",
+   "Look at the transcript: the words you sent appear in your message bubble."
+  ],
+  "where": "AGI Extension side panel > type in the box that shows \"How can I help you today?\" > Send"
+ },
+ "S16.03": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a file to upload (PNG, JPEG, WebP or GIF image, PDF, or text or Markdown file)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Extension side panel from its toolbar icon.",
+   "Click the + button labelled \"Add attachment\", then click \"Upload from device\".",
+   "Choose a PNG image or a PDF from your Mac and wait until it is ready to send.",
+   "Type a short message and click Send.",
+   "Look at your sent message: the image shows as a thumbnail, and the other file shows as a named chip with its file name."
+  ],
+  "where": "AGI Extension side panel > Add attachment (+ button) > Upload from device"
+ },
+ "S16.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add the browser page"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   }
+  ],
+  "needs": "a normal website tab (not a Chrome internal page)",
+  "note": "Only the browser-page chip was found on a sent user message. No chip for quoted text, connector or MCP resources, editor selection, or @mentions was found in the sent-message code, and the trigger for the @mention menu was not traced. The chip label is \"Tabs and projects\" for that menu, which I did not verify as the trigger.",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal website in a Chrome tab and make it the active tab.",
+   "Open the AGI Extension side panel, click the + button labelled \"Add attachment\", and click \"Add the browser page\".",
+   "Type a short message and click Send.",
+   "Look at your sent message: a link chip with the page title (or host name) appears on it, and clicking the chip opens the page in a new tab."
+  ],
+  "where": "AGI Extension side panel > Add attachment (+ button) > Add the browser page"
+ },
+ "S16.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "The time is shown inline in the action row with no visible words, formatted by the browser's locale (apps/extension/src/features/side-panel/dom.ts formatTime).",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Extension side panel from its toolbar icon.",
+   "Type \"Hello\" and click Send.",
+   "Look at the row under your message: a small grey time of day is shown beside it, always visible.",
+   "Compare the time with the clock on your Mac."
+  ],
+  "where": "AGI Extension side panel > send any message > look under the sent message"
+ },
+ "S16.09": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send again"
+   }
+  ],
+  "needs": "a signed-in account with the reply finished",
+  "note": "The button is shown on every sent message, but the code only replays the latest user message; earlier messages do nothing when it is clicked.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Extension side panel, type \"Hello\", and click Send.",
+   "Wait until the reply finishes.",
+   "Move the mouse over your sent message and find the round icon button with the label \"Send again\" in the row under it.",
+   "Click \"Send again\" and wait for a new reply.",
+   "Look at the transcript: your message text is unchanged, and the old reply is replaced by a new one."
+  ],
+  "where": "AGI Extension side panel > hover your sent message > Send again"
+ },
+ "S16.15": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a way to make a send fail (not traced)",
+  "note": "The failed state is set on the reply bubble, not on the user's message. The code (apps/extension/src/features/side-panel/chat-state.ts:563 applyStreamFailure) creates an assistant error message with the stream id, so the sent message itself gets no failed mark, which differs from Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Make a send fail (the way to cause a failure was not traced in the code).",
+   "Look at the transcript after the failed send.",
+   "Look for an alert box with error text and a Retry button; it sits on the reply bubble that follows your message."
+  ],
+  "where": "AGI Extension side panel > a message that fails to send > red error box under the reply"
+ },
+ "S16.16": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a failed send with an attachment or text to resend",
+  "note": "Retry only resends when the sent message has files saved with an asset ID and no page. Otherwise the text goes back into the composer with a notice, such as \"The images or page from this message are no longer attached. Attach them again, then send.\" or \"Finish your current draft, then retry the earlier message.\" The button is in the reply's error box, not on the user's message.",
+  "reachable": "yes",
+  "steps": [
+   "Make a send fail (the way to cause a failure was not traced in the code).",
+   "In the red error box under the failed reply, click Retry; the button greys out after one click.",
+   "Wait for the new outcome.",
+   "Look at the transcript: the failure is gone and replaced by a new reply, with your text and attachments sent again."
+  ],
+  "where": "AGI Extension side panel > a failed reply > Retry"
+ }
+}

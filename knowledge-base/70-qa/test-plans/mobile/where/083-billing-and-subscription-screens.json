@@ -1,0 +1,233 @@
+{
+ "S83.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Account"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "What your plan includes"
+   }
+  ],
+  "needs": "a signed-in account in Cloud mode",
+  "note": "The all-plans comparison is off in this build because nativePurchases is false in apps/mobile/src/features/billing/storePurchases.json, so the plans screen shows only the signed-in plan.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the sidebar and tap Settings.",
+   "In the Account section, tap Subscription.",
+   "Tap What your plan includes.",
+   "Look at the card and its Includes list, and compare with Expected: only the signed-in plan is shown, not a side-by-side comparison of all plans."
+  ],
+  "where": "Settings > Account > Subscription > What your plan includes"
+ },
+ "S83.03": {
+  "labels": [],
+  "needs": "a signed-in account and a build with purchases switched on",
+  "note": "Checkout controls exist in apps/mobile/src/features/settings/cloud-billing/index.tsx but are drawn only when nativePurchases is true in storePurchases.json, and FEATURES.billing is false in apps/mobile/lib/v1FeatureFlags.ts, so no checkout can be reached in this build.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S83.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "No proration text exists in apps/mobile (searched for prorat, pro-rat and unused time); the only unused-time wording is in apps/mobile/src/features/settings/cloud-account/deleteAccountConfirmation.ts, so the item's code line is stale.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S83.06": {
+  "labels": [],
+  "needs": "none",
+  "note": "No tax or total-price text exists in apps/mobile (searched for tax); the only price line, The store shows the exact charge before you approve., is drawn only with purchases switched on.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S83.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Trial ends"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Account"
+   }
+  ],
+  "needs": "an account on a free trial",
+  "note": "The wording Free trial ends ... then renews unless you cancel is drawn only in the purchase branch, which is off in this build.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account on a free trial.",
+   "Open Settings, then Account, then Subscription.",
+   "Read the row Trial ends and note its date.",
+   "Compare with Expected: only the end date is shown; the trial length and the charge after the trial are not shown on this screen in this build."
+  ],
+  "where": "Settings > Account > Subscription"
+ },
+ "S83.13": {
+  "labels": [],
+  "needs": "a build with purchases switched on",
+  "note": "The Purchase verified confirmation in apps/mobile/src/features/settings/cloud-billing/index.tsx is drawn only when nativePurchases is true, so no paid-purchase confirmation can be reached in this build.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S83.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Current plan"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Help with your plan"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   }
+  ],
+  "needs": "an account with a failed payment",
+  "note": "The summary shows the raw subscription status and Paid capabilities are unavailable., with no payment-specific wording.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account whose payment has failed (past due or similar).",
+   "Open Settings, then Account, then Subscription.",
+   "Read the summary under Your plan and the row Current plan.",
+   "Tap Help with your plan and compare with Expected: no payment-failure message or fix link is shown on this screen in this build, and Help with your plan opens Support."
+  ],
+  "where": "Settings > Account > Subscription"
+ },
+ "S83.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Access ends"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Account"
+   }
+  ],
+  "needs": "an account with a scheduled cancellation",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account whose paid plan is set to end at the period end.",
+   "Open Settings, then Account, then Subscription.",
+   "Find the row Access ends and read its date.",
+   "Compare with Expected: the date is shown; the cancellation itself is made on the web or in the store, not on this screen."
+  ],
+  "where": "Settings > Account > Subscription"
+ },
+ "S83.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Access ends"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Account"
+   }
+  ],
+  "needs": "an account that has cancelled to end of term",
+  "note": "The sentence saying what you keep until the end of the term is drawn only in the purchase branch, which is off in this build.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has cancelled to end of term.",
+   "Open Settings, then Account, then Subscription.",
+   "Read the summary under Your plan and the row Access ends.",
+   "Compare with Expected: the end date is shown, but the screen does not say what you keep or what happens after."
+  ],
+  "where": "Settings > Account > Subscription"
+ },
+ "S83.25": {
+  "labels": [],
+  "needs": "a build with purchases switched on",
+  "note": "The Restore purchases row in apps/mobile/src/features/settings/cloud-billing/index.tsx is drawn only when nativePurchases is true, so it is not reachable in this build.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S83.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Billing"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Managed where you subscribed"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   }
+  ],
+  "needs": "an account billed by Apple or Google",
+  "note": "In this build the Billing row has no store link, unlike the link the item expects.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account billed by Apple or Google.",
+   "Open Settings, then Account, then Subscription.",
+   "Find the row Billing and read its value Managed where you subscribed.",
+   "Compare with Expected: the value names no store and there is no link; the store manage link is drawn only when purchases are switched on."
+  ],
+  "where": "Settings > Account > Subscription"
+ },
+ "S83.27": {
+  "labels": [],
+  "needs": "a build with purchases switched on",
+  "note": "The Subscription managed elsewhere alert in apps/mobile/src/features/settings/cloud-billing/index.tsx opens only from an upgrade row, which is drawn only when nativePurchases is true, so no duplicate-subscription warning can be reached in this build.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S83.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/mobile/src/features/team/WorkspaceAdministration.tsx",
+    "text": "Seats and invitations"
+   },
+   {
+    "file": "apps/mobile/src/features/team/WorkspaceAdministration.tsx",
+    "text": "Invite by email"
+   }
+  ],
+  "needs": "an admin account in a team workspace",
+  "note": "Seats are taken through invitations and accepted members, and no separate seat-assignment control was found.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as an admin of a team workspace.",
+   "Open Settings, then Account, then Workspace.",
+   "Find the section Seats and invitations and read the row Seats, for example 'X of Y used'.",
+   "Tap Invite by email, enter an address, and tap Send invitation.",
+   "Compare with Expected: the Seats count changes and the pending invitation is shown as holding a seat."
+  ],
+  "where": "Settings > Account > Workspace > Seats and invitations"
+ }
+}

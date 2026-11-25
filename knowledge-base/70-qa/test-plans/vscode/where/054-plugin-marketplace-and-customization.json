@@ -1,0 +1,110 @@
+{
+ "S54.01": {
+  "labels": [],
+  "needs": "the AGI CLI connected to this window",
+  "note": "No 'Customize' wording exists anywhere in apps/extension-vscode (searched case-insensitively). Skills, Connectors and Plugins are separate rows in the sidebar More menu (apps/extension-vscode/src/features/surfaces/surfaceMenu.ts), and Connectors is not in the Settings nav. The closest single place is Settings > Integrations, which holds Plugins and Skills but not Connectors.",
+  "reachable": "unsure",
+  "steps": [
+   "Click the button titled More in the sidebar header (the ... button).",
+   "Look through the menu for one Customize entry that holds Skills, Connectors and Plugins together.",
+   "Compare with Expected: the menu lists Connectors, Skills, Plugins and MCP servers as separate rows, and no Customize entry exists."
+  ],
+  "where": ""
+ },
+ "S54.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Plugins"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Browse AGI Cloud Marketplace"
+   }
+  ],
+  "needs": "the AGI CLI connected to this window; an installed plugin to see rows (otherwise it reads 'No plugins are installed yet')",
+  "note": "The plugin list itself shows installed plugins only; the available-plugin list is reached through the marketplace browser, so Expected's 'available' is only partly visible in this list. Also reachable at Settings > Integrations > Plugins, which has a Manage plugins button.",
+  "reachable": "yes",
+  "steps": [
+   "Click the button titled More in the sidebar header.",
+   "Click Plugins in the menu.",
+   "Look at the list: the Browse AGI Cloud Marketplace row comes first, then the installed plugins below it (and an Install a plugin row if installing is offered).",
+   "Compare with Expected: the list shows installed plugins, and marketplace plugins are reached through the Browse AGI Cloud Marketplace row, not listed directly."
+  ],
+  "where": "More > Plugins"
+ },
+ "S54.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Plugins"
+   }
+  ],
+  "needs": "the AGI CLI connected to this window",
+  "note": "Settings > Integrations also lists Plugins and Skills as separate nav buttons, which is a second route to the same pair.",
+  "reachable": "yes",
+  "steps": [
+   "Click the button titled More in the sidebar header.",
+   "Look at the menu: the Skills row sits directly above the Plugins row.",
+   "Click Skills and look at the list of loaded skills, with Create a skill and Install a skill rows at the top.",
+   "Compare with Expected: Skills sits beside Plugins in the same menu and opens its own list."
+  ],
+  "where": "More > Skills (the Skills row sits directly above Plugins)"
+ },
+ "S54.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Skills:"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Plugins"
+   }
+  ],
+  "needs": "an installed plugin that includes skills; the AGI CLI connected to this window",
+  "note": "Usable depends on the skill: a plugin skill shows ', not allowed yet' until it is consented, and the Turn on or Turn off button only appears for consented skills, so usability is not shown on the plugin row itself.",
+  "reachable": "yes",
+  "steps": [
+   "Click the button titled More in the sidebar header, then click Plugins.",
+   "Look at an installed plugin row: if the plugin includes skills, its second line reads 'Skills:' followed by the skill names; a plugin without skills shows its folder path instead.",
+   "Click More > Skills and look for those skill names with the scope word plugin in the row description.",
+   "Compare with Expected: the plugin shows its included skills, and those skills appear in the Skills list."
+  ],
+  "where": "More > Plugins, then read the Skills: line under an installed plugin; then More > Skills"
+ },
+ "S54.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Turn off"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More"
+   }
+  ],
+  "needs": "an installed plugin; the AGI CLI connected to this window",
+  "note": "The same toggle also appears as an icon button on the plugin row, with tooltips Turn off and Turn on. Do not use the Remove entry, which uninstalls the plugin.",
+  "reachable": "yes",
+  "steps": [
+   "Click the button titled More in the sidebar header, then click Plugins.",
+   "Click an installed plugin row; a small menu titled with the plugin name opens with a Turn off or Turn on entry.",
+   "Click Turn off. The Plugins list reopens; the plugin row icon changes from a filled circle to an empty circle and the plugin is still listed.",
+   "Click the same plugin again and choose Turn on. Compare with Expected: the plugin is switched off and on again without being removed from the list."
+  ],
+  "where": "More > Plugins > click the installed plugin row > Turn off (or Turn on)"
+ }
+}

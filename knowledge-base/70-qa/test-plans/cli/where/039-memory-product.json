@@ -1,0 +1,394 @@
+{
+ "S39.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Memory is off: nothing is carried from one conversation to the next on any surface."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Memory is off for your account. Turn it on with `agi memory on`."
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "A second, local switch exists in the chat command /memories (row Auto-memory, saved with s); its footer does not mention s, and the account switch is the one that covers all surfaces.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory status in a terminal and note the line it prints.",
+   "Type agi memory off.",
+   "Type agi memory status again.",
+   "Compare the last line with Expected: it should say Memory is off, and nothing is carried from one conversation to the next."
+  ],
+  "where": "agi memory off, then agi memory on (check with agi memory status)"
+ },
+ "S39.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "memories in {workspace} (* pinned, used first):"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Your AGI account holds no memories in {workspace}."
+   }
+  ],
+  "needs": "a signed-in AGI account with at least one memory (if none, the screen says so)",
+  "note": "There is no full-screen list; the list is printed as plain text in the terminal.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory list in a terminal.",
+   "Read the header line that gives the number of memories and the workspace name.",
+   "Compare the list with Expected: every saved memory should appear, with its text under its topic."
+  ],
+  "where": "agi memory list"
+ },
+ "S39.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "General"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "memories in {workspace} (* pinned, used first):"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "Topics are sorted alphabetically and come from the category label typed with --category; the code does not pick from a fixed list such as preferences, work or background.",
+  "reachable": "yes",
+  "steps": [
+   "Add two memories with different categories: type agi memory add --category Work <text>, then agi memory add --category Preferences <text>.",
+   "Type agi memory list.",
+   "Compare with Expected: each topic should appear as its own heading, with its memories under it.",
+   "Memories with no category appear under the heading General."
+  ],
+  "where": "agi memory list"
+ },
+ "S39.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Remembered in your account, on every client."
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The in-chat command /memory add writes a local file, not the account memory; this item uses the account command.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory add I prefer short answers with bullet points.",
+   "Read the line printed back.",
+   "Type agi memory list and find the new line.",
+   "Compare with Expected: the new fact should be saved and listed."
+  ],
+  "where": "agi memory add <text>"
+ },
+ "S39.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/exec/tools/memory_tool.rs",
+    "text": "Remember this in {tier} memory?"
+   },
+   {
+    "file": "apps/cli/src/features/exec/tools/memory_tool.rs",
+    "text": "Remembered in {}."
+   }
+  ],
+  "needs": "a chat with the assistant and the ability to answer an approval prompt",
+  "note": "This tool saves to the local memory files (global, project or local tiers), so the saved fact does not appear in agi memory list.",
+  "reachable": "yes",
+  "steps": [
+   "Start a chat and type: Remember that I prefer short answers.",
+   "When the approval prompt appears, read its text.",
+   "Approve it.",
+   "Compare with Expected: a confirmation should appear that the item was remembered."
+  ],
+  "where": "In a chat with the assistant, type Remember that I prefer short answers, then answer the prompt Remember this in {tier} memory?"
+ },
+ "S39.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/memories_settings.rs",
+    "text": "Auto-memory"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/memories_settings.rs",
+    "text": "Max facts"
+   }
+  ],
+  "needs": "a chat with the assistant, with Auto-memory set to ON",
+  "note": "The count shown is for local fact files only, and the save is not confirmed on screen; the code gives no other visible sign.",
+  "reachable": "yes",
+  "steps": [
+   "Start the CLI chat and type /memories.",
+   "Check that the row Auto-memory shows ON, and note the number in Max facts.",
+   "Press Esc, have a normal conversation that states a lasting fact about you, then type /memories again.",
+   "Compare with Expected: the stored count should go up, showing that a new fact was saved automatically."
+  ],
+  "where": "/memories (row Auto-memory, then row Max facts)"
+ },
+ "S39.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Updated in your account, on every client."
+   }
+  ],
+  "needs": "a saved memory in the account",
+  "note": "Edit is a command, not a menu; there is no edit screen in the chat.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory list and copy the id of a memory.",
+   "Type agi memory edit <id> <new text>.",
+   "Read the line printed back.",
+   "Type agi memory list again and compare with Expected: the memory should show the new text under the same id."
+  ],
+  "where": "agi memory edit <id|text> <new text>"
+ },
+ "S39.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Forgotten in your account, on every client."
+   }
+  ],
+  "needs": "a saved memory in the account",
+  "note": "The command is named forget, not delete.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory list and copy the id of a memory.",
+   "Type agi memory forget <id>.",
+   "Read the line printed back.",
+   "Type agi memory list and compare with Expected: the memory should no longer be listed."
+  ],
+  "where": "agi memory forget <id|text>"
+ },
+ "S39.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Pinned: this memory is used first."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "(* pinned, used first)"
+   }
+  ],
+  "needs": "a saved memory in the account",
+  "note": "Pinning is done by command only; there is no pin button in a menu.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory pin <id>.",
+   "Read the line printed back.",
+   "Type agi memory list and look for the star marker at the start of that memory's line.",
+   "Compare with Expected: the memory should show as pinned, and the header should say pinned memories are used first."
+  ],
+  "where": "agi memory pin <id|text> and agi memory unpin <id|text>"
+ },
+ "S39.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "learned in"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "updated"
+   }
+  ],
+  "needs": "a signed-in AGI account; a memory learned from a named chat is needed for the learned-in line",
+  "note": "The origin label is free text from the server or the import source (default Other); the phrase typed by the user is not in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory list.",
+   "Read the bracket text after each memory id: it shows the origin (default web), the scope and the updated date.",
+   "For a memory learned in a chat, read the line learned in '<chat title>' under it.",
+   "Compare with Expected: the origin should show where it came from. The code shows only the origin label and the chat title, not the words typed by the user."
+  ],
+  "where": "agi memory list"
+ },
+ "S39.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "updated"
+   }
+  ],
+  "needs": "a signed-in AGI account with at least one memory",
+  "note": "The date shown is only the first ten characters of the server timestamp.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory list.",
+   "Read the bracket text after each memory id: it ends with updated and a date (YYYY-MM-DD).",
+   "Edit one memory with agi memory edit, then run agi memory list again.",
+   "Compare with Expected: the updated date for that memory should be today."
+  ],
+  "where": "agi memory list"
+ },
+ "S39.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Imported {} memories. Skipped {} duplicates"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Nothing new to import: every memory in that file is already in your account."
+   }
+  ],
+  "needs": "a text or markdown file with memories to import",
+  "note": "The import runs at once and there is no preview step in the code, although Expected asks for a preview.",
+  "reachable": "yes",
+  "steps": [
+   "Create a plain text or markdown file with a few facts, one per line, in a folder outside the project.",
+   "Type agi memory import <file> --source Other.",
+   "Read the line printed back.",
+   "Type agi memory list and compare with Expected: the new memories should be listed, and later chats should use them."
+  ],
+  "where": "agi memory import <file> [--source <name>]"
+ },
+ "S39.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Exported {} memories to {}."
+   }
+  ],
+  "needs": "a signed-in AGI account with at least one memory",
+  "note": "Without --out, the JSON is printed in the terminal. The output is JSON, which may not be the readable file Expected describes.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory export --out ~/Desktop/memories-export.json (the file must not exist yet).",
+   "Read the line printed back.",
+   "Open the file in a text editor.",
+   "Compare with Expected: the file should contain every saved memory. It is JSON, not a formatted document."
+  ],
+  "where": "agi memory export --out <new file>"
+ },
+ "S39.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/memories_settings.rs",
+    "text": "Max facts"
+   }
+  ],
+  "needs": "a chat with the assistant",
+  "note": "Owner decision is open on this item. The count covers local fact files only, and no screen lists memories outside the limit.",
+  "reachable": "yes",
+  "steps": [
+   "Start the CLI chat and type /memories.",
+   "Read the Max facts row: it shows how many are stored and the limit, for example [N of 500 stored].",
+   "Press Esc.",
+   "Compare with Expected: the screen shows the count and limit, but does not list which memories fall outside the limit."
+  ],
+  "where": "/memories (row Max facts)"
+ },
+ "S39.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "this project"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "in this project's memory"
+   }
+  ],
+  "needs": "a project in the account and a folder linked to it",
+  "note": "A local project tier also exists in the chat command /memory add project <text>; the account list marks other projects as another project.",
+  "reachable": "yes",
+  "steps": [
+   "In a project folder, type agi projects link <project name>.",
+   "Type agi memory add --project Our release uses staging first.",
+   "Read the line printed back.",
+   "Type agi memory list and look for the label this project on that memory.",
+   "Compare with Expected: the memory should show as project-only and only that project's chats should use it."
+  ],
+  "where": "agi projects link <project>, then agi memory add --project <text>, then agi memory list"
+ },
+ "S39.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "memories in {workspace} (* pinned, used first):"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Your AGI account holds no memories in {workspace}."
+   }
+  ],
+  "needs": "a second workspace on the same account (the command to switch workspace was not found in the code)",
+  "note": "The code shows the active workspace name only; the switching command was not located in the app's folder.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory list and read the header: it names the workspace the memories belong to.",
+   "If the account has a second workspace, switch to it and type agi memory list again.",
+   "Compare with Expected: each workspace should show only its own memories, with its name in the header."
+  ],
+  "where": "agi memory list"
+ },
+ "S39.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Never remember anything mentioning ({}): {}"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Not remembered:"
+   },
+   {
+    "file": "apps/cli/src/cloud/personalization.rs",
+    "text": "Nothing is on your never-remember list."
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "Automatic refusal of credentials is decided by the account server; the app only prints the refusal it returns, and no credential-specific text was found in the app's folder.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi memory never --add salary.",
+   "Read the line printed back: it lists the never-remember terms.",
+   "Type agi memory add My salary is 90000, then read the refusal line.",
+   "Compare with Expected: the sensitive fact should be refused with a Not remembered line."
+  ],
+  "where": "agi memory never --add <term>, then agi memory never"
+ },
+ "S39.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Remembered in your account, on every client."
+   },
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/model"
+   }
+  ],
+  "needs": "a signed-in AGI account and access to two models",
+  "note": "Model-independence is enforced in the agent code path, which was not traced to a visible screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type agi memory add I prefer short answers.",
+   "Start a chat, switch with /model to one model, and ask what the assistant knows about your answer style.",
+   "Switch with /model to a different model, ask the same question.",
+   "Compare with Expected: both models should use the same saved memory."
+  ],
+  "where": "Effect seen in chat: a memory saved with agi memory add is used after switching model with /model"
+ },
+ "S39.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Remembered in your account, on every client."
+   }
+  ],
+  "needs": "a second client signed in to the same account",
+  "note": "Sync is done by the account server; the CLI prints only the on-every-client line and does not show the other client.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On this machine, type agi memory add I work on the billing team.",
+   "On a second client signed in to the same account, look for the memory or ask the assistant about it.",
+   "Compare with Expected: the memory should appear and be used there too."
+  ],
+  "where": "Effect seen on another client signed in to the same account (for example AGI Mobile or the web app), or via agi memory list on a second machine"
+ }
+}

@@ -1,0 +1,369 @@
+{
+ "S20.01": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "Paragraph spacing has no control of its own; it is reached through any chat reply.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Write three short paragraphs about the water cycle, with a blank line between each.",
+   "Look at the reply: each paragraph should be a separate block with space between them, matching Expected."
+  ],
+  "where": "Chat: start a new chat, send a prompt that asks for several paragraphs, read the reply"
+ },
+ "S20.02": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Answer with a # heading, a ## heading and a ### heading, each followed by one sentence.",
+   "Look at the reply: the three headings should show as styled headings, with no # marks showing."
+  ],
+  "where": "Chat: start a new chat, send a prompt that asks for headings, read the reply"
+ },
+ "S20.03": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Reply with one sentence in bold, one in italic, and one with strikethrough text.",
+   "Look at the reply: bold, italic and struck-through text should show, with no asterisk or tilde marks."
+  ],
+  "where": "Chat: start a new chat, send a prompt that uses bold, italic and strikethrough, read the reply"
+ },
+ "S20.04": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The start value depends on what the model writes; the tester should confirm the prompt was followed before judging.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Give a numbered list of four steps for making tea, starting the list at 5.",
+   "Look at the reply: the list should show numbers that are indented, starting at 5 as the prompt asked."
+  ],
+  "where": "Chat: start a new chat, send a prompt for a numbered list, read the reply"
+ },
+ "S20.05": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Give a bulleted list of three fruits.",
+   "Look at the reply: each item should show a bullet marker and be indented."
+  ],
+  "where": "Chat: start a new chat, send a prompt for a bulleted list, read the reply"
+ },
+ "S20.06": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Give a bulleted list of two fruits, and under the first fruit add two indented sub-items.",
+   "Look at the reply: the sub-items should sit under their parent, indented further than the parent."
+  ],
+  "where": "Chat: start a new chat, send a prompt for a nested list, read the reply"
+ },
+ "S20.07": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The checkbox element has an accessibility role of checkbox; the tester should confirm the boxes match the prompt.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Make a task list with one unchecked item (- [ ]) and one checked item (- [x]).",
+   "Look at the reply: each item should show a checkbox, and the checked one should show as ticked."
+  ],
+  "where": "Chat: start a new chat, send a prompt for a task list, read the reply"
+ },
+ "S20.08": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Reply with a two-line quotation written with > at the start of each line.",
+   "Look at the reply: the quotation should show as an indented block that looks different from normal text."
+  ],
+  "where": "Chat: start a new chat, send a prompt that starts with a quote mark, read the reply"
+ },
+ "S20.09": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Write one sentence, then a line with three dashes (---), then one more sentence.",
+   "Look at the reply: a horizontal divider line should sit between the two sentences, with no dashes showing."
+  ],
+  "where": "Chat: start a new chat, send a prompt that asks for a divider line, read the reply"
+ },
+ "S20.10": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Write a sentence that includes the word `print` in backticks.",
+   "Look at the reply: the word should show in a monospace style with a background, and differ from the text around it."
+  ],
+  "where": "Chat: start a new chat, send a prompt that uses inline code, read the reply"
+ },
+ "S20.11": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Show a short Python function inside a fenced code block with three indented lines.",
+   "Look at the reply: the code should show in a monospace block, keep its indentation and line breaks, and show a copy control."
+  ],
+  "where": "Chat: start a new chat, send a prompt that asks for a code block, read the reply"
+ },
+ "S20.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MarkdownInline.tsx",
+    "text": "Copy Link"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MarkdownInline.tsx",
+    "text": "Share Link"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Reply with one sentence that includes the link [example site](https://example.com).",
+   "Look at the reply: the link text should show underlined and in the link colour.",
+   "Tap the link and look at the page that opens; long-press the link to see the menu."
+  ],
+  "where": "Chat: an answer containing a link. Tap the link to open it; long-press the link for the menu with Open, Copy Link and Share Link"
+ },
+ "S20.13": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Reply with one sentence that includes the bare address https://example.com with no brackets.",
+   "Look at the reply: the address should show as a link, and tapping it should open the page."
+  ],
+  "where": "Chat: an answer containing a bare web address. Tap the address"
+ },
+ "S20.15": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Make a table with columns Name, Age and City and three rows.",
+   "Look at the reply: the table should show a header row and aligned cells in a grid."
+  ],
+  "where": "Chat: start a new chat, send a prompt that asks for a table, read the reply"
+ },
+ "S20.16": {
+  "labels": [],
+  "needs": "a signed-in account, phone width",
+  "note": "The sideways scroll is the SideScroller used for tables in the renderer.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Make a table with 12 columns named Col 1 to Col 12 and two rows of values.",
+   "Look at the reply on a phone-width screen: the table should scroll sideways rather than being cut off."
+  ],
+  "where": "Chat: start a new chat, send a prompt that asks for a wide table, read the reply"
+ },
+ "S20.19": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The formula is drawn in a WebView by MathBlock.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Write one sentence that includes the formula $E = mc^2$ inside the sentence.",
+   "Look at the reply: the formula should show as typeset maths within the sentence, not as raw LaTeX."
+  ],
+  "where": "Chat: start a new chat, send a prompt with an inline formula, read the reply"
+ },
+ "S20.20": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Show the formula $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$ on its own line.",
+   "Look at the reply: the formula should show as a centred block of typeset maths."
+  ],
+  "where": "Chat: start a new chat, send a prompt with a display formula, read the reply"
+ },
+ "S20.21": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Write the text \\*not italic\\*, the price \\$5 and the name my\\_file.",
+   "Look at the reply: the asterisks, dollar sign and underscore should show as plain characters with no backslashes."
+  ],
+  "where": "Chat: start a new chat, send a prompt that uses escaped symbols, read the reply"
+ },
+ "S20.22": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The streaming row uses a separate rendering path in MessageBubble.tsx; the tester must watch during the stream.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Write a long answer with a heading, a bulleted list and a bold word.",
+   "Watch the reply while it types: the heading, list and bold text should show formatted before the reply finishes, not as raw # or * marks."
+  ],
+  "where": "Chat: start a new chat, send a prompt for a long answer, and watch the reply while it is still being written"
+ },
+ "S20.23": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "Closing an open fence is handled by closeUnterminatedCodeFence in packages/platform/utils/src/markdownSource.ts. Catching the stream mid-fence depends on timing; no separate control was found.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Show a long Python script inside a fenced code block.",
+   "Watch the reply while it types: the code should show in a code block as soon as the opening fence arrives, before the closing fence."
+  ],
+  "where": "Chat: start a new chat, send a prompt for a code block, and watch the reply while it is still being written"
+ },
+ "S20.24": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "Raw HTML blocks are dropped by dropHiddenHtmlBlocks in apps/mobile/src/features/chat/utils/markdownHiddenHtml.ts; the tester may see the HTML text removed rather than shown.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a new chat.",
+   "Send: Include this exact text in your reply: <script>alert(1)</script> and <b>bold</b>.",
+   "Look at the reply: no alert should appear, and raw HTML blocks should not run or show as live content."
+  ],
+  "where": "In a chat answer that contains raw HTML tags such as a script tag"
+ },
+ "S20.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MarkdownInline.tsx",
+    "text": "Open"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MarkdownInline.tsx",
+    "text": "Copy Link"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "javascript: and data: links match no open path in the link resolver (apps/mobile/src/features/chat/utils/answerLinks.ts), so tapping one does nothing; the tester may not be able to produce one from a reply.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat.",
+   "Send: Reply with one link [example site](https://example.com) and one email link [mail us](mailto:test@example.com).",
+   "Tap the web link: it should open in the in-app browser, not in the chat.",
+   "Tap the mail link: it should open the mail app; compare with Expected."
+  ],
+  "where": "Chat: tap a link in an answer; long-press a link for Open, Copy Link and Share Link"
+ },
+ "S20.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Select Text"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SelectTextSheet.tsx",
+    "text": "Select Text"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Inline answer text is set not selectable in the bubble; selection happens in the Select Text sheet. A second action list in MessageBubble.tsx uses the lower-case label Select text; the tester should use the sheet menu label as shown.",
+  "reachable": "yes",
+  "steps": [
+   "Start a new chat and get an answer with a heading, a list and a code block.",
+   "Long-press the answer bubble.",
+   "Tap Select Text.",
+   "Drag from the heading down through the list and the code block; compare what is highlighted with Expected."
+  ],
+  "where": "Chat: long-press an answer, then tap Select Text. Drag-select across the text in the sheet"
+ },
+ "S20.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Export Message"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/FileExportButton.tsx",
+    "text": "Export as PDF"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+    "text": "Print"
+   }
+  ],
+  "needs": "a device with a share or print option",
+  "note": "The menu label in code is Export Message followed by an ellipsis character; the chat-level Export entry is in apps/mobile/app/(app)/chat/[id].tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Get an answer with a heading, a table, a code block and a formula.",
+   "Long-press the answer, tap Export Message, then tap Export as PDF.",
+   "Open the PDF or print preview and compare the headings, table, code and formula with the answer on screen.",
+   "Optionally open the chat's Export sheet and tap Print to compare."
+  ],
+  "where": "Chat: long-press an answer, then tap Export Message, then Export as PDF. Or open the chat's actions menu, tap Export, then Export as PDF or Print"
+ },
+ "S20.29": {
+  "labels": [],
+  "needs": "a signed-in account, and a prompt that asks for Arabic or Hebrew text",
+  "note": "The direction rule is in apps/mobile/src/features/chat/components/MessageContentRenderer.tsx (directionStyle, applied to headings, list items and paragraphs), so the Code line that said unverified is now backed by code.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a new chat.",
+   "Send: Reply in Arabic with a heading, a bulleted list of two items, and one paragraph.",
+   "Look at the reply: the Arabic text should read right to left and line up to the right."
+  ],
+  "where": "In a chat answer with Arabic or Hebrew headings, list items or paragraphs; the text lines up to the right"
+ },
+ "S20.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MermaidDiagramView.tsx",
+    "text": "This diagram could not be drawn."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MermaidDiagramBlock.tsx",
+    "text": "Its source is kept below."
+   }
+  ],
+  "needs": "a Free account or a paid account; the failure depends on the model output, so a tester may need several tries",
+  "note": "The Code line's quoted text is gone and the line numbers moved: the unknown-card fallback is now InteractiveCardBlock.tsx around lines 1160-1190 (testID interactive-card-fallback, text comes from the server), and the unknown-language fallback is AssistantSurface.tsx around line 635 (testID answer-fallback, raw text, no visible label, classified in packages/ui/unified-chat/src/components/markdown/assistantFence.ts); the navigation words \"Chat\" and the way to ask for a diagram were not verified in a screen file.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat.",
+   "Send a message asking for a diagram, such as a flowchart of a simple process (the model decides the output, so this may need a retry).",
+   "If the diagram cannot be drawn, look for the text \"This diagram could not be drawn.\" followed by \"Its source is kept below.\" with the diagram source as readable text under it.",
+   "Compare with Expected: the block should show a readable fallback, not disappear or break the message.",
+   "Also check that an assistant reply with a fenced block in an unknown language (for example a language name the app does not know) shows the raw text in a plain box, instead of vanishing."
+  ],
+  "where": "Chat > ask the assistant for a flowchart or diagram; a Mermaid block that fails to draw shows the message below it"
+ }
+}

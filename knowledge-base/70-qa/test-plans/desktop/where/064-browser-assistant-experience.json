@@ -1,0 +1,241 @@
+{
+ "S64.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Use the browser"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Read the page"
+   }
+  ],
+  "needs": "A paired Chrome browser with the AGI extension and a page open in Chrome",
+  "note": "The dialog shows the page text, but the code did not show that a question typed afterwards is answered from it.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a chat, and pair Chrome with the AGI extension if it is not paired yet.",
+   "Open a web page in Chrome and keep it as the active tab.",
+   "Click the + button in the message box, then click Use the browser.",
+   "Click Read the page and read the address, title and text shown in the Recent activity area and the transcript box.",
+   "Compare the shown title and address with the page open in Chrome."
+  ],
+  "where": "Chat composer > the + button (aria-label \"More composer options\") > Use the browser > Read the page"
+ },
+ "S64.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Explain this"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add selected text"
+   }
+  ],
+  "needs": "Chrome with the AGI extension and an approved site",
+  "note": "The Chrome-side entries were found; the handoff into the Desktop chat was traced only as far as the bridge server.",
+  "reachable": "yes",
+  "steps": [
+   "In Chrome, open a site the user has approved in the AGI extension.",
+   "Select a sentence or paragraph of text on the page.",
+   "Right-click the selection and click Explain this.",
+   "Or open the AGI side panel, click its + button and click Add selected text.",
+   "Look in the AGI chat for the selected text sent as context and the question asked about it."
+  ],
+  "where": "Chrome: highlight text on an approved site > right-click the selection > Explain this, or open the AGI side panel > + > Add selected text"
+ },
+ "S64.05": {
+  "labels": [],
+  "needs": "A paired Chrome browser with a page open",
+  "note": "No button named Summarize was found; the closest is Read the page in Use the browser, whose description mentions summarizing, and the summary request is typed in chat.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S64.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Use the browser"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Read the page"
+   }
+  ],
+  "needs": "A paired Chrome browser with the AGI extension and a page open in Chrome",
+  "note": "Whether the page text reaches the chat answer was not traced end to end.",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome with the AGI extension and open a page in Chrome.",
+   "Click the + button in the message box, then click Use the browser.",
+   "Click Read the page to load the current page.",
+   "Type a question about the page in the chat box and send it.",
+   "Check that the answer uses facts from the page that is open in Chrome."
+  ],
+  "where": "Chat composer > the + button (aria-label \"More composer options\") > Use the browser > Read the page, then type the question in the chat box"
+ },
+ "S64.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Open a page"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Address"
+   }
+  ],
+  "needs": "A paired Chrome browser with the AGI extension",
+  "note": "The dialog's action button label was not found by name; it was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button in the message box, then click Use the browser.",
+   "Choose Open a page.",
+   "Type https://example.com in the field labelled Address.",
+   "Send the action with the dialog's action button.",
+   "Look in Chrome for the new address opened in the active tab."
+  ],
+  "where": "Chat composer > the + button (aria-label \"More composer options\") > Use the browser > Open a page"
+ },
+ "S64.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Back"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Reload"
+   }
+  ],
+  "needs": "Desktop app with a coding session and a Browser panel",
+  "note": "The known gap holds: the assistant has no reload command, and how the Browser panel is opened from the session was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a coding session that shows the Browser panel and load two pages in it.",
+   "Click Back and check that the previous page loads.",
+   "Click Forward and check that the next page loads again.",
+   "Click Reload and check that the current page reloads.",
+   "Check that Back and Forward are greyed out when there is no history."
+  ],
+  "where": "Browser panel of a coding session (aria-label \"Browser\") > Back, Forward or Reload"
+ },
+ "S64.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Type"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "CSS selector"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Text"
+   }
+  ],
+  "needs": "A paired Chrome browser and a page with a form",
+  "note": "The tester must know a CSS selector; the dialog does not find fields by name.",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome and open a page with a form in Chrome.",
+   "Click the + button in the message box, then click Use the browser.",
+   "Click Read the page and note a field selector from the text shown.",
+   "Choose Type, enter the CSS selector in the field labelled CSS selector and the value in Text, then send.",
+   "Look in Chrome to see the text typed into that field."
+  ],
+  "where": "Chat composer > the + button (aria-label \"More composer options\") > Use the browser > Type"
+ },
+ "S64.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Recent activity"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Use the browser"
+   }
+  ],
+  "needs": "A paired Chrome browser with the AGI extension",
+  "note": "The list is shown only while the dialog is open, and it resets when Desktop restarts.",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome, then open Use the browser from the + button.",
+   "Run Read the page or Open a page.",
+   "Look at the Recent activity list in the dialog.",
+   "Check that the new entry shows the command name and its status: running, then done or failed."
+  ],
+  "where": "Chat composer > the + button (aria-label \"More composer options\") > Use the browser > Recent activity"
+ },
+ "S64.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Downloads"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Open Downloads folder"
+   }
+  ],
+  "needs": "A paired Chrome browser and a file address to download",
+  "note": "The Downloads section appears only after a download succeeds; an approval step before download was not found in this file.",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome, open Use the browser, and choose Download a file.",
+   "Type the address of a file in the field labelled Address and send it.",
+   "Look for the Downloads section listing the downloaded file name.",
+   "Click Open Downloads folder and check the file is there."
+  ],
+  "where": "Chat composer > the + button (aria-label \"More composer options\") > Use the browser > Download a file > Downloads section"
+ },
+ "S64.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPaneSettings.tsx",
+    "text": "Clear browsing data"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPaneSettings.tsx",
+    "text": "Clear browsing data?"
+   }
+  ],
+  "needs": "Desktop app (the section is hidden on the web)",
+  "note": "The settings nav label is taken from the section heading Browser, which was not separately confirmed in the navigation file.",
+  "reachable": "yes",
+  "steps": [
+   "In the Desktop app, open Settings and go to the Browser section.",
+   "Click Clear browsing data.",
+   "Read the confirmation titled Clear browsing data? and click Clear.",
+   "Look for the message Browsing data cleared.",
+   "Open a site that needed sign-in in the browser pane and check that you are signed out."
+  ],
+  "where": "Settings > Browser > Clear browsing data > Clear"
+ },
+ "S64.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Recent activity"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "That browser action did not run."
+   }
+  ],
+  "needs": "A paired Chrome browser with the AGI extension",
+  "note": "The code shows the result and the activity status, but a written chat summary of what remains for the user was not confirmed in the dialog.",
+  "reachable": "yes",
+  "steps": [
+   "Pair Chrome, open Use the browser, and run an action such as Read the page.",
+   "Read the result text shown above Recent activity.",
+   "Read the Recent activity entries for the outcome: done, or failed with a message.",
+   "If an action fails, look for the message That browser action did not run."
+  ],
+  "where": "Chat composer > the + button (aria-label \"More composer options\") > Use the browser > run an action > result text above Recent activity"
+ }
+}

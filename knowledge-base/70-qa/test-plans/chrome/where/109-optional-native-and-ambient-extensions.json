@@ -1,0 +1,56 @@
+{
+ "S109.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Page assistant overlay"
+   },
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/launcher.ts",
+    "text": "Ask AGI"
+   },
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/panel.ts",
+    "text": "Open in side panel"
+   }
+  ],
+  "needs": "a signed-in account and an approved web page; the panel's answers come from the cloud assistant, so the tester needs a network connection",
+  "note": "Expected says it floats over other apps, but the code mounts the launcher only on approved http and https pages. The More menu trigger label was not found in the code. The quoted line at panel.ts:160 from the audit is gone; the prompt box is at panel.ts:139 (aria-label only, no visible text).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the extension and approve a normal web page (http or https) in the approved-sites list, as the Options page describes.",
+   "In the side panel, open the More menu, choose \"Extension settings\", then click \"Options\" in the left nav and confirm the \"Page assistant overlay\" toggle is on (it is on by default).",
+   "Open the approved web page in a Chrome tab and look for the round \"Open AGI\" launcher on the right side of the page; hovering it shows the tooltip \"Ask AGI\".",
+   "Click the launcher, type a question in the panel's prompt box, and click Send. Look for the answer in the panel on top of the page, and compare with Expected: a compact assistant floats over the page and takes a prompt without opening the full app.",
+   "Note: the code adds the launcher only on http and https pages, so it does not float over other apps."
+  ],
+  "where": "Side panel > More menu > Extension settings > Options > Page assistant overlay (the More menu's trigger label was not found in the code, so the tester may need to look for the menu icon in the side panel; the Options page nav item is \"Options\"). The floating launcher then appears on approved http and https web pages."
+ },
+ "S109.09": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send a screenshot of the page to Desktop"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send page screenshot to Desktop"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Shortcuts"
+   }
+  ],
+  "needs": "the AGI Desktop app running and paired with the extension, and a web page on an approved site",
+  "note": "The capture goes to the AGI Desktop app (its chat handoff in apps/desktop/electron/browser/bridgeServer.ts), not to a chat inside the extension. The shortcut is set in Chrome's own shortcut page, and the default key is Alt+Shift+Y on other systems. Which chat receives it was not confirmed beyond the Desktop handoff code.",
+  "reachable": "yes",
+  "steps": [
+   "Install and open the AGI Desktop app and make sure the extension shows it as connected (paired).",
+   "Open a normal web page on an approved site in Chrome and make it the active tab.",
+   "Press Command+Shift+Y (or the shortcut shown in Options > Shortcuts > \"Send page screenshot to Desktop\"; use the Configure button to change it in Chrome).",
+   "Look for the Chrome notification \"Page sent to Desktop\" with the text \"A screenshot of the current page is waiting in Desktop.\"; then open the AGI Desktop app and check that the screenshot is in a chat, comparing with Expected: a shortcut captures the screen and attaches it to an AGI chat.",
+   "If Desktop is not connected, the notification is the undelivered message instead, and nothing is captured."
+  ],
+  "where": "Keyboard shortcut in Chrome (default on Mac: Command+Shift+Y), labelled \"Send a screenshot of the page to Desktop\" at chrome://extensions/shortcuts. Inside the app: Options > Shortcuts, where the row is labelled \"Send page screenshot to Desktop\"."
+ }
+}

@@ -1,0 +1,377 @@
+{
+ "S12.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "How can I help you today?"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "New Chat"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Empty-state rendering is in apps/web/features/chat/pages/WebChatPage.tsx (isEmptyChat branch).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the desktop app with any account.",
+   "Look at the first screen: it should be New chat with no earlier messages in the middle area.",
+   "Look at the message box at the bottom: it should be ready to type in, with the placeholder text 'How can I help you today?'.",
+   "Compare with Expected: an empty conversation area and a ready composer."
+  ],
+  "where": "Sign in, then the first screen is the New chat screen (New chat)"
+ },
+ "S12.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Good morning, {{name}}"
+   }
+  ],
+  "needs": "a signed-in account with a name in the profile",
+  "note": "Greeting logic is in apps/web/features/chat/components/GreetingBanner/useGreeting.ts; the time-band wording comes from packages/platform/utils/src/greeting.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that has a preferred name or name set in the profile.",
+   "Open New chat.",
+   "Look at the greeting line above the message box: it should use the first name, for example 'Good morning, <name>'.",
+   "Compare with Expected: the greeting uses the name. The wording depends on the time of day and the day of the month, so it may not be 'Good morning'."
+  ],
+  "where": "New chat screen, under the top of the page (greeting line)"
+ },
+ "S12.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Personalization"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Settings section named Personalization exists, and the greeting checks an opt-out (useNameOptedOut.ts), but I did not find the visible label of the control that turns name use off, so the exact path is unknown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.04": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "I searched apps/web and packages/ui for 'suggest' and 'Suggested'. The hits were slash-command and composer files and i18n files, and no suggested-prompt cards on the New chat screen were found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.05": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The plan's Code line points to apps/web/features/chat/pages/WebChatPage.tsx:7751, which is message-list wiring, not a category shortcut row. The closest controls are the + menu rows Deep Research, Create image and Create video (see S12.11 to S12.13), but no write, research or image shortcut row on the empty screen was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "New chat in project"
+   }
+  ],
+  "needs": "an account with at least one project",
+  "note": "Sidebar code is in packages/ui/ui/src/sidebar/Sidebar.tsx. I did not trace whether a click opens the project or starts a chat, so this is a little uncertain.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make sure the account has at least one project.",
+   "Look at the sidebar on the left for the Projects section.",
+   "Click a project name in that section.",
+   "Compare with Expected: the project opens, or a new chat starts inside it."
+  ],
+  "where": "Sidebar > Projects > click a project name (the sidebar has a Projects section; a project row also offers 'New chat in project')"
+ },
+ "S12.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add from library"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Add attachments and tools"
+   }
+  ],
+  "needs": "an account with files in the Library",
+  "note": "The word 'recent' does not appear in the library rows. The list is the Library list, so whether it is ordered by recent use is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Open New chat and click the + button in the message box (its label is 'Add attachments and tools').",
+   "Click 'Add from library'.",
+   "Look at the list of files that appears under it.",
+   "Compare with Expected: the list offers files you used recently to attach in one step. The list order was not verified in code."
+  ],
+  "where": "Message box > 'Add attachments and tools' (+) > 'Add from library' (the list of library files opens under it)"
+ },
+ "S12.09": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The plan's Code line gives no location. I searched the composer and greeting files for 'recommended' and found no recommended-connectors area on the New chat screen.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+    "text": "Search the web"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+    "text": "/search"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The slash menu is in apps/web/features/chat/components/Composer/SlashCommandMenu.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open New chat and click into the message box.",
+   "Type / to open the slash command menu.",
+   "Choose '/search' (described as 'Search the web').",
+   "Look at the message box: it should show /search, ready for the next message. Send a question and check that the answer uses web results."
+  ],
+  "where": "Message box > type / > choose /search"
+ },
+ "S12.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Add attachments and tools"
+   }
+  ],
+  "needs": "a signed-in account (the row can be disabled by plan)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open New chat and click the + button ('Add attachments and tools').",
+   "Click the 'Deep Research' row to turn it on.",
+   "Look at the row: it should show as checked.",
+   "Type a question and send it, then compare with Expected: the message is sent in deep-research mode. The row may be disabled depending on the account, and its title explains why."
+  ],
+  "where": "Message box > 'Add attachments and tools' (+) > 'Deep Research' (switch)"
+ },
+ "S12.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   }
+  ],
+  "needs": "an account with image generation available",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open New chat and click the + button ('Add attachments and tools').",
+   "Click 'Create image'.",
+   "Type a picture description in the message box and click send.",
+   "Compare with Expected: the send creates an image, not a text answer. The row shows only when the account can generate images."
+  ],
+  "where": "Message box > 'Add attachments and tools' (+) > 'Create image'"
+ },
+ "S12.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create video"
+   }
+  ],
+  "needs": "an account with video generation available",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open New chat and click the + button ('Add attachments and tools').",
+   "Click 'Create video'.",
+   "Type a short video description and click send.",
+   "Compare with Expected: the send starts a video generation. The row shows only when the account can generate videos."
+  ],
+  "where": "Message box > 'Add attachments and tools' (+) > 'Create video'"
+ },
+ "S12.14": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Start voice input"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "I found the composer's 'Start voice input' label, which reads like dictation. I did not find the label of the spoken voice-mode entry (onEnterVoiceMode in ChatComposerNew.tsx), so the exact path is unknown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.15": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Agent Mode"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "'Agent Mode' and the Work mode (workMode, AGI_WORK_MODE) exist in code, but I did not trace which control on the New chat composer turns them on, so the exact path is unknown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.16": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Code"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The route is apps/web/app/code/page.tsx; the sidebar entry is in packages/ui/ui/src/sidebar/Sidebar.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and look at the sidebar on the left.",
+   "Click 'Code'.",
+   "Look at the coding screen: it should offer a repository or workspace-aware coding session.",
+   "Start a session, then compare with Expected: a coding session starts, not a plain chat."
+  ],
+  "where": "Sidebar > Code (opens the coding area at /code)"
+ },
+ "S12.17": {
+  "labels": [
+   {
+    "file": "apps/web/lib/temporary-chat-policy.ts",
+    "text": "Temporary chat"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Add attachments and tools"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The row is in apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx (TemporaryChatRows).",
+  "reachable": "yes",
+  "steps": [
+   "Open New chat and click the + button ('Add attachments and tools').",
+   "Click the 'Temporary chat' row to turn it on.",
+   "Read the explanation under it, then send a message.",
+   "Compare with Expected: the chat is marked temporary and is not kept in history. The 'end temporary chat' control appears in the same menu while it is on."
+  ],
+  "where": "Message box > 'Add attachments and tools' (+) > 'Temporary chat' (switch)"
+ },
+ "S12.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Auto"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The footer button text comes from a template label ('Auto: <model>'), so the visible wording depends on the model name.",
+  "reachable": "yes",
+  "steps": [
+   "Open New chat and look at the footer of the message box before typing.",
+   "Read the model name shown there.",
+   "Click it to open the model list if you want to compare.",
+   "Compare with Expected: the model shown is the one the next message uses. The name depends on the plan and on the Auto setting."
+  ],
+  "where": "Message box footer > model name button (shows the model the next message will use)"
+ },
+ "S12.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Workspace: {{name}}"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Personal"
+   }
+  ],
+  "needs": "an account that belongs to an organization",
+  "note": "Code is apps/web/features/chat/components/GreetingBanner/NewChatWorkspace.tsx; it returns nothing when the account has no organization workspace.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an account that belongs to an organization.",
+   "Open New chat.",
+   "Look for the line under the greeting that starts with 'Workspace:'.",
+   "Compare with Expected: it names the workspace the new chat will use. The line does not appear for accounts without an organization."
+  ],
+  "where": "New chat screen, under the greeting: 'Workspace: <name>'"
+ },
+ "S12.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Project or folder"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Search projects"
+   }
+  ],
+  "needs": "an account with at least one project",
+  "note": "I did not trace which visible button opens the picker, so the first step is a best guess.",
+  "reachable": "yes",
+  "steps": [
+   "Open New chat and find the 'Project or folder' control in the message box area.",
+   "Open it and pick a project from the list (there is a 'Search projects' field).",
+   "Look at the control: it should show the chosen project.",
+   "Send a message and check that the new chat is created in that project. The clear control is labelled 'Clear project or folder selection'."
+  ],
+  "where": "Message box > 'Project or folder' control"
+ },
+ "S12.21": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Learn how to use Work safely."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "I searched the new-chat code for mode explanations and found none on the New chat screen. The only related link is 'Learn how to use Work safely.' on the Work home screen, which is not the same thing.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.22": {
+  "labels": [],
+  "needs": "a new account (first sign-up)",
+  "note": "The routes apps/web/app/welcome/page.tsx and the OnboardingWizard component exist, but I did not read their visible step text, so the exact screens and words are unknown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "The draft is kept in browser storage (apps/web/features/chat/components/Composer/composer-draft-storage.ts, key 'new-chat'); there is no control for it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open New chat and type a sentence in the message box without sending.",
+   "Go to another page in the app (for example Settings) and come back to New chat.",
+   "Compare with Expected: the typed sentence is still in the message box."
+  ],
+  "where": ""
+ },
+ "S12.24": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Without an account you can send {{count}} messages a day."
+   }
+  ],
+  "needs": "a signed-out browser (web only; the desktop app requires sign-in)",
+  "note": "Guest limit copy exists, but the guest chat path depends on the guest.chat flag, which the plan says is off, and I did not find the sign-in prompt text, so the path is unknown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

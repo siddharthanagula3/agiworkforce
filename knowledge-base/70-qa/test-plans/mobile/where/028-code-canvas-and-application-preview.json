@@ -1,0 +1,98 @@
+{
+ "S28.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Source"
+   }
+  ],
+  "needs": "an HTML artifact in a chat (ask the assistant to make a small HTML page with a button if none exists)",
+  "note": "The cited line SafeArtifactPreview.tsx:280 is the WebView that renders HTML (runsScripts is true for html); the tab label is only shown when the artifact is previewable. The card's own label was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that has an HTML artifact (a page the assistant made as an artifact).",
+   "Tap the HTML artifact card in the chat to open the full-screen artifact view.",
+   "Make sure the \"Preview\" tab is selected at the top (the other tab is \"Source\").",
+   "Look for a live, interactive page: buttons and links should respond when tapped, and the page should show its content, not the raw HTML text. Compare with Expected."
+  ],
+  "where": "Chat > tap an HTML artifact card (opens the full-screen artifact view) > tab \"Preview\""
+ },
+ "S28.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+    "text": "This preview stopped with an error."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+    "text": "Retry"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+    "text": "View source"
+   }
+  ],
+  "needs": "an HTML artifact that throws a JavaScript error (ask the assistant to make one on purpose)",
+  "note": "The error box is drawn at SafeArtifactPreview.tsx:226-260 (the cited line 69 no longer holds it). The error reporter script in sandboxedArtifactHtml.ts:166 was not read in full, so the exact message shown for a given error was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and ask the assistant for an HTML artifact that throws a JavaScript error on load (for example a script line that calls an undefined function).",
+   "Tap the HTML artifact card to open it full screen, with the \"Preview\" tab selected.",
+   "Look for the error box with the text \"This preview stopped with an error.\" and the error message under it.",
+   "Tap \"Retry\" to run the preview again, or \"View source\" to switch to the Source tab. Compare with Expected."
+  ],
+  "where": "Chat > tap an HTML artifact card > tab \"Preview\" > error box with \"Retry\" and \"View source\" buttons"
+ },
+ "S28.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "an HTML artifact in a chat",
+  "note": "The source option label for HTML was not confirmed: artifactExport.ts builds it from codeFileFor(language), which was not opened, so the exact option text (likely \"HTML file\") is unverified. The cited line ArtifactFullScreen.tsx:228 no longer contains the quoted code.",
+  "reachable": "yes",
+  "steps": [
+   "Open an HTML artifact full screen (tap its card in the chat).",
+   "Tap the download icon in the top header, labelled \"Download artifact\".",
+   "If a choice list titled \"Download\" appears, pick the option that names the source file (for HTML it should be a source option, not PDF). If the system share sheet opens directly, that is the source file.",
+   "Save or open the shared file and check that it contains the same HTML code as the Source tab. Compare with Expected."
+  ],
+  "where": "Chat > tap an HTML artifact card > header icon \"Download artifact\" (down-arrow icon) > share sheet or \"Download\" choices"
+ },
+ "S28.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Publish artifact to a public link"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Publish to a public link?"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account in Cloud mode (a Local-only device shows \"Switch to AGI Cloud to publish\"; a signed-out one shows \"Sign in to AGI Cloud to publish\")",
+  "note": "The globe icon only shows when publishableKindFor(artifact) accepts the artifact kind, and publishableKindFor was not checked for html, so it is not confirmed that an HTML artifact shows the globe icon. The publish helper is in apps/mobile/src/features/chat/services/artifactPublishing.ts:60 (publishArtifact).",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the mode toggle at the top of the chat shows \"Cloud\" (not \"Local\"), and that you are signed in to AGI Cloud.",
+   "Open an HTML artifact full screen and tap the globe icon in the header, labelled \"Publish artifact to a public link\".",
+   "In the alert \"Publish to a public link?\", tap \"Publish\".",
+   "Look for the link box with the link text (shown with \"Copy publication link\" and \"Share publication link\" buttons) and the hint \"Private. Only you can open it until you publish it.\" before publishing. Open the link in a browser and compare with Expected."
+  ],
+  "where": "Chat > \"Cloud\" mode (top mode toggle) > tap an HTML artifact card > header icon \"Publish artifact to a public link\" (globe icon) > alert \"Publish to a public link?\" > \"Publish\""
+ }
+}

@@ -1,0 +1,509 @@
+{
+ "S55.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Made by"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Settings table shows Connector, Type and status columns with no publisher column; the publisher is on the detail page under Made by.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings (Mac menu bar Settings\u2026 or Command+,).",
+   "Click Connectors in the Settings list.",
+   "Click Add, then click Browse connectors.",
+   "Look for a catalogue of connector cards, each with its name and a state (Connected or Connect).",
+   "Click one connector and check its Made by row for the publisher."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors"
+ },
+ "S55.02": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Search connectors\u2026"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "none",
+  "note": "The Settings table search matches name and description only; the Browse connectors search also matches publisher and category; neither matches tool names as Expected says.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Click the search box at the top right of the connector list.",
+   "Type part of a name, for example Gmail.",
+   "Look for the list narrowing to matching rows, then clear the box to see all connectors again."
+  ],
+  "where": "Settings > Connectors > Search connectors\u2026"
+ },
+ "S55.03": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Filter by"
+   },
+   {
+    "file": "apps/web/features/directory/constants.ts",
+    "text": "Category"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Clear filters"
+   }
+  ],
+  "needs": "none",
+  "note": "The Category group only appears when the catalogue has at least two categories.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Connectors, then Add and Browse connectors.",
+   "Click Filter by.",
+   "Under Category, pick one (for example Productivity).",
+   "Look for the list showing only connectors in that category, then click Clear filters to reset."
+  ],
+  "where": "Settings > Connectors > Browse connectors > Filter by > Category"
+ },
+ "S55.04": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Sign-in"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Made by"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "More info"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, Connectors, then Add and Browse connectors.",
+   "Click any connector name or card.",
+   "Read the description and the Categories, Made by, Author and Sign-in rows (Sign-in shows Required or None).",
+   "Check the Connector URL and More info links, the Tools list, and the note Only use connectors you trust.",
+   "Compare with Expected: description, publisher, sign-in requirement, tools and links should all be present."
+  ],
+  "where": "Settings > Connectors > Browse connectors > click a connector name"
+ },
+ "S55.05": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Tools"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Live MCP capabilities"
+   }
+  ],
+  "needs": "a connector that exposes tools; a connected one to see the live list",
+  "note": "The live capabilities panel only appears once the connector is connected.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connector that is not connected yet.",
+   "Find the Tools heading and read the list of tools.",
+   "Connect the connector, reopen it, and find the Live MCP capabilities section.",
+   "Check that the tools, resources and prompts it lists match the list you saw before connecting."
+  ],
+  "where": "Settings > Connectors > Browse connectors > click a connector > Tools"
+ },
+ "S55.06": {
+  "labels": [
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Before you connect"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorScopeList.tsx",
+    "text": "Permissions requested"
+   }
+  ],
+  "needs": "a connector not yet connected",
+  "note": "For connectors without a provider scope list, the text says the exact permissions are named on the provider's own consent screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Click a connector that is not connected.",
+   "Read the Before you connect box and the Permissions requested list, which shows a Read or Write badge for each permission.",
+   "Click Connect and read the dialog titled Connect <name>? that lists the permissions.",
+   "Compare with Expected: the text should say in plain language what the connector can read and change."
+  ],
+  "where": "Settings > Connectors > click a connector that is not connected yet"
+ },
+ "S55.07": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Allow"
+   }
+  ],
+  "needs": "none for the dialog; an outside account for OAuth connectors",
+  "note": "The consent dialog is opened from apps/web/features/connectors/lib/open-connector-authorization.ts before the authorization starts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Click Connect on a connector row, or open the connector and click Connect.",
+   "In the dialog titled Connect <name>? click Allow.",
+   "Look for the connector to move to its connected state, or for the provider sign-in page to open."
+  ],
+  "where": "Settings > Connectors > Connect"
+ },
+ "S55.08": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Allow"
+   }
+  ],
+  "needs": "an outside account (Google) that can approve the provider consent",
+  "note": "Only the code path was traced; the stored grant after the callback was not checked in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Click Connect on an OAuth connector such as Google Drive.",
+   "In the dialog click Allow.",
+   "Look for the provider's own consent page to open; approve there.",
+   "Return to the app and look for the connector shown as connected."
+  ],
+  "where": "Settings > Connectors > Connect (an OAuth connector such as Google Drive)"
+ },
+ "S55.09": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Add API key"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorApiKeyForm.tsx",
+    "text": "Test and save"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorApiKeyForm.tsx",
+    "text": "API key"
+   }
+  ],
+  "needs": "an API-key connector and a valid key for it",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, Connectors, then click the API key connector.",
+   "Click Add API key.",
+   "Type a key into the API key field and click Test and save.",
+   "Look for the message Connected. with the tool count, and for the key to be stored (the form says it is stored encrypted)."
+  ],
+  "where": "Settings > Connectors > click a connector that uses an API key > Add API key"
+ },
+ "S55.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Sharing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/OrganizationSharingSection.tsx",
+    "text": "Shared connectors"
+   },
+   {
+    "file": "apps/web/features/settings/sections/OrganizationSharingSection.tsx",
+    "text": "Share connector with organization"
+   }
+  ],
+  "needs": "an organization admin account and a second member account in the same workspace",
+  "note": "Code search did not confirm the menu item that opens the Workspace console from the app; the route is /workspace/sharing.",
+  "reachable": "yes",
+  "steps": [
+   "As an organization admin, open the Workspace console and click Sharing.",
+   "Under Shared connectors, pick one of your connectors and click Share connector with organization.",
+   "Sign in as a member of the same organization and open that connector's tools.",
+   "Look for the member to use the connector without seeing the credential."
+  ],
+  "where": "Workspace console > Sharing > Shared connectors > Share connector with organization"
+ },
+ "S55.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorAccountSummary.tsx",
+    "text": "Connected account"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorAccountSummary.tsx",
+    "text": "The provider did not share the account name."
+   }
+  ],
+  "needs": "a connected account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, Connectors, then Add and Browse connectors.",
+   "Click a connector that is connected.",
+   "Find the Connected account heading and the row under it.",
+   "Look for the account name (email or login). If the provider sent no name, the text says The provider did not share the account name."
+  ],
+  "where": "Settings > Connectors > Browse connectors > click a connected connector > Connected account"
+ },
+ "S55.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorAccountSummary.tsx",
+    "text": "Connected account"
+   }
+  ],
+  "needs": "a connected account signed in with an email or login",
+  "note": "Only the identity label is shown; no domain or workspace field was found in the UI or in apps/web/lib/connectors/accounts.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector as in S55.13.",
+   "Look at the Connected account row for the sign-in identity (email or login).",
+   "Look for any domain or workspace name next to it."
+  ],
+  "where": "Settings > Connectors > Browse connectors > click a connected connector > Connected account"
+ },
+ "S55.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorScopeList.tsx",
+    "text": "Permissions granted"
+   }
+  ],
+  "needs": "a connected account",
+  "note": "The list appears only when the stored grant has scopes.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector as in S55.13.",
+   "Find the Permissions granted list.",
+   "Read each row and its Read or Write badge.",
+   "Compare with the Permissions requested list shown before connecting (S55.06)."
+  ],
+  "where": "Settings > Connectors > Browse connectors > click a connected connector > Permissions granted"
+ },
+ "S55.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorHealthDashboard.tsx",
+    "text": "Connector health"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Not responding"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Reconnect"
+   }
+  ],
+  "needs": "a connector that has been called recently for a useful state",
+  "note": "The health section reads call statistics from the last hour; it does not itself say needs reauthorization.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, Connectors, then Add and Browse connectors.",
+   "Click a connector and scroll to the Connector health section.",
+   "Read the state for the connector: Responding, Degraded, Not responding or Not called yet.",
+   "Click Refresh and check the call counts. A connector that needs reconnecting shows a Reconnect button on its row instead."
+  ],
+  "where": "Settings > Connectors > Browse connectors > click a connector > Connector health"
+ },
+ "S55.20": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Reconnect"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Disconnect"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorAccountSummary.tsx",
+    "text": "Needs reconnecting"
+   }
+  ],
+  "needs": "an expired or revoked connection, for example a Google Drive grant revoked at Google",
+  "note": "The plan marks this item as unfinished; the code path exists but was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open the connector whose connection needs reconnecting.",
+   "Look for a Reconnect button beside Disconnect and the text that says it needs reconnecting; its settings are kept.",
+   "Click Reconnect and check that the provider's consent page opens again.",
+   "Look for the connector to return to connected, with its tool permissions still set."
+  ],
+  "where": "Settings > Connectors > click a connector whose grant has expired or was revoked (for example Google Drive) > Reconnect"
+ },
+ "S55.21": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched the connector feature, settings and directory for Test, Check, Refresh and Retry. Only Test and save exists, and it tests a new API key while saving it; no standalone test-connection action was found. Refresh re-reads call stats and Retry discovery appears only when live capabilities fail to load.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.22": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a connected connector",
+  "note": "The dialog says you can connect it again later; the trust copy says Disconnect deletes its saved per-tool permissions.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Connectors, then click a connected connector.",
+   "Click Disconnect.",
+   "In the dialog titled Disconnect <name>? read the warning and click Disconnect.",
+   "Look for the connector to show Connect again and for the assistant to stop using it in a new chat."
+  ],
+  "where": "Settings > Connectors > click a connected connector > Disconnect"
+ },
+ "S55.23": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "an outside account for the provider",
+  "note": "No Revoke button or word exists in the UI; the token revocation runs on the server when Disconnect is used (apps/web/lib/connectors/oauth-access.ts and apps/web/app/api/connectors/route.ts). Not checked live.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Disconnect a connected connector as in S55.22.",
+   "Open the provider's own account page for connected or authorised apps.",
+   "Look for the app to be gone from the list."
+  ],
+  "where": "After Disconnect (S55.22), on the provider's own connected-apps page"
+ },
+ "S55.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched the connector feature, the connectors API routes, the directory and the desktop folder picker. No folder or repository limit control was found for connectors. GitHub repositories are picked in the GitHub install flow on GitHub's side, and Choose a folder belongs to local folder attach, not connectors.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+    "text": "Write and delete tools"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a connected connector with write tools and a chat to test in",
+  "note": "No single read-only switch was found; read-only behaviour is set per tool group in Tool permissions. The bulk button wording was read from aria labels, not confirmed visually.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector and click Tool permissions.",
+   "Find the Write and delete tools group.",
+   "Use the bulk control for that group to set Deny, or set Deny on each write tool.",
+   "Look in a chat for the assistant to be unable to run those write tools."
+  ],
+  "where": "Settings > Connectors > click a connected connector > Tool permissions > Write and delete tools"
+ },
+ "S55.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Ask"
+   }
+  ],
+  "needs": "a connected connector with write tools",
+  "note": "Destructive tools always ask and cannot be set to Allow, shown as Always asks: destructive.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector and click Tool permissions.",
+   "Find a tool under Write and delete tools.",
+   "Click Allow (Always run without asking), Ask (Needs approval each time) or Deny (Never run this tool).",
+   "Look for the chosen option to be highlighted and saved, and for a chat to follow it."
+  ],
+  "where": "Settings > Connectors > click a connected connector > Tool permissions"
+ },
+ "S55.28": {
+  "labels": [
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Before you connect"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "What it fetches stays with the chat"
+   }
+  ],
+  "needs": "a connector not yet connected",
+  "note": "The copy says fetched data follows the chat's retention; no fixed number of days is shown.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Connectors, then click a connector that is not connected.",
+   "Read the Before you connect box.",
+   "Find What it fetches stays with the chat and read it.",
+   "Compare with Expected: it says what is stored and for how long."
+  ],
+  "where": "Settings > Connectors > click a connector that is not connected > Before you connect"
+ },
+ "S55.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched ToolTimeline.tsx for provider text: none found. apps/web/features/connectors/lib/mcp-tool-name.ts no longer exists. No provider attribution text found in the chat connector cards.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.30": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx",
+    "text": "needs more permission"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx",
+    "text": "Reconnect"
+   }
+  ],
+  "needs": "a connected account whose grant lacks a needed scope, and a task that needs it",
+  "note": "Setting up the missing-scope state is hard to do from the UI; the card itself is in code and was not triggered.",
+  "reachable": "yes",
+  "steps": [
+   "Connect a connector whose grant lacks a permission the task needs.",
+   "In a chat, ask the assistant to do that task.",
+   "Look for the card headed <name> needs more permission, listing permissions, with a Reconnect <name> button."
+  ],
+  "where": "Chat > a request that a connected tool cannot do with its current permission"
+ }
+}

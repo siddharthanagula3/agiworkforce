@@ -1,0 +1,195 @@
+{
+ "S23.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "New project"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Creation asks only for a name and instructions; a description cannot be set at creation, only later (see S23.02).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Code from the sidebar if asked.",
+   "Click the More button (\u2026) in the AGI Code sidebar header and click Projects.",
+   "Click the New project icon in the Projects title bar, or run Code: New Project from the Command Palette.",
+   "Type a project name and press Enter. Leave the instructions box empty or type some, then press Enter.",
+   "Look for the message saying the project is on your account, on every client, and for the new project in the Projects list."
+  ],
+  "where": "Sidebar > More > Projects > New project (or Command Palette > Code: New Project)"
+ },
+ "S23.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Description"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Edit"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a project you can edit",
+  "note": "The description is not asked for at creation (projectActions.ts createProjectInteractively asks only name and instructions), so it is set only through Edit after creation.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the More menu in the AGI Code sidebar header and pick a project.",
+   "Under Edit, pick Rename, type a new name, and press Enter.",
+   "Back in the project list, pick Description, type a short description, and press Enter.",
+   "Look for the saved-to-your-account message, then check that the new name and description show in the project's title and row."
+  ],
+  "where": "Sidebar > More > Projects > pick a project > Edit > Rename or Description"
+ },
+ "S23.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Knowledge files"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Recent conversations"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a project with a description, instructions, files and conversations",
+  "note": "Counts are not section headers; they appear in each project's row description in the Projects list (files and chats counts from projectPresentation.ts), and the overview shows the name and description only as the title and placeholder.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the More menu in the AGI Code sidebar header.",
+   "Pick a project from the list.",
+   "Look at the top of the quick pick: the project name is the title and the description line is shown as the placeholder.",
+   "Scroll through the sections About, Knowledge files, Recent conversations, Actions and Edit, and compare with Expected."
+  ],
+  "where": "Sidebar > More > Projects > pick a project"
+ },
+ "S23.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Recent conversations"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a project that already has chats",
+  "note": "The list and opening are in the extension; no control to start a new chat filed under a project was found in the extension, and the only other project action is Use in this chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the More menu and pick a project that has chats.",
+   "Look under the Recent conversations section and compare the listed chats with Expected.",
+   "Pick one conversation; it opens in the web browser on the chat page.",
+   "Look at the browser tab to see that the chat opens."
+  ],
+  "where": "Sidebar > More > Projects > pick a project > Recent conversations > pick a conversation"
+ },
+ "S23.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Instructions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Use in this chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Active project"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a project you can edit",
+  "note": "The code applies instructions to VS Code turns in the current workspace only after Use in this chat, not to every chat in the project; the input box text says every chat on every client.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the More menu and pick a project.",
+   "Under Edit, pick Instructions, type an instruction such as a style rule, and press Enter.",
+   "Pick the project again and choose Use in this chat.",
+   "Open the chat in the AGI Code sidebar and look for the Active project chip, then send a message and compare the reply with Expected."
+  ],
+  "where": "Sidebar > More > Projects > pick a project > Edit > Instructions"
+ },
+ "S23.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Default model"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Choose the model"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The quick pick offers only your current configured model or No default model, and applying a project with a different default model only shows a prompt; it does not switch the model by itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the More menu and pick a project.",
+   "Under Edit, pick Default model.",
+   "Choose the option offered (Use your model, or No default model) and confirm.",
+   "Back in the project list, check the Default model description; then pick Use in this chat and check whether a Choose the model prompt appears."
+  ],
+  "where": "Sidebar > More > Projects > pick a project > Edit > Default model"
+ },
+ "S23.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Use in this chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Active project"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a local folder open in VS Code",
+  "note": "No folder picker or folder-to-project link was found; the association is stored per open VS Code workspace (activeProject.ts uses workspaceState), so it applies to the folder that is open.",
+  "reachable": "yes",
+  "steps": [
+   "Open the folder you want to work in with File > Open Folder in VS Code.",
+   "Open Projects from the More menu, pick a project, and choose Use in this chat.",
+   "Look for the Active project chip above the chat composer in the AGI Code sidebar.",
+   "Open a different folder and check whether the Active project chip is gone, then compare with Expected."
+  ],
+  "where": "Sidebar > More > Projects > pick a project > Use in this chat"
+ },
+ "S23.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Delete project"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/surfaceMenu.ts",
+    "text": "Projects"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account, a project you own, and a chat that was in it",
+  "note": "The extension does not check ownership itself; the owner check, if any, is server-side and was not verified here. The trash icon on a row (Delete this project) is a second route.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects from the More menu, pick a project you own, then pick Delete project under Actions.",
+   "In the modal, read the warning text for the knowledge files and conversations, then click Delete project.",
+   "Look for the message saying the project was deleted from your account.",
+   "Reopen Projects and check the project is gone; then open a chat that was in it on the web and check it still exists."
+  ],
+  "where": "Sidebar > More > Projects > pick a project > Delete project"
+ }
+}

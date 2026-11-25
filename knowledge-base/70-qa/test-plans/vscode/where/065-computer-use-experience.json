@@ -1,0 +1,29 @@
+{
+ "S65.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Permissions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Trusted folders"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Stop Trusting"
+   }
+  ],
+  "needs": "A paid or Free account that can sign in, a folder that is trusted in VS Code, and an AGI CLI that offers trusted folders (the \"Trusted folders\" section only appears when the CLI reports it)",
+  "note": "Revoke is in the UI, but granting is not: AGI has no add-folder control in the Permissions view. A folder gets its grant from VS Code Workspace Trust (extension.ts:353 records consent on trust grant), and the 'Restricted Mode' message in localRuntimeClient.ts:118 tells the person to trust the folder. The VS Code trust prompt itself is outside this app's code. The Permissions view appears only when the CLI offers permission rules; the trusted-folder rows appear only when it offers trust. Both conditions are unverified at runtime.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI chat panel in VS Code, then press Cmd+Shift+P and type \"Code: Permissions\". Press Enter. (Or type /permissions in the chat box.)",
+   "Look for the separator \"Trusted folders\" in the list. Each trusted folder shows its path, with the description \"The agent may read, edit and run commands here\".",
+   "Hover a folder row and click its trash icon (tooltip \"Stop trusting\").",
+   "In the dialog, click \"Stop Trusting\". Then reopen Code: Permissions and check that the folder is gone from \"Trusted folders\". Also check that the folder now reads \"No folders are trusted yet\" if it was the only one.",
+   "To grant a folder, open it in VS Code and accept VS Code's own Workspace Trust prompt (not AGI's). Then check that \"Trusted folders\" lists it under Code: Permissions."
+  ],
+  "where": "Command Palette (Cmd+Shift+P) > \"Code: Permissions\" (or type \"/permissions\" in the chat box) > \"Trusted folders\" section > trash icon on a folder > \"Stop Trusting\""
+ }
+}

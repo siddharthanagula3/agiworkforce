@@ -1,0 +1,393 @@
+{
+ "S24.02": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Uploads"
+   }
+  ],
+  "needs": "a file to upload (upload one first with New > Upload file if the Library is empty)",
+  "note": "The tab is labelled Uploads, not an uploaded-files view name; the filter is origin uploaded.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then click Library in the left sidebar.",
+   "Click the Uploads tab in the row of tabs under the search box.",
+   "Look that only files you uploaded are listed (no files the assistant made)."
+  ],
+  "where": "Sidebar > Library > Uploads"
+ },
+ "S24.03": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Generated files"
+   }
+  ],
+  "needs": "an account that already has a generated file (for example an image or document made in a chat)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click the Generated files tab in the row of tabs under the search box.",
+   "Look that only files the assistant produced are listed, and that uploads are not."
+  ],
+  "where": "Sidebar > Library > Generated files"
+ },
+ "S24.04": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Artifacts"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "an account with at least one artifact made in a chat",
+  "note": "The tile label is built as Open <name> in code, so the exact tile text depends on the artifact name.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click the Artifacts tab.",
+   "Click a tile labelled Open followed by an artifact name; the artifact opens in the Library viewer.",
+   "Look that the list shows only your artifacts and that each one opens."
+  ],
+  "where": "Sidebar > Library > Artifacts"
+ },
+ "S24.05": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Images"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Zoom in"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "an account with at least one image",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click the Images tab.",
+   "Click an image tile (its label is Open followed by the file name). The image opens in a viewer dialog named after the file, with Zoom in and Zoom out buttons.",
+   "Look that the image is shown in the viewer and that the Images tab lists images only."
+  ],
+  "where": "Sidebar > Library > Images"
+ },
+ "S24.06": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Videos"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "an account with at least one video",
+  "note": "The video player is a standard video element with controls (test id library-video-player).",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click the Videos tab.",
+   "Click a video tile (label Open followed by the file name).",
+   "In the viewer, press the play control on the video and look that it plays."
+  ],
+  "where": "Sidebar > Library > Videos"
+ },
+ "S24.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add from library"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Browse all"
+   }
+  ],
+  "needs": "a signed-in account with a few library files",
+  "note": "No separate Recent view exists in the Library; the recent list is the Add from library submenu, sorted by modified. The exact label of the + button was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat (or New chat) and click the + button beside the message box.",
+   "Hover or click Add from library.",
+   "Look at the list: it shows your most recently changed library files, newest first.",
+   "Click Browse all at the bottom to compare with the full Library sorted by Modified."
+  ],
+  "where": "Chat composer > (+) menu > Add from library"
+ },
+ "S24.12": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Grid view"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "List view"
+   }
+  ],
+  "needs": "an account with a few files",
+  "note": "These are icon-only buttons; their names come from the title and aria labels.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar and note that files show as tiles.",
+   "Click the List view icon button at the right of the filter row.",
+   "Look that files now show as rows with a name, date and size.",
+   "Click the Grid view icon button and look that tiles return."
+  ],
+  "where": "Sidebar > Library > Grid view / List view (icon buttons at the top right, in the group Library layout)"
+ },
+ "S24.13": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Search files and projects"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "No matches"
+   }
+  ],
+  "needs": "an account with several named files",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click the box that says Search files and projects and type part of a file name.",
+   "Wait a moment; the list narrows to matching names.",
+   "Clear the box and look that all files return. A search with no match shows No matches."
+  ],
+  "where": "Sidebar > Library > search box (Search files and projects)"
+ },
+ "S24.14": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Documents"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Images"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Videos"
+   }
+  ],
+  "needs": "an account with an image, a video and a document",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click Documents, then Images, then Videos in the row of tabs.",
+   "Look that each tab shows only that file type.",
+   "Click All to return to everything."
+  ],
+  "where": "Sidebar > Library > Images / Videos / Documents (tabs)"
+ },
+ "S24.15": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Uploads"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Generated files"
+   }
+  ],
+  "needs": "an account with both uploaded and generated files",
+  "note": "Only upload and generated origins are filters. No connector or provider filter was found in LibraryView.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click Uploads, then Generated files in the row of tabs.",
+   "Look that each tab shows only files from that source.",
+   "Click All to return to everything."
+  ],
+  "where": "Sidebar > Library > Uploads / Generated files (tabs)"
+ },
+ "S24.19": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Modified"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Name"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Size"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Type"
+   }
+  ],
+  "needs": "an account with several files of different names, sizes and types",
+  "note": "On narrow screens only the icon shows; its name is Sort by plus the current option.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click the sort button at the top right of the filter row (it shows Modified on wide screens).",
+   "Choose Name, then Size, then Type from the menu.",
+   "Look that the order changes each time; Modified sorts newest first."
+  ],
+  "where": "Sidebar > Library > sort button (shows Modified) > Name / Size / Type"
+ },
+ "S24.27": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Add to project"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "a document file in the Library and at least one project (the dialog says you have no projects if none exist)",
+  "note": "The menu item appears only for document types the app accepts as project files.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "On a document row, click the three-dot button labelled Actions for <file name>.",
+   "Click Add to project. A dialog titled Add to project opens.",
+   "Click a project in the list, then open that project and look for the file."
+  ],
+  "where": "Sidebar > Library > (row) Actions for <file name> > Add to project"
+ },
+ "S24.28": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add from library"
+   }
+  ],
+  "needs": "a file in the Library",
+  "note": "The attach row label is built as Attach <file name> in code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click the Actions for <file name> button on a file row, then Add to chat.",
+   "Look that a new chat opens with the file attached in the message box.",
+   "Alternatively, in any chat click the + button, then Add from library, then Attach <file name>."
+  ],
+  "where": "Sidebar > Library > (row) Actions for <file name> > Add to chat"
+ },
+ "S24.29": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Open chat"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   }
+  ],
+  "needs": "a file that was created inside a chat (an uploaded or generated file from a conversation)",
+  "note": "The item is shown only when the file has a conversation id.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Click the Actions for <file name> button on a file that came from a chat.",
+   "Click Open chat.",
+   "Look that the chat the file came from opens."
+  ],
+  "where": "Sidebar > Library > (row) Actions for <file name> > Open chat"
+ },
+ "S24.33": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "file storage used"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Library"
+   }
+  ],
+  "needs": "a signed-in account (the numbers come from the account's plan)",
+  "note": "The line is shown only when the server returns a storage figure; the allowance part is shown only when a limit is returned.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Read the small line under the Library heading, for example 'X of Y file storage used'.",
+   "Read the second line about file downloads used this month if it is shown.",
+   "Upload or delete a file, return to Library, and look that the number changes."
+  ],
+  "where": "Sidebar > Library > the line under the Library heading (storage used)"
+ },
+ "S24.34": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Recently deleted"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Restore"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Deleted files wait here for 30 days before they are removed for good."
+   }
+  ],
+  "needs": "a file in the Library that you are willing to delete and restore",
+  "note": "Delete asks for confirmation first; the copy says deleted files stay restorable for 30 days.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Open a file's Actions for <file name> menu and click Delete; confirm in the dialog.",
+   "Click the trash icon labelled Recently deleted in the filter row.",
+   "Open the file's Actions menu, click Restore, then return to All and look that the file is back."
+  ],
+  "where": "Sidebar > Library > Recently deleted (trash icon) > Restore"
+ },
+ "S24.35": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Kept until"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "This file is unavailable right now. Try again later, or remove this entry."
+   }
+  ],
+  "needs": "a deleted file (for Kept until); a file whose stored copy is missing (for the unavailable message), which is hard to set up",
+  "note": "No word 'expired' is shown; the expired state appears as Kept until and as the unavailable message. The unavailable case is hard to reproduce on purpose.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar, then the trash icon labelled Recently deleted.",
+   "Look at each deleted file's line for Kept until and a date.",
+   "For a file whose content cannot be loaded, look for the line This file is unavailable right now. Try again later, or remove this entry."
+  ],
+  "where": "Sidebar > Library > Recently deleted (for Kept until); a file row that cannot load (for the unavailable message)"
+ }
+}

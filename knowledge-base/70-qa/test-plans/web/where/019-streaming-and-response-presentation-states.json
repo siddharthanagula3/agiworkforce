@@ -1,0 +1,526 @@
+{
+ "S19.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/TypingIndicator.tsx",
+    "text": "Preparing"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat in the web app.",
+   "Type any short question in the composer.",
+   "Press the Send message button.",
+   "Look for the Preparing line with the spinning mark under your message, before any answer text appears."
+  ],
+  "where": "Composer: type a message and press Send message; the chat then shows Preparing before the answer"
+ },
+ "S19.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Queued"
+   }
+  ],
+  "needs": "none",
+  "note": "A separate Queued row also exists in ChatComposerNew.tsx; which one shows depends on composer state, not verified in the running app.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that gives a long answer.",
+   "While it is still answering, type a second message in the composer.",
+   "Press Send message.",
+   "Look for the Queued chip next to the send button (with a count if more than one is queued)."
+  ],
+  "where": "Composer: send a second message while the first reply is still running; a Queued chip appears beside the send button"
+ },
+ "S19.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/TypingIndicator.tsx",
+    "text": "Preparing"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "No separate wording for reading context, attachments or memory was found; the only visible word is Preparing.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat.",
+   "Attach a file with the attachment control in the composer.",
+   "Type a question about the file and press Send message.",
+   "Look for Preparing while the file is read, before the answer starts."
+  ],
+  "where": "Composer: send a message with an attachment; the chat shows Preparing before the model answers"
+ },
+ "S19.04": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Searching the web"
+   }
+  ],
+  "needs": "a turn that uses web search",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that needs current information from the web.",
+   "Look at the activity timeline above the answer while it runs.",
+   "Look for Searching the web, followed by the search summary if one is shown."
+  ],
+  "where": "Composer: send a question that needs web search; the activity timeline shows Searching the web"
+ },
+ "S19.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Running Python\u2026"
+   }
+  ],
+  "needs": "a model route that runs code",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask the model to calculate something by running Python code.",
+   "Look for the code execution block in the answer.",
+   "Look for Running Python while the step is executing, then the Output section when it finishes."
+  ],
+  "where": "Composer: ask the model to run Python code; the code block shows Running Python while it runs"
+ },
+ "S19.06": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/connector-step-sentence.ts",
+    "text": "Using"
+   }
+  ],
+  "needs": "a connected connector account",
+  "note": "The connector sentence is built from the summary text; the exact settings path to connect a service was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Connect a service in the app's connectors settings, then open a new chat.",
+   "Ask for something that needs that service.",
+   "Look at the activity timeline for a step that names the service with Using.",
+   "Check that the step shows the call in progress until it finishes."
+  ],
+  "where": "Composer: send a request that uses a connected connector; the activity step names the connector with Using"
+ },
+ "S19.07": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Needs approval"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
+    "text": "Waiting for your approval"
+   }
+  ],
+  "needs": "a tool that asks for approval",
+  "note": "The exact approve and deny button words were not found by search; the tester should read them on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that triggers a tool needing approval.",
+   "Look for the Needs approval label in the activity timeline.",
+   "Look for the note Waiting for approval. This response is partial; review the tool request to continue.",
+   "Check that approve and deny controls appear on the tool step."
+  ],
+  "where": "Composer: send a request that needs approval for a tool step; the turn shows Needs approval"
+ },
+ "S19.08": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Waiting for your input"
+   }
+  ],
+  "needs": "a task that makes the assistant ask a question",
+  "note": "The answer control's exact visible words were not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task that is vague, so the assistant needs a detail from you.",
+   "Look for the Waiting for your input label in the activity timeline.",
+   "Find the question card in the answer and type a reply into it.",
+   "Check that the turn continues after you reply."
+  ],
+  "where": "Composer: send a task where the assistant asks a question mid-task; the activity shows Waiting for your input"
+ },
+ "S19.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Generating response\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a question in a new chat.",
+   "Watch the Generating response line under your message.",
+   "As soon as the first words appear, check that the Generating response line is gone and the answer text is shown."
+  ],
+  "where": "Shown in the chat thread when the first answer text arrives; the Generating response line gives way to the answer"
+ },
+ "S19.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and type a question that gives a longer answer.",
+   "Press Send message.",
+   "Watch the answer grow in the chat thread while it is still running.",
+   "Check that the text grows in pieces, not all at once when the answer finishes."
+  ],
+  "where": "Composer: send any question; the answer text appears word by word in the chat thread"
+ },
+ "S19.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a request such as Make a table of three fruits with their colours, or Write a short Python function.",
+   "Watch the answer while it is still streaming.",
+   "Check that the table, list or code block is drawn correctly before the answer finishes.",
+   "Check that the finished answer shows the same structure."
+  ],
+  "where": "Composer: ask for a list, a table or a code block; check it while the answer is still streaming"
+ },
+ "S19.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactCreatingRow.tsx",
+    "text": "Creating"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
+    "text": "Writing\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant to create a document or a small file.",
+   "Look at the artifact row in the answer while it is being made.",
+   "Look for the word Creating and the Show the code being written action.",
+   "Check that the row changes to Created a file when it is done."
+  ],
+  "where": "Composer: ask for a file or document; the chat shows Creating while it is built, then Created a file"
+ },
+ "S19.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a model route that generates images",
+  "note": "The generating text on the media card was not found by search; the progress UI is in MessageBubble.tsx around the media card.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant to generate an image of a simple object.",
+   "Look at the media card in the answer while it generates.",
+   "Check that a progress or generating state is shown before the picture appears."
+  ],
+  "where": "Composer: ask for an image or a video; the media card shows generation progress"
+ },
+ "S19.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Response complete"
+   }
+  ],
+  "needs": "none",
+  "note": "Response complete is a status string for assistive tech and was not seen as a visible label; a visible completed label was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Send a short question and wait for the answer to finish.",
+   "Check that the Generating response line and the Preparing line are gone.",
+   "Check that the answer is marked complete for screen readers, for example with the Response complete announcement."
+  ],
+  "where": "Chat thread: a finished turn shows no loading line and its state is named for screen readers"
+ },
+ "S19.16": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Finished with errors"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Response finished with errors"
+   }
+  ],
+  "needs": "a multi-step turn where one step fails",
+  "note": "No visible label Partially completed was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that uses several steps, such as a search plus a tool call.",
+   "Let one step fail, or wait for a run where a step fails.",
+   "Look for Finished with errors in the activity timeline or the Response finished with errors line under the answer.",
+   "Check that it is not shown as Response complete or Response failed."
+  ],
+  "where": "Chat thread or activity timeline: a run with some failed steps shows Finished with errors"
+ },
+ "S19.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Stop generation"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/StreamPhaseNotice.tsx",
+    "text": "Stopping the Cloud task\u2026"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that gives a long answer.",
+   "Press the stop button in the composer (its tooltip says Stop generation).",
+   "Look for the Stopping the Cloud task line in the answer, below the text.",
+   "Check that the line stays until the run has stopped."
+  ],
+  "where": "Composer: while an answer is running, press Stop generation; the chat shows Stopping the Cloud task"
+ },
+ "S19.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Response stopped."
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Try again"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a long question and press Stop generation partway.",
+   "Check that the text that arrived is still shown above.",
+   "Look for the line Response stopped. with a Try again button.",
+   "Look for Response cancelled. Partial response saved. in the message status if shown."
+  ],
+  "where": "Chat thread: after Stop, the answer keeps the text that arrived and shows Response stopped. with Try again"
+ },
+ "S19.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/StreamPhaseNotice.tsx",
+    "text": "Reconnecting\u2026"
+   }
+  ],
+  "needs": "a way to drop the network connection",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a long question.",
+   "Turn off Wi-Fi on the Mac while the answer is running.",
+   "Look for the Reconnecting\u2026 line under the answer.",
+   "Turn Wi-Fi back on and check whether the answer continues."
+  ],
+  "where": "Chat thread: if the network drops during a turn, the line Reconnecting... shows until it resumes"
+ },
+ "S19.20": {
+  "labels": [],
+  "needs": "a turn that is still running when the tab is closed",
+  "note": "No visible Resuming word was found; the effect is seen only through the answer continuing.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a long question in a chat.",
+   "Close the browser tab while the answer is still running.",
+   "Open the same chat again from the sidebar.",
+   "Check that the answer continues from where it was, and that the text does not start again from the top."
+  ],
+  "where": "Shown by reopening a chat while a reply is running; the answer carries on instead of starting again"
+ },
+ "S19.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/turn-error-notice.ts",
+    "text": "This model is receiving too many requests right now."
+   }
+  ],
+  "needs": "a provider rate limit, which is hard to make happen on demand",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a message to a model that is receiving too many requests.",
+   "Look for the notice under the reply.",
+   "Check that it says to wait and retry, and names another model if your plan has one."
+  ],
+  "where": "Chat thread: a rate-limited turn shows the rate-limit notice under the failed reply, with Retry"
+ },
+ "S19.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/turn-error-notice.ts",
+    "text": "You have reached a usage limit on your account."
+   }
+  ],
+  "needs": "an account at its usage limit",
+  "note": "The Usage screen location was not traced in the menus.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account that has reached its usage limit.",
+   "Send a message.",
+   "Look for the notice: You have reached a usage limit on your account.",
+   "Check that it points to Usage to see when it resets."
+  ],
+  "where": "Chat thread: a turn blocked by an account usage limit shows the usage notice with Usage"
+ },
+ "S19.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/turn-error-notice.ts",
+    "text": "Your session ended before this turn finished. Sign in again, then retry."
+   }
+  ],
+  "needs": "an expired session",
+  "note": "The code has the words Sign in again in the notice text, but no sign-in button tied to it was found.",
+  "reachable": "yes",
+  "steps": [
+   "Let the session expire, or sign out in another tab, then send a message.",
+   "Look for the notice: Your session ended before this turn finished.",
+   "Check whether a Sign in again control is offered next to the notice."
+  ],
+  "where": "Chat thread: a turn that fails because sign-in expired shows the session notice"
+ },
+ "S19.24": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Waiting for your desktop"
+   }
+  ],
+  "needs": "the desktop app linked and then offline",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a task that needs the desktop app, with the desktop app closed.",
+   "Look at the activity timeline in the chat.",
+   "Look for Waiting for your desktop, with the device name if one is shown."
+  ],
+  "where": "Activity timeline: when a step needs your desktop and it is offline, the step shows Waiting for your desktop"
+ },
+ "S19.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/turn-error-notice.ts",
+    "text": "The model provider is temporarily unreachable."
+   }
+  ],
+  "needs": "a provider outage, or a free route that is overloaded",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Send a message to a model whose provider is down or overloaded.",
+   "Look for the notice under the reply.",
+   "Check that it says the provider is temporarily unreachable and offers Retry or another model."
+  ],
+  "where": "Chat thread: when the model provider is unavailable the notice offers Retry or another model"
+ },
+ "S19.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/turn-error-notice.ts",
+    "text": "This message is too long for the selected model."
+   }
+  ],
+  "needs": "a very long message or an unsupported attachment",
+  "note": "Failed-turn text restore was reported in an earlier run, not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Paste a very long message, or attach a file the model cannot read.",
+   "Send it.",
+   "Look for the notice that names the problem, such as This message is too long for the selected model.",
+   "Check that the text is put back in the composer so you can fix and resend."
+  ],
+  "where": "Chat thread: a message that is too long or an attachment the model cannot read shows the fix to make, with Retry"
+ },
+ "S19.27": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/errors.json",
+    "text": "The part that arrived is kept above."
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Retry"
+   }
+  ],
+  "needs": "a way to make the provider fail mid-answer (no reliable on-demand trigger found in the code); a Free account can reach the fallback route",
+  "note": "The failure text comes from the stream_interrupted error code (apps/web/features/chat/lib/turn-error-notice.ts line 149 and apps/web/app/api/llm/v1/chat/completions/lib/upstream-error-copy.ts line 101); the exact trigger is not reachable on demand, and the English text is also in apps/web/features/chat/components/messages/ChatMessageList.tsx line 117 as a lookup.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat from the first screen.",
+   "Send a long request, such as \"Write a detailed 2000-word guide\", so the answer runs for a while.",
+   "Wait for the connection or provider to fail while text is still arriving (this is not something a tester can force on demand; if it does not happen, mark it unsure).",
+   "Check that the text that already arrived stays on the page, and that the message says the response stopped part way through and the part that arrived is kept above.",
+   "Check that a \"Retry\" button is offered, and that the failed state is shown in the turn's activity details."
+  ],
+  "where": "Chat > send a message > the answer stops part way through > look for the \"Retry\" button under the failed turn"
+ },
+ "S19.28": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Recents"
+   }
+  ],
+  "needs": "a signed-in account that can produce a failed or stopped turn",
+  "note": "The restore path was located in code (packages/ui/ui/src/sidebar/SessionItem.tsx and the messages persist route) but the exact sidebar section shown on the web app was not confirmed visually; the label Recents is from the shared locale file.",
+  "reachable": "yes",
+  "steps": [
+   "Start a chat and let one turn finish as failed (for example a provider error) or stop it with the stop control.",
+   "Note the turn's final state: the failure text, or the stopped state.",
+   "Quit the app completely and open it again, then sign in if asked.",
+   "Find the same conversation under Recents in the sidebar and open it.",
+   "Compare the conversation and that turn's final state (failed or stopped) with what you noted before the restart."
+  ],
+  "where": "Sidebar > Recents > open a conversation that ended as failed or stopped, after quitting and reopening the app"
+ },
+ "S19.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/completion-notification.ts",
+    "text": "Your reply is ready"
+   },
+   {
+    "file": "apps/web/features/chat/lib/completion-notification.ts",
+    "text": "Work finished"
+   }
+  ],
+  "needs": "a signed-in account; desktop notification permission for the notification part",
+  "note": "This is server-side behaviour in apps/web/app/api/llm/v1/chat/completions/route.ts (durable run start near line 642) with the resume logic in apps/web/lib/hooks/useChatStream.ts near line 3118; whether the run keeps going after a tab closes was not confirmed by reading the code alone.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a long answer in a chat.",
+   "Close the browser tab or window while the answer is still generating.",
+   "Wait a minute or two, then open the app or the same conversation again from Recents.",
+   "Check that the answer is complete or still being produced, and that a desktop notification titled \"Your reply is ready\" appeared when the app was in the background."
+  ],
+  "where": "No control; its effect is seen in the conversation after reopening, and as a desktop notification when the reply is ready"
+ }
+}

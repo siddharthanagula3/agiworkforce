@@ -1,0 +1,234 @@
+{
+ "S43.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "an image file to upload; a Free account must use a model that accepts images",
+  "note": "The + button's label was not found in the code. Production can refuse uploads through the external scanner (UPLOAD_SCAN_WEBHOOK_URL), which is server configuration, not a control.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Click the round + button beside the message box (it has no visible words).",
+   "Click Add photos & files and choose one image.",
+   "Type \"What is in this picture?\" and send.",
+   "Compare: the answer describes what the image shows."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files"
+ },
+ "S43.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "two image files to upload",
+  "note": "The + button has no visible words in the code. An attachment count limit applies per message.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the round + button beside the message box.",
+   "Click Add photos & files and select two images at once.",
+   "Type \"What is different between these two pictures?\" and send.",
+   "Compare: the answer refers to both images."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files"
+ },
+ "S43.03": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Screenshot to Chat"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "the desktop app; macOS may ask for screen recording permission (unknown)",
+  "note": "If the composer is not ready, the app copies the screenshot to the clipboard and tells the person to paste it, as the code shows.",
+  "reachable": "yes",
+  "steps": [
+   "Open the desktop app and go to a chat.",
+   "Choose File > Screenshot to Chat and capture the screen as the app asks.",
+   "If the image does not appear in the message box, click the box and press Command-V.",
+   "Type \"What does this screenshot show?\" and send.",
+   "Compare: the answer explains the screenshot."
+  ],
+  "where": "File > Screenshot to Chat (desktop app), then the message box"
+ },
+ "S43.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a photo or scan of a document, or a PDF",
+  "note": "The composer has a conflict check for images and PDFs in one message (apps/web/features/chat/components/Composer/ChatComposerNew.tsx); the exact warning text was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the round + button beside the message box.",
+   "Click Add photos & files and choose a photo of a paper document or a scanned PDF.",
+   "Type \"Read this document and explain it.\" and send.",
+   "Compare: the answer reads the text and explains it."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files"
+ },
+ "S43.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a chart image file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the round + button beside the message box.",
+   "Click Add photos & files and choose a chart image.",
+   "Type \"What trend does this chart show?\" and send.",
+   "Compare: the answer reads the values and trends from the chart."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files"
+ },
+ "S43.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a diagram image file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the round + button beside the message box.",
+   "Click Add photos & files and choose a diagram image.",
+   "Type \"Explain the structure of this diagram.\" and send.",
+   "Compare: the answer names the parts and how they connect."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files"
+ },
+ "S43.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a photo of handwritten notes",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the round + button beside the message box.",
+   "Click Add photos & files and choose a photo of handwritten notes.",
+   "Type \"Transcribe these notes.\" and send.",
+   "Compare: the answer gives the handwritten words."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files"
+ },
+ "S43.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
+    "text": "Copy message"
+   }
+  ],
+  "needs": "an image with readable text",
+  "note": "The Copy message control's visibility on assistant replies was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the round + button beside the message box.",
+   "Click Add photos & files and choose an image that contains text.",
+   "Type \"Extract all the text in this image.\" and send.",
+   "Click Copy message under the reply and paste it somewhere to check.",
+   "Compare: the copied text matches the text in the image."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files, then the reply"
+ },
+ "S43.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "an image with countable objects",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the round + button beside the message box.",
+   "Click Add photos & files and choose an image with several of one object.",
+   "Type \"How many apples are in this picture?\" (use the object in the image) and send.",
+   "Compare: the answer gives a count that matches the image."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files"
+ },
+ "S43.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "two scene images",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the round + button beside the message box.",
+   "Click Add photos & files and select two scene images.",
+   "Type \"Describe the differences between these two scenes.\" and send.",
+   "Compare: the answer names differences that appear in the two images."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files"
+ },
+ "S43.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a photo or screenshot of a problem",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat and click the round + button beside the message box.",
+   "Click Add photos & files and choose a photo or screenshot of the problem (device, error or setup).",
+   "Type \"What is wrong and how do I fix it?\" and send.",
+   "Compare: the answer gives troubleshooting steps that match the picture."
+  ],
+  "where": "New chat > round + button beside the message box > Add photos & files"
+ },
+ "S43.17": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Remix"
+   }
+  ],
+  "needs": "an image in the Library; an account that can create images (plan limits unknown)",
+  "note": "Remix shows only for image items. The menu trigger label for an item was not found. An earlier chat image can also be used through the Variation button in apps/web/features/chat/components/ImageGenerationCard.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Open the menu of an image item in the Library.",
+   "Click Remix.",
+   "Check the new chat: the image is attached and the menu \"What to do with the attached image\" shows.",
+   "Type an edit prompt, send, and compare: the new image is made from the chosen reference."
+  ],
+  "where": "Library > image item > Remix (a new chat opens with the image attached and Image mode on)"
+ }
+}

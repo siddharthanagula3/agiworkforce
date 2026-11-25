@@ -1,0 +1,747 @@
+{
+ "S2.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/MarketingLanding.tsx",
+    "text": "Try chat"
+   }
+  ],
+  "needs": "none for the signed-out check; a Free account for the signed-in check",
+  "note": "An earlier run recorded that a signed-in visit to / showed Something Went Wrong (E085); the signed-out homepage was not tested earlier.",
+  "reachable": "yes",
+  "steps": [
+   "Open the site root address in a private browser window, signed out.",
+   "Look at the first screen for the 'Try chat' button and the Desktop call to action beside it.",
+   "Compare with Expected: sign-in, try and download calls to action are visible on the homepage."
+  ],
+  "where": "Site address / (signed out, private window)"
+ },
+ "S2.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Products"
+   },
+   {
+    "file": "packages/contracts/types/src/product-names.ts",
+    "text": "Chat"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Click the Products menu in the header.",
+   "Click Chat.",
+   "Read the page headline and the paragraph about chatting with eligible models.",
+   "Compare with Expected: the page explains the chat assistant and has a 'Try chat' button to start."
+  ],
+  "where": "Products > Chat"
+ },
+ "S2.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Capabilities"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Deep research"
+   }
+  ],
+  "needs": "none",
+  "note": "Deep research is not in the header menu; it is reached from the footer or the sitemap.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and find the Capabilities column.",
+   "Click Deep research.",
+   "Look for the section 'Review and edit before you start' and the cited-report explanation.",
+   "Compare with Expected: the page explains deep research with cited reports and how to use it."
+  ],
+  "where": "Footer > Capabilities > Deep research"
+ },
+ "S2.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Products"
+   },
+   {
+    "file": "packages/contracts/types/src/product-names.ts",
+    "text": "Work"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Click the Products menu in the header.",
+   "Click Work.",
+   "Read the menu description 'A goal in, a plan first, approvals on sensitive steps' and the page that opens.",
+   "Compare with Expected: the page presents agentic work and has a way to start."
+  ],
+  "where": "Products > Work"
+ },
+ "S2.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Products"
+   },
+   {
+    "file": "packages/contracts/types/src/product-names.ts",
+    "text": "Code"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Click the Products menu in the header.",
+   "Click Code.",
+   "Read the menu description 'One coding agent across the CLI and VS Code' and the page that opens.",
+   "Compare with Expected: the page presents the coding agent and how to get it."
+  ],
+  "where": "Products > Code"
+ },
+ "S2.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Products"
+   },
+   {
+    "file": "packages/contracts/types/src/product-names.ts",
+    "text": "Desktop"
+   }
+  ],
+  "needs": "none",
+  "note": "The download page reports Windows and Linux installers as not published (apps/web/app/download/DesktopDownloadAvailability.tsx); compare the Desktop page wording with that.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Products menu in the header.",
+   "Click Desktop.",
+   "Read the page on what the desktop app does and which platforms it covers.",
+   "Compare with Expected: the page describes the desktop app truthfully, including availability and download."
+  ],
+  "where": "Products > Desktop"
+ },
+ "S2.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Products"
+   },
+   {
+    "file": "packages/contracts/types/src/product-names.ts",
+    "text": "Mobile"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Click the Products menu in the header.",
+   "Click Mobile.",
+   "Read the page on the mobile app and its availability.",
+   "Compare with Expected: the page describes the mobile app and its availability."
+  ],
+  "where": "Products > Mobile"
+ },
+ "S2.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Products"
+   },
+   {
+    "file": "packages/contracts/types/src/product-names.ts",
+    "text": "CLI"
+   }
+  ],
+  "needs": "none",
+  "note": "The install command is shown only when a release is published; otherwise the page says 'No signed release is published yet, so there is no install command to run.' (apps/web/app/cli/CliInstallCommand.tsx), which differs from a working-install expectation if no release exists.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Products menu in the header.",
+   "Click CLI.",
+   "Find the install section and the install command, if the page shows one.",
+   "Compare with Expected: the page tells a visitor how to install the CLI and offers a working install."
+  ],
+  "where": "Products > CLI"
+ },
+ "S2.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Products"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "VS Code"
+   }
+  ],
+  "needs": "none",
+  "note": "The menu text is built in nav.ts from the product name plus ' for VS Code', so the exact visible text is composed, not stored as one string.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Products menu in the header.",
+   "Click Code for VS Code.",
+   "Read the page describing the extension and its availability.",
+   "Compare with Expected: the page describes the IDE extension and where it is available."
+  ],
+  "where": "Products > Code for VS Code"
+ },
+ "S2.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Products"
+   },
+   {
+    "file": "packages/contracts/types/src/product-names.ts",
+    "text": "Extension"
+   }
+  ],
+  "needs": "none",
+  "note": "The footer names the same page 'Chrome' under Surfaces (apps/web/features/marketing/components/system/nav.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click the Products menu in the header.",
+   "Click Extension.",
+   "Read the page describing the browser extension and its availability.",
+   "Compare with Expected: the page describes the browser extension and its availability."
+  ],
+  "where": "Products > Extension"
+ },
+ "S2.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Resources"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "MCP directory"
+   }
+  ],
+  "needs": "none",
+  "note": "Connecting a server asks for sign-in; browsing and searching do not, per the page copy in apps/web/app/connectors/mcp-directory/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Resources menu in the header.",
+   "Click MCP directory.",
+   "Type a server name in the search box and read the results.",
+   "Open one listing and read its publisher and listed tools.",
+   "Compare with Expected: the logged-out visitor can browse and search the integration directory."
+  ],
+  "where": "Resources > MCP directory"
+ },
+ "S2.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Sitemap"
+   },
+   {
+    "file": "apps/web/app/sitemap-page/page.tsx",
+    "text": "Plugins"
+   }
+  ],
+  "needs": "none",
+  "note": "The catalogue is read from the live registry (apps/web/features/plugins/server/registry-source.ts); what the page shows when the registry is empty or fails was not read.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the bottom of the page and click Sitemap.",
+   "Under Product, click Plugins.",
+   "Browse the plugin catalogue and click one plugin name.",
+   "Compare with Expected: a logged-out visitor can browse the catalogue with a path to install."
+  ],
+  "where": "Sitemap > Product > Plugins"
+ },
+ "S2.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Resources"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Skills"
+   }
+  ],
+  "needs": "none",
+  "note": "An earlier run recorded that /skills opened Settings > Skills for a signed-in user; the signed-out directory in apps/web/app/skills/SignedOutSkills.tsx was not tested earlier.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Resources menu in the header or scroll to the footer Resources column.",
+   "Click Skills.",
+   "Look for the heading 'Skills live in your workspace' and the skill list.",
+   "Compare with Expected: a logged-out visitor sees a public skill directory."
+  ],
+  "where": "Resources > Skills"
+ },
+ "S2.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Sitemap"
+   },
+   {
+    "file": "apps/web/app/sitemap-page/page.tsx",
+    "text": "Gallery"
+   }
+  ],
+  "needs": "none",
+  "note": "The launch path is in apps/web/app/gallery/GalleryClient.tsx; some line references in the audit moved, so the launch behaviour was not checked against a live page.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the bottom of the page and click Sitemap.",
+   "Under Product, click Gallery.",
+   "Look at the template cards and the 'Start from scratch' option.",
+   "Compare with Expected: the gallery offers curated templates that can be previewed and launched into chat."
+  ],
+  "where": "Sitemap > Product > Gallery"
+ },
+ "S2.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Sitemap"
+   },
+   {
+    "file": "apps/web/app/plugins/[id]/page.tsx",
+    "text": "Install"
+   }
+  ],
+  "needs": "none",
+  "note": "The detail page has no 'Permissions' heading in the code; it has Skills and Capabilities sections instead.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the bottom of the page and click Sitemap.",
+   "Under Product, click Plugins, then click any plugin name.",
+   "On its page read the Version line, the Install section and the Releases section.",
+   "Compare with Expected: description, install info and release history are shown."
+  ],
+  "where": "Sitemap > Product > Plugins, then click a plugin name"
+ },
+ "S2.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Sitemap"
+   },
+   {
+    "file": "apps/web/app/sitemap-page/page.tsx",
+    "text": "Gallery"
+   }
+  ],
+  "needs": "none",
+  "note": "The template address is built in apps/web/app/gallery/inspiration.ts as /gallery/<id>.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the bottom of the page and click Sitemap.",
+   "Under Product, click Gallery, then click any template card.",
+   "Check that the page address shows /gallery/ followed by the template name.",
+   "Compare with Expected: each template has its own previewable page at its own address."
+  ],
+  "where": "Sitemap > Product > Gallery, then click a template"
+ },
+ "S2.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Product"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Pricing"
+   }
+  ],
+  "needs": "none to view; a Free account to reach the checkout step",
+  "note": "Paid plan buttons open checkout; the tester must stop before payment.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and find the Product column.",
+   "Click Pricing.",
+   "Read the individual plan cards, their prices and the plan names.",
+   "Click a paid plan's button and stop at the checkout or sign-in step. Do not complete a purchase.",
+   "Compare with Expected: individual plans and prices are listed, and a plan can be chosen."
+  ],
+  "where": "Footer > Product > Pricing"
+ },
+ "S2.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Solutions"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Teams"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Get Team"
+   }
+  ],
+  "needs": "none to view; a Free account to reach the checkout step",
+  "note": "The Teams page button text is built from a seat constant, so its exact words are composed; 'Get Team' is the pricing page's button key.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Solutions menu in the header.",
+   "Click Teams.",
+   "Click the button that starts at the minimum seat count, which opens the Team pricing section.",
+   "Choose a seat count and read the per-seat price.",
+   "Compare with Expected: per-seat pricing is shown, and the buyer can choose seats. Stop before paying."
+  ],
+  "where": "Solutions > Teams"
+ },
+ "S2.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Solutions"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Enterprise"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Click the Solutions menu in the header.",
+   "Click Enterprise.",
+   "Look for the 'Start the evaluation' section and its contact or sales button.",
+   "Compare with Expected: the Enterprise offering is presented with a sales path. Do not submit the form."
+  ],
+  "where": "Solutions > Enterprise"
+ },
+ "S2.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Pricing"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   }
+  ],
+  "needs": "none",
+  "note": "The audit's line references for the comparison data moved; the table cells were not traced to enforcement code here.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and click Pricing under Product.",
+   "Scroll to the 'Compare plans' section.",
+   "Read the rows and the plan columns.",
+   "Compare each cell with Expected: the cell should match what the plan allows."
+  ],
+  "where": "Footer > Product > Pricing, then scroll to Compare plans"
+ },
+ "S2.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Help"
+   },
+   {
+    "file": "apps/web/content/support/usage-and-credits.md",
+    "text": "Usage limits, credits and top-ups"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and click Help under Resources.",
+   "Open the article 'Usage limits, credits and top-ups'.",
+   "Read how usage is measured and what happens when an allowance runs out.",
+   "Also open Pricing and read the sentence 'Weekly and monthly usage allowances apply.'",
+   "Compare with Expected: public pages explain managed usage, allowances and credits."
+  ],
+  "where": "Footer > Resources > Help, then open 'Usage limits, credits and top-ups'"
+ },
+ "S2.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Products"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Downloads"
+   }
+  ],
+  "needs": "none",
+  "note": "The page states that Windows and Linux installers are not published (apps/web/app/download/DesktopDownloadAvailability.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Click the Products menu in the header.",
+   "Click Downloads.",
+   "Read the Mac download buttons and the platform notes.",
+   "Compare with Expected: installers are offered per platform and architecture, and only what is published is shown."
+  ],
+  "where": "Products > Downloads"
+ },
+ "S2.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Resources"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Release notes"
+   }
+  ],
+  "needs": "none",
+  "note": "The same page is also served at /changelog (apps/web/app/changelog/page.tsx) without a menu link.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Resources menu in the header.",
+   "Click Release notes.",
+   "Look for the heading 'Releases, newest first.' and the dated release rows.",
+   "Compare with Expected: a public changelog lists dated releases."
+  ],
+  "where": "Resources > Release notes"
+ },
+ "S2.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Resources"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Release notes"
+   },
+   {
+    "file": "apps/web/app/release-notes/[slug]/page.tsx",
+    "text": "All release notes"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Click the Resources menu in the header, then Release notes.",
+   "Click the title of any release.",
+   "Check that the page shows that release and a button named 'All release notes'.",
+   "Compare with Expected: each announcement has its own public page."
+  ],
+  "where": "Resources > Release notes, then click a release"
+ },
+ "S2.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Resources"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Documentation"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Click the Resources menu in the header.",
+   "Click Documentation.",
+   "Read the guide index and look for the API docs link.",
+   "Compare with Expected: the documentation portal indexes guides and API docs."
+  ],
+  "where": "Resources > Documentation"
+ },
+ "S2.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Help"
+   },
+   {
+    "file": "apps/web/features/support/components/HelpSearch.tsx",
+    "text": "Search help articles"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Resources"
+   }
+  ],
+  "needs": "none",
+  "note": "The help page heading reads \"Get unstuck, fast.\" and the search is a client component that calls /api/help/search.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the footer and click \"Help\" under Resources (logged out or signed in).",
+   "Click the box labelled \"Search help articles\" and type a word such as \"temporary\".",
+   "Wait for the results list and click one result.",
+   "Check that the article opens at its own address and shows readable article text, compared with Expected (searchable articles)."
+  ],
+  "where": "Footer > Resources > Help, then type in \"Search help articles\""
+ },
+ "S2.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Status"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Resources"
+   }
+  ],
+  "needs": "none",
+  "note": "Health labels such as \"Checks passing\" and \"Some checks failing\" are in apps/web/app/status/page.tsx; the page is force-dynamic.",
+  "reachable": "yes",
+  "steps": [
+   "Open the \"Resources\" menu in the header, or scroll to the footer.",
+   "Click \"Status\".",
+   "Read the status heading and the list of checks, with the time each check ran.",
+   "Compare with Expected (current health from live checks). The page says model inference and a chat turn are not tested."
+  ],
+  "where": "Resources > Status (header menu) or Footer > Resources > Status"
+ },
+ "S2.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Trust centre"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Resources"
+   }
+  ],
+  "needs": "none",
+  "note": "The heading text is in apps/web/app/trust/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the \"Resources\" menu in the header and click \"Trust centre\".",
+   "Read the page heading \"Claims with dates, and the ones we cannot make.\"",
+   "Scroll to the rows and the \"Check the live health signal\" item, which links to /status.",
+   "Compare with Expected (security posture and data handling are explained)."
+  ],
+  "where": "Resources > Trust centre (header menu) or Footer > Legal > Trust centre"
+ },
+ "S2.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "About"
+   },
+   {
+    "file": "apps/web/app/about/page.tsx",
+    "text": "Multi-provider, by design."
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the \"Resources\" menu in the header and click \"About\".",
+   "Read the heading \"Multi-provider, by design.\"",
+   "Scroll to the company description that starts \"AGI is built by\".",
+   "Compare with Expected (product and company information is shown)."
+  ],
+  "where": "Resources > About (header menu) or Footer > Company > About"
+ },
+ "S2.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Contact"
+   },
+   {
+    "file": "apps/web/app/contact/page.tsx",
+    "text": "One inbox, one human."
+   },
+   {
+    "file": "apps/web/app/contact/page.tsx",
+    "text": "Draft it here, send it from your mail app."
+   }
+  ],
+  "needs": "none",
+  "note": "The contact page composer opens a pre-filled mail draft; it does not store the message.",
+  "reachable": "yes",
+  "steps": [
+   "Open the \"Resources\" menu in the header and click \"Contact\".",
+   "Read the heading \"One inbox, one human.\" and the email address shown on the page.",
+   "Scroll to \"Draft it here, send it from your mail app.\" and check the composer fields are present.",
+   "Compare with Expected (a visitor can reach the company). Do not press the send button: it opens the mail app."
+  ],
+  "where": "Resources > Contact (header menu) or Footer > Company > Contact"
+ },
+ "S2.36": {
+  "labels": [
+   {
+    "file": "apps/web/app/desktop/page.tsx",
+    "text": "Discuss Enterprise access"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Desktop"
+   },
+   {
+    "file": "apps/web/features/marketing/components/WaitlistModal.tsx",
+    "text": "Discuss Enterprise access"
+   }
+  ],
+  "needs": "none",
+  "note": "The form dialog is apps/web/features/marketing/components/WaitlistDialog.tsx. The Enterprise page's own button \"Contact sales\" goes to an email page, not this form, and the /waitlist route exists in apps/web/app but its link was not traced. I did not confirm the desktop button renders the trigger.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Desktop page from the footer under Surfaces, labelled \"Desktop\".",
+   "Click the button labelled \"Discuss Enterprise access\".",
+   "In the dialog titled \"Discuss Enterprise access\", check the email field and the wording about contract-scoped Enterprise access.",
+   "Compare with Expected (a prospect can request an Enterprise conversation). Do not submit unless testing storage is allowed; the success text is \"You're on the list.\""
+  ],
+  "where": "Products > Desktop (footer Surfaces > Desktop) > \"Discuss Enterprise access\""
+ },
+ "S2.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Privacy"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Terms"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Cookies"
+   },
+   {
+    "file": "apps/web/features/marketing/components/system/nav.ts",
+    "text": "Accessibility"
+   }
+  ],
+  "needs": "none",
+  "note": "The footer legal nav has aria-label \"Legal\" in apps/web/features/marketing/components/system/MarketingFooter.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Scroll to the bottom of any public page to the legal row of the footer.",
+   "Click \"Terms\", then go back and click \"Privacy\", then \"Cookies\", then \"Accessibility\".",
+   "Check each page opens with a heading and readable body text.",
+   "Compare with Expected (all four pages exist and are linked site-wide)."
+  ],
+  "where": "Footer > bottom legal row: \"Privacy\", \"Terms\", \"Cookies\", \"Accessibility\""
+ },
+ "S2.40": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Share\u2026"
+   },
+   {
+    "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+    "text": "Share conversation"
+   }
+  ],
+  "needs": "a signed-in account with a conversation, and a private browser window",
+  "note": "The exact button that opens the title menu was not traced. Expired or non-live links return not found (apps/web/app/share/[token]/page.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a conversation in chat, and open its title menu.",
+   "Click \"Share\u2026\", then choose a public link and create it (the dialog title reads \"Share conversation\" until a link exists).",
+   "Copy the link, then open it in a private window while signed out.",
+   "Check that the shared conversation appears read-only with its messages, compared with Expected (a logged-out visitor sees shared content)."
+  ],
+  "where": "Signed-in chat > open a conversation > conversation title menu > \"Share\u2026\" > \"Share conversation\"; then open the link in a signed-out private window"
+ }
+}

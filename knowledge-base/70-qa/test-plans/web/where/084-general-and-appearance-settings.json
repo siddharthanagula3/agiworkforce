@@ -1,0 +1,328 @@
+{
+ "S84.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Display Language"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether every string translates is not judged here; the selector itself calls i18n.changeLanguage.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the account menu, then click Settings.",
+   "On the General page, find the Preferences heading and the Display Language row.",
+   "Open the Display Language dropdown (it lists languages by their own names) and pick a different language.",
+   "Look at the page: the labels and menu text should switch to the chosen language, as Expected says."
+  ],
+  "where": "Settings > General > Preferences > Display Language"
+ },
+ "S84.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none",
+  "note": "Persistence across reload is handled by the useAppTheme hook; the code was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Appearance in the settings list.",
+   "Under Theme, click Light, then Dark, then System.",
+   "After each click, look at the whole page colours and check the chosen button is marked active.",
+   "Reload the page and check the same theme is still selected."
+  ],
+  "where": "Settings > Appearance > Theme"
+ },
+ "S84.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Accent colour"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   }
+  ],
+  "needs": "none",
+  "note": "The web app always shows the swatches; no per-plan gate was found in the row.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Appearance.",
+   "Find the Accent colour row of colour circles.",
+   "Click one circle (each is labelled with its colour name followed by accent).",
+   "Look for the check mark on the chosen circle and for buttons, links and highlights to take that colour. Click another circle and compare."
+  ],
+  "where": "Settings > Appearance > Accent colour"
+ },
+ "S84.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Chat text size"
+   }
+  ],
+  "needs": "a chat with at least one reply",
+  "note": "The size is applied through a data attribute on the root element (AppearancePreferences.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Appearance.",
+   "Choose Large in the Chat text size dropdown.",
+   "Open a chat that has several replies.",
+   "Compare message text with Small and Default; the size should change across messages."
+  ],
+  "where": "Settings > Appearance > Chat text size"
+ },
+ "S84.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Motion"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Reduced"
+   }
+  ],
+  "needs": "none",
+  "note": "The code offers System and Reduced only. Honouring the OS reduce-motion setting is not verified in code here; the OS-level CSS query was not searched.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Appearance.",
+   "Under Motion, click Reduced.",
+   "Look at the interface and replies for less animation, for example while a reply streams or a menu opens.",
+   "Click System and compare the motion again."
+  ],
+  "where": "Settings > Appearance > Motion"
+ },
+ "S84.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Code theme"
+   }
+  ],
+  "needs": "a chat with a code block; dark mode to see the colours",
+  "note": "The theme list comes from CODE_THEMES; the individual theme names were not listed here.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Appearance.",
+   "Choose a theme in the Code theme dropdown.",
+   "Open a chat that shows a code block, or ask for a short code sample.",
+   "Compare code colours; the hint says the colours apply in dark mode and light mode keeps high contrast."
+  ],
+  "where": "Settings > Appearance > Code theme"
+ },
+ "S84.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Wrap long code lines"
+   }
+  ],
+  "needs": "a chat with a code block that has a long line",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Appearance.",
+   "Turn on the switch labelled Wrap long code lines.",
+   "Open a chat with a code block that has a very long line.",
+   "Check the long line wraps onto new lines; turn the switch off and check it no longer wraps."
+  ],
+  "where": "Settings > Appearance > Wrap long code lines"
+ },
+ "S84.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Default model"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Last used"
+   }
+  ],
+  "needs": "a Free account to see the Free choices; a paid account to pick a model marked Upgrade to use",
+  "note": "Models not on the plan show Upgrade to use and open a plan message instead of saving.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > General.",
+   "In Preferences, open the Default model dropdown.",
+   "Choose a model name, or leave Last used.",
+   "Start a new chat and check the model shown for it matches your choice."
+  ],
+  "where": "Settings > General > Preferences > Default model"
+ },
+ "S84.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Reasoning effort"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Off"
+   }
+  ],
+  "needs": "a paid account to pick levels marked not on your plan",
+  "note": "The row hint says each chat can change the level in the composer.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > General.",
+   "In Preferences, open the Reasoning effort dropdown.",
+   "Choose a level other than Off.",
+   "Start a new chat and check the effort control in the composer shows that level."
+  ],
+  "where": "Settings > General > Preferences > Reasoning effort"
+ },
+ "S84.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "New chats start in"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Work"
+   }
+  ],
+  "needs": "none; if the hint under the row says your plan lacks Work, a plan that includes Work",
+  "note": "Expected mentions ask vs auto, but this row offers only Chat and Work. No ask or auto choice was found in General; the approval default sits under Capabilities as Default approval for tool actions.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > General.",
+   "In Preferences, open the New chats start in dropdown.",
+   "Choose Work, then click the new chat button and check the new chat opens in Work.",
+   "Set it back to Chat and check the next new chat opens in Chat."
+  ],
+  "where": "Settings > General > Preferences > New chats start in"
+ },
+ "S84.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Send with Enter"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Composer"
+   }
+  ],
+  "needs": "none",
+  "note": "Expected says the user picks which modifier sends. The code offers no choice: the send keys are fixed to Cmd + Enter on Mac and Ctrl + Enter elsewhere.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > General and scroll to the Composer heading.",
+   "Turn Send with Enter on, go to a chat, type a line and press Enter; the message should send.",
+   "Read the hint under the switch: it names the send keys for this computer, such as Cmd + Enter on a Mac.",
+   "Turn the switch off, type a line and press Enter; it should start a new line, and the send keys should send."
+  ],
+  "where": "Settings > General > Composer > Send with Enter"
+ },
+ "S84.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Keyboard"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx",
+    "text": "Restore defaults"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "View shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "Only shortcuts the code marks rebindable get a Change keys button. Restore defaults asks for confirmation first.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Keyboard (or open General and click View shortcuts).",
+   "Find a shortcut with a Change keys for button and click it, then press a new key combination.",
+   "Turn that shortcut's switch off and check it is marked off in the list.",
+   "Click Restore defaults and confirm; check the keys and switches return to their defaults."
+  ],
+  "where": "Settings > Keyboard, or Settings > General > Preferences > Keyboard shortcuts > View shortcuts"
+ },
+ "S84.18": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Scheduled task finished"
+   },
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Mobile push"
+   }
+  ],
+  "needs": "none for Email; Browser needs browser notification permission; Mobile push needs the phone app (unsure)",
+  "note": "Channel names are Browser, Email and Mobile push. Whether each channel delivers is outside this code path and was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Notifications.",
+   "Find the row Scheduled task finished and open its dropdown.",
+   "Choose Email, then open it again and choose Off.",
+   "Check the row's selected value changes each time; the options list only channels released for this app."
+  ],
+  "where": "Settings > Notifications, then the dropdown on a row such as Scheduled task finished"
+ },
+ "S84.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Time and focus"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Quiet hours"
+   }
+  ],
+  "needs": "none",
+  "note": "The switch has aria-label Enable quiet hours. The save control label was not located, and the switch is disabled while loading or saving. Holding of notifications is not checked here.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Time and focus.",
+   "Turn on the switch next to Quiet hours, then set Start, End and Days.",
+   "Click the save control on the page (its visible label was not found in code) and wait for the status text.",
+   "Reload the page and check Quiet hours still shows your times and days."
+  ],
+  "where": "Settings > Time and focus > Quiet hours"
+ },
+ "S84.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Sidebar items"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Toggle sidebar"
+   }
+  ],
+  "needs": "none",
+  "note": "Collapsed by default and auto-hide have no settings control. Searched apps/web/features/settings, apps/web/shared/stores/layout-store.ts (sidebarCollapsed, no setting) and packages/ui/ui/src/sidebar/Sidebar.tsx. Chat cannot be hidden.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > General and find the Sidebar items row.",
+   "Click a destination button to switch it off, then look at the left sidebar: that item should be gone.",
+   "Click the same button again to show it; the item returns.",
+   "Click the Toggle sidebar button in the sidebar and check it collapses; click again to expand."
+  ],
+  "where": "Settings > General > Preferences > Sidebar items (collapse: the Toggle sidebar button in the sidebar)"
+ }
+}

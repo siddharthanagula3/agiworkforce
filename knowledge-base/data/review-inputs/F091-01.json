@@ -1,0 +1,553 @@
+{
+ "feature": {
+  "id": "F091-01",
+  "aliases": [
+   "Model registry",
+   "Provider registry",
+   "Provider-route registry",
+   "Capability registry",
+   "Model alias resolution",
+   "Model lifecycle management",
+   "models.json",
+   "registry.json",
+   "model catalog",
+   "S91.01-S91.06"
+  ],
+  "summary": "One generated catalog of models, providers, provider routes, capabilities, plan tiers, aliases and lifecycle (stage, deprecation, retirement). A developer edits curated JSON and runs the sync command. Web, Mobile, the extensions and the server read the compiled output through one TypeScript module; Desktop's Rust code reads a generated mirror.",
+  "purpose": {
+   "what_it_does": "Holds every model fact in JSON under packages/ai/model-registry/catalog, compiles it into a registry plus models.json, and exposes lookups (alias to canonical id, provider display, routes, capabilities, tier access, lifecycle) through packages/contracts/types/src/model-catalog.ts (packages/ai/model-registry/scripts/compile.mjs:37, :54, :57; packages/contracts/types/src/model-catalog.ts:1446).",
+   "why_it_exists": "So no surface keeps its own copy of model ids, prices, capabilities or plan limits, and a model swap never needs a consumer edit (doc: AGENTS.md section 4; packages/contracts/types/src/model-catalog.ts:1-18).",
+   "who_uses_it": "Developers and operators edit and sync it. Every app and the server read it. End users see only the result: the models in the picker, plan locks, and retirement notices.",
+   "problems_solved": [
+    "Duplicated model lists drifting between apps and server.",
+    "A model id typo or retired id reaching a provider.",
+    "Plan limits defined in more than one place.",
+    "Unknown lifecycle state: whether a model is new, old, or being retired."
+   ],
+   "use_cases": [
+    "A developer adds a model to the curation file, runs sync, and every picker shows it.",
+    "A model is marked deprecated with a date; routing then refuses to pick it once the date has passed.",
+    "A client sends a provider API model id or an old alias; the catalog resolves it to the canonical id.",
+    "The server checks which plan a model needs and names it in an error."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "No screen edits the catalog. Web: the model trigger in the chat composer footer opens the picker built from it (apps/web/features/chat/components/Composer/ComposerFooter.tsx:1932, packages/ai/routing/src/model-picker.ts:272).",
+    "Mobile: ModelPickerSheet (apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:263).",
+    "Chrome extension: managed model picker (apps/extension/src/features/cloud-bridge/managedModelPicker.ts, uses buildModelPickerShortList per grep).",
+    "VS Code: model-picker/modelConstants.ts (apps/extension-vscode/src/features/model-picker/modelConstants.ts:425).",
+    "Desktop (public Electron app) shows the hosted web app, so it shows the web picker (doc: AGENTS.md section 5).",
+    "CLI: unknown, not read."
+   ],
+   "prerequisites": [
+    "Developer side: pnpm and the repo. Edit packages/ai/model-registry/catalog/models.curation.json, then run pnpm sync:models (package.json:386).",
+    "User side: none for seeing the picker; plan decides which rows are locked."
+   ],
+   "screens_and_controls": [
+    "Picker rows show name, plan lock label, release stage label (preview, experimental, beta, alpha) (packages/ai/routing/src/model-picker.ts:195, :247).",
+    "Mobile shows 'Retires <date>' when a model retires within 30 days (apps/mobile/src/features/model-picker/retirement.ts:7, :18).",
+    "Mobile shows a notice that a retired model used by a chat has been retired and names the replacement if one is recorded (apps/mobile/src/features/model-picker/retirement.ts:30)."
+   ],
+   "journey": [
+    "Developer edits catalog/models.curation.json or another catalog file.",
+    "Developer runs pnpm sync:models; compile.mjs validates against a schema and writes registry.json, registry.ts, models.json and the Rust mirror (scripts/compile.mjs:37-57).",
+    "pnpm sync:models:check and pnpm check:model-catalog fail CI if generated files or integrity drift (package.json:387, :361).",
+    "Surfaces read the new data; the person opens the picker and sees the model, locked or open by plan.",
+    "A retired id in an old chat resolves to a name through the retirement record, so old messages still show a name (packages/contracts/types/src/model-catalog.ts:1504)."
+   ],
+   "feedback_and_outputs": [
+    "Plan lock labels and release-stage labels in the picker.",
+    "Retirement label and retired-model notice on Mobile.",
+    "unknown: the exact wording of web or desktop retirement notices; a search of apps/web found no consumer of the retirement record (grep for getRetiredModelMetadataById in apps/web/app and apps/web/lib found none; apps/web/features not searched)."
+   ],
+   "settings": [
+    "None for the person. Operator tools: pnpm sync:models, sync:models:check, sync:models:refresh, models:families (package.json:386-394)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Compiler reads catalog JSON, validates it and writes generated registry and models.json (packages/ai/model-registry/scripts/compile.mjs:37-57, :3145).",
+    "Alias resolution: canonical ids, provider api model ids and per-provider canonicalization map to one canonical id (packages/contracts/types/src/model-catalog.ts:1427-1452).",
+    "Provider registry: provider labels, display ids, aliases, default model, surface (packages/contracts/types/src/model-catalog.ts:1609-1664).",
+    "Route registry: one record per provider and model with harness, trust modes, response formats and commercial status (packages/contracts/types/src/model-catalog.ts:143-157).",
+    "Capability registry splits intrinsic and route-dependent capability names (packages/contracts/types/src/model-catalog.ts:190-195).",
+    "Plan tiers: TIER_POLICIES per free, pro, max, enterprise with allowed slots and allowed provider surfaces (managed_cloud, byok, local) (packages/contracts/types/src/model-catalog.ts:1065, :1413).",
+    "Lifecycle: 11 stages from discovered to removed, with named shortcuts (packages/ai/model-registry/scripts/lifecycle-stages.mjs:12-49); deprecation date check (packages/contracts/types/src/model-catalog.ts:1181); retired records keep identity and replacement (packages/contracts/types/src/model-catalog.ts:1469-1500).",
+    "Routing enforces lifecycle: a deprecated model, or one past its deprecation date, is not eligible (packages/ai/routing/src/auto.ts:1356-1358); the server passes the past-date set into every managed routing request (apps/web/lib/server/managed-cloud-routing/routing-request.ts:109).",
+    "Which generation of a model family is live is owned by model-families.json; promote or roll back with models:families scripts (doc: AGENTS.md section 4; package.json:394-396)."
+   ],
+   "incomplete": [
+    "Successor handling is a notice only. A pinned retired or deprecated model is refused, not swapped for its replacement (packages/ai/routing/src/__tests__/retired-model-selection.test.ts:23-30). The replacement is shown only on Mobile (apps/mobile/src/features/model-picker/retirement.ts:30); web and other apps: unknown.",
+    "Brief item S91.06 says lifecycle is 'enforced'; the code enforces eligibility in routing, but the stage value itself is only recorded in the registry. Whether any consumer other than the compiler and tools reads the stage: unknown."
+   ],
+   "disconnected_or_disabled": [
+    "Brief line numbers for S91.01 (model-catalog.ts:1367) and S91.05 (:1340) no longer match; the code is at :1121 and :1427-1446. The brief is stale on this point."
+   ],
+   "not_available": [
+    "Batch or deferred inference is a separate brief item (S91.30), outside this feature.",
+    "Own-key (BYOK) and local trust modes are in the catalog (harness trust modes), but the compiled route data is shared; whether each app uses them: see F091-02 and unknowns."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "One compiled model registry is the source every surface and the server read for model facts.",
+     "source": "S91.01 Should"
+    },
+    {
+     "statement": "A provider registry records each provider (display, defaults, governance, hosts).",
+     "source": "S91.02 Should"
+    },
+    {
+     "statement": "A provider-route registry records every model x provider route with harness, trust modes, retention, cache class and price.",
+     "source": "S91.03 Should"
+    },
+    {
+     "statement": "A capability registry records intrinsic and route-dependent capabilities per model.",
+     "source": "S91.04 Should"
+    },
+    {
+     "statement": "Model aliases resolve to canonical model ids everywhere.",
+     "source": "S91.05 Should"
+    },
+    {
+     "statement": "Model lifecycle (stage, deprecation, retirement, replacement) is managed and enforced.",
+     "source": "S91.06 Should"
+    },
+    {
+     "statement": "The model catalog is generated and is the only place a model id may be a literal; never hand-edit models.json.",
+     "source": "doc: AGENTS.md section 4"
+    },
+    {
+     "statement": "AGI never claims a model or provider can do something if capability metadata does not prove it.",
+     "source": "doc: docs/product/requirements.md:294-296"
+    }
+   ],
+   "acceptance_criteria": [
+    "After editing the curation file and running pnpm sync:models, pnpm sync:models:check passes and models.json changed only through the generator.",
+    "Resolving a provider api model id, an alias and a canonical id returns the same canonical id.",
+    "A model whose deprecation date is in the past is not selected by Auto and is refused when pinned, on every plan and trust mode.",
+    "The picker shows a plan lock for a model the plan does not include, using the tier policy from the catalog.",
+    "A message stored with a retired model id still shows a model name.",
+    "An inline model id literal in app code fails pnpm check:model-id-literals."
+   ],
+   "inferred": [
+    "[inferred] The picker hides or locks models by the same tier policy the server uses, because both read model-catalog.ts.",
+    "[inferred] A retired model should show a successor on every app, as Mobile does; only Mobile is evidenced."
+   ],
+   "proposed": [
+    "[proposed] Show the retirement notice and replacement on web and extensions, the way Mobile does.",
+    "[proposed] Add a test that every surface picker reads the retirement label from one shared helper."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "config",
+    "name": "Catalog JSON files",
+    "path": "packages/ai/model-registry/catalog/models.curation.json",
+    "role": "Hand-curated model facts; with models.synced.json, harnesses.json, model-routes.json, model-families.json, retired-models.json, routing-policies.json, provider-governance.json, provider-hosts.json, provider-defaults.json, developers.json, gateways.json it is the only editable source."
+   },
+   {
+    "kind": "command",
+    "name": "compile.mjs",
+    "path": "packages/ai/model-registry/scripts/compile.mjs",
+    "role": "Validates catalog, builds registry.json/registry.ts, models.json and the Rust mirror; --check mode verifies drift (:3145)."
+   },
+   {
+    "kind": "config",
+    "name": "lifecycle-stages.mjs",
+    "path": "packages/ai/model-registry/scripts/lifecycle-stages.mjs",
+    "role": "Defines the 11 lifecycle stages and legal shortcuts."
+   },
+   {
+    "kind": "schema",
+    "name": "registry schema",
+    "path": "packages/ai/model-registry/schema/registry.schema.json",
+    "role": "JSON schema the compiler validates against (compile.mjs reads REGISTRY_SCHEMA_JSON)."
+   },
+   {
+    "kind": "other",
+    "name": "generated registry",
+    "path": "packages/ai/model-registry/generated/registry.ts",
+    "role": "Typed compiled registry exported as @agiworkforce/model-registry."
+   },
+   {
+    "kind": "other",
+    "name": "models.json",
+    "path": "packages/contracts/types/src/models.json",
+    "role": "Generated compatibility catalog read by apps; never hand-edited."
+   },
+   {
+    "kind": "service",
+    "name": "model-catalog.ts",
+    "path": "packages/contracts/types/src/model-catalog.ts",
+    "role": "Lookup API: normalizeModelId (:1446), getModelMetadataById (:1454), retired lookup (:1481), TIER_POLICIES (:1413), canAccessModelForSubscriptionTier (:2216), getMinimumRequiredTier (:2196), getRegistryRoute (:154)."
+   },
+   {
+    "kind": "service",
+    "name": "model-picker.ts",
+    "path": "packages/ai/routing/src/model-picker.ts",
+    "role": "Builds the shared picker short list, plan lock labels and release-stage labels (:272, :247, :195)."
+   },
+   {
+    "kind": "service",
+    "name": "routing eligibility",
+    "path": "packages/ai/routing/src/auto.ts",
+    "role": "evaluateEligibility refuses deprecated or past-deprecation models (:1340-1358); modelsPastDeprecationDate (:1710)."
+   },
+   {
+    "kind": "service",
+    "name": "managed routing request",
+    "path": "apps/web/lib/server/managed-cloud-routing/routing-request.ts",
+    "role": "Passes retiredModelKeys into every managed routing request (:109)."
+   },
+   {
+    "kind": "service",
+    "name": "model tier gate",
+    "path": "apps/web/lib/model-tiers.ts",
+    "role": "canAccessModel: Auto is closed to the free tier; other models use the catalog tier check (:9)."
+   },
+   {
+    "kind": "service",
+    "name": "Mobile retirement helpers",
+    "path": "apps/mobile/src/features/model-picker/retirement.ts",
+    "role": "Retirement label (30-day window) and retired-model notice with replacement."
+   },
+   {
+    "kind": "component",
+    "name": "Mobile picker sheet",
+    "path": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+    "role": "Mobile model picker; local scope offers Auto on every plan (:316-325)."
+   },
+   {
+    "kind": "component",
+    "name": "Web composer footer",
+    "path": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "role": "Web model trigger and picker host."
+   },
+   {
+    "kind": "service",
+    "name": "Rust mirror",
+    "path": "apps/desktop/src-tauri/src/core/llm/models_config.rs",
+    "role": "Tauri build reads models.json via include_str! (:24); Tauri is retained internal code, not the public Desktop (doc: AGENTS.md section 5)."
+   },
+   {
+    "kind": "command",
+    "name": "integrity guards",
+    "path": "scripts/check-model-catalog-integrity.mjs",
+    "role": "check:model-catalog guard; also check-no-hardcoded-model-ids.mjs for inline literals."
+   },
+   {
+    "kind": "test",
+    "name": "registry tests",
+    "path": "packages/ai/model-registry/tests/",
+    "role": "Node tests for lifecycle, families, routes, schema, pricing, current roster."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Developer edits catalog JSON and runs the sync command.",
+     "runs_on": "device",
+     "evidence": "package.json:386; packages/ai/model-registry/scripts/compile.mjs:3140-3145"
+    },
+    {
+     "what_happens": "Compiler validates the catalog and writes registry.json, registry.ts, models.json and the Rust mirror files.",
+     "runs_on": "device",
+     "evidence": "packages/ai/model-registry/scripts/compile.mjs:37-57"
+    },
+    {
+     "what_happens": "Apps import the compiled data at build time; the server and routing package read the same registry in process.",
+     "runs_on": "device and our servers",
+     "evidence": "packages/contracts/types/src/model-catalog.ts:1-18, :1121"
+    },
+    {
+     "what_happens": "At request time the server resolves the incoming model id to the canonical id and reads tier, routes and lifecycle from it.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/services/provider-adapter-service.ts:185-190; packages/ai/routing/src/auto.ts:1340-1358"
+    },
+    {
+     "what_happens": "Picker rows are built from the same catalog on the person's device, with plan locks from the tier policy.",
+     "runs_on": "device",
+     "evidence": "packages/ai/routing/src/model-picker.ts:272"
+    }
+   ],
+   "data": [
+    {
+     "what": "Catalog source JSON and generated registry and models.json",
+     "where_stored": "Repository files under packages/ai/model-registry and packages/contracts/types/src",
+     "synced": "Shipped inside each app build and the server build; no runtime sync found.",
+     "retained_or_deleted": "Kept in git; retired models stay as records in retired-models.json (packages/ai/model-registry/scripts/compile.mjs:45)."
+    }
+   ],
+   "models_and_providers": "The catalog describes every provider route (managed cloud, own key, local harnesses) but does not call any provider itself; compile.mjs may refresh synced data from outside sources only in its refresh mode (packages/ai/model-registry/package.json scripts: refresh)."
+  },
+  "access_and_usage": {
+   "account": "Reading the catalog needs no account. Account matters only when a request is made: the server checks the plan (apps/web/lib/model-tiers.ts:9).",
+   "permissions": "Editing needs repository write access; CI guards block drift (package.json:361, :387).",
+   "subscription": "TIER_POLICIES define allowed slots, manual selection, caps per tier free, pro, max, enterprise (packages/contracts/types/src/model-catalog.ts:1065, :1413). Minimum plan for a model: getMinimumRequiredTier (:2196). The brief says plan limits come from this catalog; plan display names come from the billing catalog, not read here.",
+   "limits_and_metering": "Price per route and token caps per tier live in the catalog (packages/contracts/types/src/model-catalog.ts:1413 for tokenCapPerMonth); metering itself is another feature.",
+   "flags": "Family promotion via models:families scripts (package.json:394-396). No runtime feature flag found for the catalog itself.",
+   "model_compatibility": "Capabilities are recorded per model and per route; routes decide route-dependent ones (packages/contracts/types/src/model-catalog.ts:190-195).",
+   "provider_restrictions": "Each route carries trust modes (managed_cloud, byok, local) and each provider has governance data (packages/contracts/types/src/model-catalog.ts:1066, :143-152).",
+   "local_mode": "Tier policies list 'local' as an allowed provider surface on the max and enterprise tiers I opened (packages/contracts/types/src/model-catalog.ts:1356, :1394); the mobile local picker offers Auto on every plan because on-device routing costs nothing (apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:316-325). On-device model files are described separately in on-device-models.ts. Whether the free tier lists the local surface: not read, unknown."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Unknown model id",
+    "behaviour": "getModelMetadataById returns null; the router returns code unknown_selection; the chat endpoint answers 422 model_route_unavailable.",
+    "evidence": "packages/contracts/types/src/model-catalog.ts:1454; packages/ai/routing/src/auto.ts:474; apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4975"
+   },
+   {
+    "state": "Retired model",
+    "behaviour": "Name is still resolvable for old messages; pinned selection is refused, never swapped.",
+    "evidence": "packages/contracts/types/src/model-catalog.ts:1504; packages/ai/routing/src/__tests__/retired-model-selection.test.ts:23"
+   },
+   {
+    "state": "Deprecation date passed",
+    "behaviour": "Model drops out of routing even if still marked active.",
+    "evidence": "packages/ai/routing/src/auto.ts:1357"
+   },
+   {
+    "state": "Generated files out of date",
+    "behaviour": "sync:models:check fails the guard chain.",
+    "evidence": "package.json:387, :397"
+   },
+   {
+    "state": "Offline or loading",
+    "behaviour": "Catalog is bundled data, so it needs no network; not applicable.",
+    "evidence": "[inferred] from packages/contracts/types/src/model-catalog.ts:1121"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Web picker trigger has an aria-label naming the model and 'Change model'.",
+    "evidence": "apps/web/features/chat/components/Composer/ComposerFooter.tsx:1932"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "packages/ai/model-registry/tests/lifecycle-stage.test.mjs",
+     "covers": "lifecycle stage vocabulary and moves [inferred from file name]"
+    },
+    {
+     "path": "packages/ai/model-registry/tests/lifecycle-gates.test.mjs",
+     "covers": "lifecycle gates [inferred from file name]"
+    },
+    {
+     "path": "packages/ai/model-registry/tests/registry-contract.test.mjs",
+     "covers": "registry shape contract [inferred from file name]"
+    },
+    {
+     "path": "packages/ai/model-registry/tests/schema-validation.test.mjs",
+     "covers": "schema validation [inferred from file name]"
+    },
+    {
+     "path": "packages/ai/model-registry/tests/model-routes.test.mjs",
+     "covers": "route records [inferred from file name]"
+    },
+    {
+     "path": "packages/ai/model-registry/tests/model-families.test.mjs",
+     "covers": "family slots [inferred from file name]"
+    },
+    {
+     "path": "packages/contracts/types/src/__tests__/model-catalog.test.ts",
+     "covers": "catalog lookups [inferred from file name]"
+    },
+    {
+     "path": "packages/contracts/types/src/__tests__/model-catalog.retired.test.ts",
+     "covers": "retired model records [inferred from file name]"
+    },
+    {
+     "path": "packages/contracts/types/src/__tests__/model-catalog.free-plan-reach.test.ts",
+     "covers": "free plan reach [inferred from file name]"
+    },
+    {
+     "path": "packages/ai/routing/src/__tests__/retired-model-selection.test.ts",
+     "covers": "retired and deprecated pinned models are refused on every tier and trust mode, never swapped (read)"
+    },
+    {
+     "path": "apps/mobile/src/features/model-picker/__tests__/retirement.test.ts",
+     "covers": "Mobile retirement label and notice [inferred from file name]"
+    },
+    {
+     "path": "scripts/check-no-hardcoded-model-ids.test.mjs",
+     "covers": "model id literal guard [inferred from file name]"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Sync round trip",
+     "steps": [
+      "Change a display name in the curation file.",
+      "Run pnpm sync:models.",
+      "Run pnpm sync:models:check and pnpm check:model-catalog."
+     ],
+     "expected": "Generated files change; both checks pass; a second sync changes nothing."
+    },
+    {
+     "name": "Alias to canonical id",
+     "steps": [
+      "Call normalizeModelId with the provider api model id of a catalog model.",
+      "Call it with the canonical id."
+     ],
+     "expected": "Both return the same canonical id."
+    },
+    {
+     "name": "Deprecated model pinned",
+     "steps": [
+      "Set a past deprecation date on a test model (in a test fixture).",
+      "Resolve a route with that model selected, on each plan."
+     ],
+     "expected": "Result is unavailable with a reason; no other model is returned."
+    },
+    {
+     "name": "Plan lock in picker",
+     "steps": [
+      "Open the picker as a free account on web and Mobile.",
+      "Look for a model above the plan."
+     ],
+     "expected": "Row shows a plan lock label; choosing it does not send a request on that model."
+    },
+    {
+     "name": "Retirement notice on Mobile",
+     "steps": [
+      "Open an old chat whose model is retired."
+     ],
+     "expected": "Notice names the retired model and its replacement or asks for another model."
+    }
+   ],
+   "diagnostics": [
+    "pnpm sync:models:check output (generated drift).",
+    "Error 'Model is not registered in the canonical model catalog' from resolveProviderFromModel (apps/web/lib/services/provider-adapter-service.ts:190).",
+    "Route unavailable log 'Managed Web model route unavailable' with routeCode and reasons (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4954)."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Replacement of a retired model is only shown as text on Mobile; no successor is applied, and web and extensions show none that I found.",
+    "affects": "Web, Chrome extension, VS Code users with old chats on a retired model.",
+    "evidence": "apps/mobile/src/features/model-picker/retirement.ts:30; no web consumer found by grep in apps/web/app and apps/web/lib",
+    "work_needed": "Decide the rule (notice, user-confirmed switch, or refusal) and share one helper across surfaces."
+   },
+   {
+    "gap": "Brief citations for S91.01 and S91.05 point at old line numbers.",
+    "affects": "Anyone following the brief.",
+    "evidence": "packages/contracts/types/src/model-catalog.ts:1121, :1427",
+    "work_needed": "Refresh the brief."
+   },
+   {
+    "gap": "No evidence that the CLI reads the compiled catalog.",
+    "affects": "CLI.",
+    "evidence": "apps/cli not searched for models.json",
+    "work_needed": "Read apps/cli model code and record it."
+   }
+  ],
+  "depends_on": [
+   "SYS-model-catalog-and-routing",
+   "SYS-api-and-contracts",
+   "SYS-subscriptions-entitlements-and-usage",
+   "file:packages/ai/model-registry/catalog/models.curation.json",
+   "file:packages/contracts/types/src/model-catalog.ts",
+   "surface:web",
+   "surface:mobile",
+   "mode:cloud"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/contracts/types/src/model-catalog.ts",
+    "evidence": "Lookups for alias, tier, retired, route and provider (packages/contracts/types/src/model-catalog.ts:1446-1504)."
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/ai/model-registry/scripts/compile.mjs",
+    "evidence": "Generates the registry and models.json (scripts/compile.mjs:37-57)."
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:packages/ai/model-registry/catalog/models.curation.json",
+    "evidence": "Editable source named in AGENTS.md section 4 and compile.mjs CURATION_JSON."
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/models",
+    "evidence": "Header of model-catalog.ts lists apps/web/app/api/models/route.ts as consumer (packages/contracts/types/src/model-catalog.ts:14); handler not opened."
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "TIER_POLICIES and getMinimumRequiredTier (packages/contracts/types/src/model-catalog.ts:1413, :2196)."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "Mobile picker and retirement helpers (apps/mobile/src/features/model-picker/retirement.ts:18)."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "Web composer footer uses the shared picker builder (apps/web/features/chat/components/Composer/ComposerFooter.tsx:1932)."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/ai/routing/src/__tests__/retired-model-selection.test.ts",
+    "evidence": "Opened; checks refusal of retired models."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/ai/model-registry/tests/registry-contract.test.mjs",
+    "evidence": "File exists; coverage inferred from name."
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-model-catalog-and-routing",
+    "evidence": "Catalog is the data side of that system page."
+   },
+   {
+    "rel": "uses_provider",
+    "to": "provider:anthropic",
+    "evidence": "Provider folders are the provider registry's members; compile.mjs reads provider-hosts and governance for each provider."
+   }
+  ],
+  "unknowns": [
+   "Whether the CLI and the Rust CLI read the compiled catalog.",
+   "Whether web shows retirement text from the retired-model record.",
+   "Which plan label text the billing catalog gives each tier (plan ids are free, basic, pro, max, enterprise in code).",
+   "Whether the free tier policy lists the local surface.",
+   "The api:GET /api/models response shape (handler not opened)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "7 Local mode",
+   "claim": "Tier policies list 'local' as an allowed surface on max and enterprise tiers (model-catalog.ts:1356, :1394); whether the free tier lists local: unknown.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Facts right, citations wrong. max allows ['managed_cloud','byok','local'] at :1329; enterprise at :1380. Lines 1356 and 1394 are not those lines (:1356 is inside the enterprise block, :1394 is tokenCapPerMonth: null). The 'unknown' is answerable: free is ['managed_cloud'] only (:1245); pro is ['managed_cloud','byok'] (:1281).",
+   "evidence": "packages/contracts/types/src/model-catalog.ts:1245, :1281, :1329, :1380",
+   "correction": "Local surface is allowed only on max (:1329) and enterprise (:1380). Free is managed_cloud only (:1245). Pro is managed_cloud and byok (:1281)."
+  },
+  {
+   "section": "7 Limits and metering",
+   "claim": "Token caps per tier live in the catalog (model-catalog.ts:1413 for tokenCapPerMonth).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": ":1413 is `export const TIER_POLICIES = TIER_POLICIES_DEFINITION`. The caps are at :1257 (free null), :1295 (pro 40,000,000), :1347 (max 100,000,000), :1394 (enterprise null).",
+   "evidence": "packages/contracts/types/src/model-catalog.ts:1257, :1295, :1347, :1394, :1413",
+   "correction": "Token caps per month are in TIER_POLICIES: free null, pro 40M, max 100M, enterprise null (:1257, :1295, :1347, :1394)."
+  },
+  {
+   "section": "7 Subscription / Unknown",
+   "claim": "TIER_POLICIES cover free, pro, max, enterprise; plan ids in code are free, basic, pro, max, enterprise.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "ProductTier is 'free'|'pro'|'max'|'enterprise' (:1065), with no 'basic' policy. But getMinimumRequiredTier returns 'free'|'basic'|'pro'|'max' (:2196) and returns 'basic' for economy models not named free. The page never says that a 'basic' floor exists with no TIER_POLICIES entry, and that canAccessModelForSubscriptionTier decides it separately.",
+   "evidence": "packages/contracts/types/src/model-catalog.ts:1065, :2196-2240",
+   "correction": "Tier policies exist for four tiers. The minimum-plan lookup works on a different set that includes 'basic' (:2196)."
+  }
+ ],
+ "missing_facts": [
+  "Free tier allowedProviderSurfaces is ['managed_cloud'] only and pro is ['managed_cloud','byok']. Local is limited to max and enterprise, and BYOK needs pro or above. The page leaves this as 'unknown' (packages/contracts/types/src/model-catalog.ts:1245, :1281, :1329, :1380).",
+  "Token caps differ by tier. The page never states them: free null, pro 40M, max 100M, enterprise null (model-catalog.ts:1257, :1295, :1347, :1394).",
+  "The routing 'on_device' trust mode exists beside managed_cloud, byok and local, and the retired-model test covers it (packages/ai/routing/src/__tests__/retired-model-selection.test.ts:17). The page's trust-mode lists omit it."
+ ]
+}

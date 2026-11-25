@@ -1,0 +1,78 @@
+{
+ "S108.19": {
+  "labels": [],
+  "needs": "unknown",
+  "note": "Searched apps/extension/src for contract, clause, redline, playbook and review terms and found nothing. The review-contract skill exists only in .agents/skills/review-contract/SKILL.md and the web skill catalog (apps/web/lib/services/skill-catalog-service.ts). The extension's Skills menu (side_panel.ts, label \"Skills\") lists only the account's own skills (\"No skills of your own yet.\"), and I found no path that runs a bundled skill from the extension.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S108.27": {
+  "labels": [],
+  "needs": "unknown",
+  "note": "Searched apps/extension/src and _locales/en/messages.json for ticket, escalation, reply and support-workflow terms and found nothing. The ticket-triage, draft-response and customer-escalation skills exist only in .agents/skills and the web skill catalog. The extension's Skills menu shows only the account's own skills, so no extension path for these workflows was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S108.28": {
+  "labels": [],
+  "needs": "unknown",
+  "note": "Searched apps/extension/src and _locales/en/messages.json for recruiting, interview, candidate and job-post terms and found nothing. The recruiting-pipeline and interview-prep skills exist only in .agents/skills and the web skill catalog. The extension's Skills menu shows only the account's own skills, so no extension path for these workflows was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S108.31": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Spec"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "View product"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Buy at $STORE$"
+   }
+  ],
+  "needs": "none",
+  "note": "The card kind product-comparison.v1 is requested from the server in apps/extension/src/features/cloud-bridge/freeTrialClient.ts (supported list near line 1585), and the card is built in apps/extension/src/features/side-panel/interactiveCards.ts. Whether a given answer shows it depends on the model, so the tester may need to retry the request. The quoted line in the plan (freeTrialClient.ts:1182) was not found; I did not use it.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel chat.",
+   "Type a request such as comparing two or three named products by specs and price, then send it.",
+   "Wait for the answer to finish streaming.",
+   "Look for a card with a table whose first column heading is \"Spec\" and whose product columns each show a price, sources and a \"View product\" or \"Buy at\" link. Compare it with Expected: specs, prices and merchants shown in a structured comparison."
+  ],
+  "where": "Chat: type a request in the message box to compare products, then look for the comparison card in the answer. There is no menu for this; the card appears only when the model chooses to send a product-comparison card."
+ },
+ "S108.33": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Stops"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Driving directions in Google Maps"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Map of $TITLE$"
+   }
+  ],
+  "needs": "none",
+  "note": "The card kind itinerary.v1 is requested from the server in apps/extension/src/features/cloud-bridge/freeTrialClient.ts (supported list near line 1585) and built in apps/extension/src/features/side-panel/interactiveCards.ts. I found no reservation or booking control in the extension source (searched for reserv), so Expected's reservations part is not visible in the code; the card only links to Google Maps directions. The quoted line in the plan (freeTrialClient.ts:1182) was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side panel chat.",
+   "Type a trip request with several named places and times, such as a day of stops in one city, then send it.",
+   "Wait for the answer to finish streaming.",
+   "Look for a card with a \"Stops\" list (each stop with a time and address) and, if routes resolve, a map and links such as \"Driving directions in Google Maps\" or \"Walking directions in Google Maps\". Compare it with Expected: itinerary, places and routes."
+  ],
+  "where": "Chat: type a request in the message box to plan a trip with stops, then look for the itinerary card in the answer. There is no menu for this; the card appears only when the model chooses to send an itinerary card."
+ }
+}

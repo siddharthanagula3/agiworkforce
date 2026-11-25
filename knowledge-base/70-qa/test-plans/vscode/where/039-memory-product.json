@@ -1,0 +1,414 @@
+{
+ "S39.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Use saved memory facts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Instructions &amp; editor"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Settings"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "If the workspace sets agiWorkforce.optOut.memory, the switch cannot turn memory on there (message \"Memory stays off here\"). The code for a chat turn that skips memory was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Open Settings\", press Enter.",
+   "Click \"Instructions &amp; editor\" in the left list (it shows as Instructions & editor).",
+   "In the Memory card, switch \"Use saved memory facts\" off.",
+   "Press Cmd+Shift+P, run \"Code: Add Memory Fact\", type a fact, press Enter.",
+   "Compare: a dialog says \"Memory is off, so saved facts are not sent with any turn.\" and no fact is saved, as Expected says."
+  ],
+  "where": "Code: Open Settings > Instructions & editor > Memory > Use saved memory facts (switch)"
+ },
+ "S39.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Memory"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "List & remove facts"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with saved facts",
+  "note": "When signed out, the list shows \"Sign in to see your memory\" instead of facts.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Memory\", press Enter.",
+   "Click \"List & remove facts\".",
+   "Compare: every saved fact appears in the list, under its topic heading."
+  ],
+  "where": "Command Palette > Code: Memory > List & remove facts"
+ },
+ "S39.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "List & remove facts"
+   },
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Your account memory, shared with every AGI client\u2026"
+   }
+  ],
+  "needs": "a signed-in account with at least two saved facts",
+  "note": "The search also matches the source and date line under each fact.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Code: Memory\" > \"List & remove facts\".",
+   "Type a word that appears in one saved fact.",
+   "Compare: only matching facts stay in the list. Delete the text to see all facts again."
+  ],
+  "where": "Command Palette > Code: Memory > List & remove facts, then the search box at the top of the list"
+ },
+ "S39.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Preferences"
+   },
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Decisions"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "List & remove facts"
+   }
+  ],
+  "needs": "a signed-in account with facts in at least two topics",
+  "note": "A fact with no topic is listed under \"Facts\".",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Code: Memory\" > \"List & remove facts\".",
+   "Look for topic headings with a count, such as \"Preferences\", \"Decisions\", \"Facts\", \"Context\", \"Summaries\" or \"Skills\".",
+   "Compare: each fact sits under the topic it was saved with. Topics with no facts do not appear."
+  ],
+  "where": "Command Palette > Code: Memory > List & remove facts (topic headings in the list)"
+ },
+ "S39.10": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Add Memory Fact"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Saved to your account, on every client."
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Add a memory fact"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "The fact is sent with chat turns only while Memory is on.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Add Memory Fact\", press Enter.",
+   "Type \"I prefer Python over JavaScript for data work.\" and press Enter.",
+   "Read the message \"Saved to your account, on every client.\"",
+   "Open \"Code: Memory\" > \"List & remove facts\" and find the new fact.",
+   "Compare with Expected: ask a chat question that the fact would answer."
+  ],
+  "where": "Command Palette > Code: Add Memory Fact (also Code: Memory > Add a memory fact)"
+ },
+ "S39.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Remember This"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Saved to your account, on every client."
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a file open in the editor",
+  "note": "No \"remember\" action inside the chat itself was found; the chat /memory command only opens the Memory list.",
+  "reachable": "yes",
+  "steps": [
+   "Open any file and select a sentence.",
+   "Right-click the selection and click \"Code: Remember This\".",
+   "Compare: the \"Add Memory Fact\" box opens with the selected text filled in. Press Enter.",
+   "Read the message \"Saved to your account, on every client.\""
+  ],
+  "where": "Editor: select text, right-click it, choose \"Code: Remember This\""
+ },
+ "S39.12": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Memory"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "List & remove facts"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with Memory on",
+  "note": "The save is done by the server and the AGI CLI after a turn. The VS Code code has no control for it, and which turns qualify, and whether CLI on-device memory reaches this list, were not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Have a normal chat that states a lasting preference, such as \"I usually write tests in pytest.\"",
+   "Wait for the reply to finish.",
+   "Open \"Code: Memory\" > \"List & remove facts\".",
+   "Compare: a new fact from that chat is listed, as Expected says."
+  ],
+  "where": "Effect seen in \"Code: Memory\" > \"List & remove facts\" after ordinary AGI Code chats"
+ },
+ "S39.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Edit this fact"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Updated in your account, on every client."
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Edit Memory Fact"
+   }
+  ],
+  "needs": "a signed-in account with at least one saved fact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Code: Memory\" > \"List & remove facts\".",
+   "Hover a fact and click the pencil button \"Edit this fact\".",
+   "Change the text and press Enter.",
+   "Read the message \"Updated in your account, on every client.\"",
+   "Compare: reopen the list and check the new text is shown; then ask a chat question the fact should change."
+  ],
+  "where": "Command Palette > Code: Memory > List & remove facts, then the edit button on a fact row"
+ },
+ "S39.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Delete this fact"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Delete"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Deleted from your account, on every client."
+   }
+  ],
+  "needs": "a signed-in account with at least one saved fact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Code: Memory\" > \"List & remove facts\".",
+   "Hover a fact and click the trash button \"Delete this fact\".",
+   "Read the dialog and click \"Delete\".",
+   "Read the message \"Deleted from your account, on every client.\"",
+   "Compare: the fact is gone from the list."
+  ],
+  "where": "Command Palette > Code: Memory > List & remove facts, then the trash button on a fact row"
+ },
+ "S39.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Clear account memory"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Forget everything"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "All memory facts deleted from your account."
+   }
+  ],
+  "needs": "a signed-in account with saved facts",
+  "note": "The Memory list itself has no separate delete-all button; this is the one-action path found.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Memory\", press Enter.",
+   "Click \"Clear account memory\".",
+   "Read the dialog (\"Delete all N memory facts from your Cloud account?\") and click \"Forget everything\".",
+   "Read the message \"All memory facts deleted from your account.\"",
+   "Compare: open \"List & remove facts\" and check no facts remain."
+  ],
+  "where": "Command Palette > Code: Memory > Clear account memory"
+ },
+ "S39.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Saved from"
+   },
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Source not recorded"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "List & remove facts"
+   }
+  ],
+  "needs": "a signed-in account with facts from more than one source (a typed fact and a chat-saved fact)",
+  "note": "The code says \"Saved from an import\" for imports and has no \"typed by you\" wording.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Code: Memory\" > \"List & remove facts\".",
+   "Hover a fact (or read its detail line) to see where it came from.",
+   "Compare: facts typed in VS Code show \"Saved from VS Code\"; facts from a chat show \"Saved from the conversation\" with its title; facts with no recorded source show \"Source not recorded\"."
+  ],
+  "where": "Command Palette > Code: Memory > List & remove facts, then the detail line under a fact"
+ },
+ "S39.18": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Created:"
+   },
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Updated:"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "List & remove facts"
+   }
+  ],
+  "needs": "a signed-in account with at least one saved fact",
+  "note": "The \"Updated:\" line appears only when the update time differs from the creation time.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Code: Memory\" > \"List & remove facts\".",
+   "Hover a fact and read the \"Created:\" line.",
+   "Edit that fact with the pencil button \"Edit this fact\" and save.",
+   "Reopen the list and hover the same fact.",
+   "Compare: an \"Updated:\" line now appears under \"Created:\"."
+  ],
+  "where": "Command Palette > Code: Memory > List & remove facts, then hover a fact"
+ },
+ "S39.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Personal memory"
+   },
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Workspace memory, kept apart from your personal memory"
+   },
+   {
+    "file": "apps/extension-vscode/src/memory/memoryTreeProvider.ts",
+    "text": "Read in your personal chats on every device"
+   }
+  ],
+  "needs": "an AGI Cloud account that belongs to a workspace, with a personal account memory and a workspace memory to compare",
+  "note": "The workspace row appears only when the account is in a workspace; clicking it opens Team settings on the web.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Code: Memory\" > \"List & remove facts\".",
+   "Read the first row: \"Personal memory\" with \"Read in your personal chats on every device\", or \"<workspace name> memory\" with \"Workspace memory, kept apart from your personal memory\".",
+   "Hover that row to read the separation text.",
+   "Compare: workspace facts appear only in workspace chats, and personal facts only in personal chats."
+  ],
+  "where": "Command Palette > Code: Memory > List & remove facts, first row"
+ },
+ "S39.29": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Never remember\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/memory/memoryExclusions.ts",
+    "text": "Add a term"
+   },
+   {
+    "file": "apps/extension-vscode/src/memory/memoryExclusions.ts",
+    "text": "Never remembered"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and a test term",
+  "note": "No credential or password check was found in the extension files read, so automatic refusal of credentials is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Code: Memory\", press Enter.",
+   "Click \"Never remember\u2026\".",
+   "Click \"Add a term\", type a client or project name, press Enter.",
+   "Compare: the term appears under \"Never remembered\".",
+   "Run \"Code: Add Memory Fact\" with a sentence containing that term and compare: it should be refused."
+  ],
+  "where": "Command Palette > Code: Memory > Never remember\u2026, then Add a term"
+ },
+ "S39.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Clear account memory"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Forget everything"
+   }
+  ],
+  "needs": "a signed-in account with saved facts and at least one chat",
+  "note": "No link from deleting a chat to the memory store was found in the chat state code, so the chat-deletion half could not be located; sign-out also clears the local memory cache.",
+  "reachable": "yes",
+  "steps": [
+   "Note the chats you have in the sidebar.",
+   "Press Cmd+Shift+P, run \"Code: Memory\", click \"Clear account memory\", then \"Forget everything\".",
+   "Compare: the chats are still listed, and \"List & remove facts\" shows no facts."
+  ],
+  "where": "Command Palette > Code: Memory > Clear account memory (memory reset only)"
+ },
+ "S39.31": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a signed-in account with Memory on and a saved fact",
+  "note": "Memory is added to every turn by the same code path; the model is not checked in it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "With Memory on and a fact saved (for example \"I prefer Python over JavaScript for data work\"), open the \"AGI Code\" chat and pick a model.",
+   "Ask a question the fact answers, such as \"What language should you use for my data scripts?\"",
+   "Switch to a different model in the chat and ask the same question again.",
+   "Compare: both replies use the saved fact."
+  ],
+  "where": "Effect seen in the \"AGI Code\" chat, with any model picked"
+ },
+ "S39.32": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Add Memory Fact"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Saved to your account, on every client."
+   }
+  ],
+  "needs": "a second client (web app, CLI or mobile) signed in to the same account",
+  "note": "The other clients' memory screens were not read, so where to look in them is unverified.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In VS Code, run \"Code: Add Memory Fact\" and save a fact such as \"I prefer Python over JavaScript for data work.\"",
+   "Open the web app, the CLI or mobile on the same account and look for that fact.",
+   "Compare: the fact appears there and is used in their chats, as Expected says.",
+   "Edit or delete the fact in VS Code and check the other client again."
+  ],
+  "where": "Effect seen in the AGI Cloud web app, the AGI CLI or mobile, signed in to the same account"
+ }
+}

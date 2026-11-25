@@ -1,0 +1,392 @@
+{
+ "S55.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Add"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Settings opener was not traced; the earlier running-app check reported a wide directory with 0 indexed connectors.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Settings (the account menu entry that opens Settings was not traced in code).",
+   "Click Connectors in the Settings list.",
+   "Click Add, then Browse connectors.",
+   "Look for a catalogue of connectors, each showing its name, publisher and connection state, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors"
+ },
+ "S55.02": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Search connectors\u2026"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The placeholder found is for the Connectors pane search; the directory toolbar search text was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Browse connectors as in S55.01.",
+   "Click the search box in the directory and type part of a connector name, a publisher or a tool word.",
+   "Watch the list narrow.",
+   "Compare the shown entries with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors"
+ },
+ "S55.03": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The exact visible filter-group label was not found; category filter is built in apps/web/features/directory/services/connectors-directory.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Browse connectors as in S55.01.",
+   "Open the filter control in the directory toolbar and choose a category such as Productivity or Developer.",
+   "Check that only connectors in that category remain.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors"
+ },
+ "S55.04": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Detail page is packages/ui/ui/src/directory/ConnectorDetailView.tsx; exact headings were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Browse connectors as in S55.01.",
+   "Click a connector card such as GitHub.",
+   "Read the detail page: description, publisher, sign-in requirement, tools and links.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors > click a connector card (e.g. GitHub)"
+ },
+ "S55.05": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Browse connectors"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The operations list is in packages/ui/ui/src/directory/ConnectorDetailView.tsx; its heading text was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connector's detail page as in S55.04, before connecting.",
+   "Scroll to the list of operations or tools.",
+   "Compare the list with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors > click a connector card (e.g. GitHub)"
+ },
+ "S55.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorScopeList.tsx",
+    "text": "Permissions granted"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The scope list component is shown; I did not confirm it is rendered before connecting rather than only after.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connector's detail page before connecting.",
+   "Read the permissions text, in plain words, on the page.",
+   "Compare what can be read and what can be changed with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors > click a connector card (e.g. GitHub)"
+ },
+ "S55.07": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "an outside account (Google or GitHub) and a configured connector",
+  "note": "Earlier run recorded this as blocked by deployment configuration (missing GitHub App setup).",
+  "reachable": "yes",
+  "steps": [
+   "Open a connector's detail page as in S55.04.",
+   "Click Connect.",
+   "Watch whether the real sign-in or authorization flow starts.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors > GitHub > Connect"
+ },
+ "S55.08": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connect"
+   }
+  ],
+  "needs": "an outside account (Google) that can approve access",
+  "note": "Provider consent page and grant storage cannot be seen from the app's own screens; earlier run blocked by external authorization setup.",
+  "reachable": "yes",
+  "steps": [
+   "Open an OAuth connector's detail page, such as Google Drive.",
+   "Click Connect.",
+   "Check that the provider's consent page opens.",
+   "After approving, check that the connector shows as connected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors > an OAuth connector > Connect"
+ },
+ "S55.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorApiKeyForm.tsx",
+    "text": "Test and save"
+   }
+  ],
+  "needs": "an API key for a connector that uses one",
+  "note": "Encrypted storage is not visible to the tester; only the form and the result can be checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connector that needs an API key.",
+   "Click Connect and enter the key in the form.",
+   "Click Test and save.",
+   "Check that the connector shows as connected, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors > an API-key connector > Connect"
+ },
+ "S55.11": {
+  "labels": [
+   {
+    "file": "apps/web/app/workspace/sharing/page.tsx",
+    "text": "What this workspace shares, and the access level of each grant."
+   }
+  ],
+  "needs": "an organization admin account and a second member account in the same organization",
+  "note": "The route to Workspace > Sharing from the app menu was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as an organization admin and open the workspace Sharing page.",
+   "Find the connectors section and share a connector with the organization.",
+   "Sign in as a second member of the same organization and check the connector can be used without entering its credential.",
+   "Compare with Expected."
+  ],
+  "where": "Workspace > Sharing (page at /workspace/sharing)"
+ },
+ "S55.13": {
+  "labels": [],
+  "needs": "a connected account",
+  "note": "Account name logic is in apps/web/lib/connectors/accounts.ts; I did not find the screen text that shows it. Searched the connector settings components and directory for the display.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.14": {
+  "labels": [],
+  "needs": "a connected account",
+  "note": "Account identity logic is in apps/web/lib/connectors/accounts.ts; no screen text showing email or domain was found in the connector components.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorScopeList.tsx",
+    "text": "Permissions granted"
+   }
+  ],
+  "needs": "a connected connector (a paid or Free account depending on the connector)",
+  "note": "The list renders only when at least one scope exists.",
+  "reachable": "yes",
+  "steps": [
+   "Connect a connector, or open one that is already connected.",
+   "Open its detail page.",
+   "Read the Permissions granted list.",
+   "Compare the listed permissions with Expected."
+  ],
+  "where": "Settings > Connectors > (connected connector, e.g. Google Drive) > click the connector card"
+ },
+ "S55.18": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Reconnect"
+   }
+  ],
+  "needs": "a connector whose grant has expired or been revoked, or a healthy one",
+  "note": "Visible words for healthy and not-responding states were not found; only the reauthorization state was confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Connectors.",
+   "Look at each connector's status label.",
+   "Check that a connector needing reauthorization shows Reconnect.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Connectors (connector row status)"
+ },
+ "S55.20": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Reconnect"
+   }
+  ],
+  "needs": "a revoked or expired OAuth grant, for example Google Drive",
+  "note": "The plan file marks this as unfinished (partial code), so the tester should expect a gap.",
+  "reachable": "yes",
+  "steps": [
+   "Use a connector whose OAuth grant was revoked or expired.",
+   "Open Settings > Connectors and find the Reconnect button beside Disconnect.",
+   "Click Reconnect and check that the authorization flow runs again.",
+   "Check that connector settings and tool permissions remain, and that a chat shows the reconnect card."
+  ],
+  "where": "Settings > Connectors > (connector needing reauthorization, e.g. Google Drive) > Reconnect"
+ },
+ "S55.21": {
+  "labels": [],
+  "needs": "a connected connector",
+  "note": "The capabilities panel (apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx) has a retry, but no visible on-demand test-connection control text was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.22": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a connected connector",
+  "note": "The confirmation title is built in packages/ui/ui/src/settings-modal/SettingsModal.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector's detail page in Settings > Connectors.",
+   "Click Disconnect.",
+   "Read the confirmation dialog titled Disconnect <name>? and confirm.",
+   "Ask the assistant to use the connector and check it is no longer available."
+  ],
+  "where": "Settings > Connectors > (connected connector) > Disconnect"
+ },
+ "S55.23": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a connected connector and the provider account (outside the app)",
+  "note": "No separate Revoke control was found; the provider token revocation runs behind Disconnect.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Disconnect a connected connector as in S55.22.",
+   "Check the connector no longer shows as connected.",
+   "Check in the provider's own account security page that the app's access is gone."
+  ],
+  "where": "Behind Settings > Connectors > (connected connector) > Disconnect"
+ },
+ "S55.25": {
+  "labels": [],
+  "needs": "a connector that supports folder or repository limits",
+  "note": "The route apps/web/app/api/connectors/route.ts and the hook apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx were found, but no visible control for choosing folders or repositories was found in the connector components.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
+    "text": "Tool permissions"
+   }
+  ],
+  "needs": "a connected connector with tools",
+  "note": "A Tool permissions label exists and the panel groups tools into Read-only tools and Write and delete tools (apps/web/features/connectors/components/ToolPermissionsPanel.tsx), but no separate read-only switch was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+    "text": "Always asks: destructive"
+   }
+  ],
+  "needs": "a connected connector with tools",
+  "note": "Allow, Needs approval each time and Never run this tool are the level labels in ToolPermissionsPanel.tsx; the approval action words are defined in packages/contracts/types/src/tool-approval-policy.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector's detail page.",
+   "Click Tool permissions.",
+   "For a tool, pick Allow, Needs approval each time, or Never run this tool.",
+   "Check that a destructive tool shows Always asks: destructive, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > (connected connector) > Tool permissions"
+ },
+ "S55.28": {
+  "labels": [
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Before you connect"
+   }
+  ],
+  "needs": "a Free or paid account, and a connector that is not connected yet",
+  "note": "The summary appears in apps/web/features/connectors/components/ConnectorConsentDialog.tsx; the exact retention sentence was not read in full.",
+  "reachable": "yes",
+  "steps": [
+   "Click Connect on a connector that is not yet connected.",
+   "Read the consent dialog before the connection starts.",
+   "Check the data retention point in the summary.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Browse connectors > a connector > Connect (consent step)"
+ },
+ "S55.29": {
+  "labels": [],
+  "needs": "a connected connector used in a chat",
+  "note": "The chat timeline groups connector tool calls by connector name (apps/web/features/chat/components/messages/ToolTimeline.tsx), but the provider attribution text was not found. apps/web/features/connectors/lib/mcp-tool-name.ts no longer exists.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.30": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx",
+    "text": "Reconnect"
+   }
+  ],
+  "needs": "a connector granted with fewer scopes than the task needs",
+  "note": "The card headline is built from a template string, so the word Reconnect is taken from that file.",
+  "reachable": "yes",
+  "steps": [
+   "Connect a connector with limited access.",
+   "In chat, ask for a task that needs more access than granted.",
+   "Look for a connector card in the chat with a Reconnect button.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > ask for a task that needs a connector scope the grant lacks (e.g. read a GitHub issue after granting only part of the access)"
+ }
+}

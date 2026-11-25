@@ -1,0 +1,216 @@
+{
+ "S45.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   }
+  ],
+  "needs": "a file to upload and a model that supports edit",
+  "note": "The attached picture is used as the source image only when the selected image model supports edit; the composer shows a conflict notice otherwise.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Click the + button in the composer and choose Add photos & files, then pick a PNG or JPG from your computer.",
+   "Click the + button again and choose Create image; the Image pill appears.",
+   "Type an instruction such as 'make the sky red' and press send.",
+   "Compare: the result is an edit of your uploaded picture, not a brand-new unrelated image."
+  ],
+  "where": "Chat composer > + menu > Add photos & files (attach your picture), then + menu > Create image, then type a change and send"
+ },
+ "S45.02": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Remix"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   }
+  ],
+  "needs": "an image generated in an earlier chat or in the Library",
+  "note": "The Remix row appears only for image items and only in hosts with an image composer; the New version route works from any chat that shows the image.",
+  "reachable": "yes",
+  "steps": [
+   "Click Library in the left sidebar.",
+   "Find an earlier image and open its menu.",
+   "Click Remix.",
+   "Look at the composer: the image is attached and the Image pill is on.",
+   "Compare: the image is ready to be changed by the next message."
+  ],
+  "where": "Sidebar > Library > open an image item's menu > Remix (opens the image in image mode); or open the chat that made it and use New version on the image"
+ },
+ "S45.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Apply this change to the image"
+   }
+  ],
+  "needs": "a generated image and a model that supports edit",
+  "note": "When the model does not support edit, the same box generates a new image and the original is not changed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that contains a generated image.",
+   "Hover over the image and click New version.",
+   "Type a change, for example 'add a hat'.",
+   "Click the send button (Apply this change to the image).",
+   "Compare: the image above is edited to match the change."
+  ],
+  "where": "Chat with a generated image > hover the image > New version > type in the box 'Describe a change to generate a new version...' > click the send button labelled Apply this change to the image"
+ },
+ "S45.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Select area"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   }
+  ],
+  "needs": "a generated image and a model that supports edit",
+  "note": "The area painter is shown only when the model supports edit; the app's own helper text warns that the rest of the image may change too.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a generated image and click New version.",
+   "Click Select area.",
+   "Paint over the part of the image to change.",
+   "Type a change and send it (Apply this change to the image).",
+   "Compare: only the painted area is meant to change, though the guide notes nearby content may change too."
+  ],
+  "where": "Chat with a generated image > hover the image > New version > Select area"
+ },
+ "S45.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Clear selection"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Select area"
+   }
+  ],
+  "needs": "a generated image and a model that supports edit",
+  "note": "Clear selection is shown only while a selection exists.",
+  "reachable": "yes",
+  "steps": [
+   "Open New version on a generated image.",
+   "Click Select area and paint a part of the image.",
+   "Click Clear selection.",
+   "Compare: the painted area disappears and the selection is empty; the Clear selection button goes away."
+  ],
+  "where": "Chat with a generated image > New version > Select area > paint an area > Clear selection"
+ },
+ "S45.15": {
+  "labels": [],
+  "needs": "a picture file",
+  "note": "No Remove background control was found. Searched for 'Remove background', 'background removal' and 'transparent background' in apps/web/features/chat/components/Composer/ChatComposerNew.tsx and apps/web/features/chat/components/ImageGenerationCard.tsx. The only related control is the Transparent pill, which asks for a transparent background on a newly generated image, not removal from a chosen picture.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S45.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   }
+  ],
+  "needs": "a generated image and a model that supports edit",
+  "note": "The composer does not offer outpainting (apps/web/features/chat/components/Composer/ChatComposerNew.tsx comment); the card's aspect change calls buildReframeEdit with operation outpaint. The aspect control's visible words were not located.",
+  "reachable": "yes",
+  "steps": [
+   "Open New version on a generated image.",
+   "Choose a different aspect ratio (the aspect control is inside the New version panel).",
+   "Apply the change with the send button (Apply this change to the image).",
+   "Compare: the image is extended to the new frame and the new area is generated to match."
+  ],
+  "where": "Chat with a generated image > New version > change the aspect ratio of the image > apply the change"
+ },
+ "S45.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   }
+  ],
+  "needs": "a generated image and a model that supports edit",
+  "note": "Reframe uses the same aspect-change path as S45.16 (apps/web/features/chat/lib/imageGenerationOptions.ts); the aspect control's visible words were not located, and a tiny ratio change is skipped.",
+  "reachable": "yes",
+  "steps": [
+   "Open New version on a generated image.",
+   "Choose a different aspect ratio.",
+   "Apply the change with the send button.",
+   "Compare: the same scene now fills the new frame, with no change to the content beyond the reframe."
+  ],
+  "where": "Chat with a generated image > New version > change the aspect ratio > apply the change"
+ },
+ "S45.22": {
+  "labels": [],
+  "needs": "a reference picture file and a model that supports edit",
+  "note": "Searched for 'Reference' in apps/web/features/chat/components/Composer/ChatComposerNew.tsx. Visible reference labels found ('Reference images', 'Reference image') belong to video mode only; the image-mode reference path (readReferenceImageAsBase64) has no visible label located.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S45.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "New version"
+   },
+   {
+    "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+    "text": "Previous version"
+   }
+  ],
+  "needs": "a generated image and a model that supports edit",
+  "note": "Earlier versions are stored in message metadata (imageVersions in apps/web/features/chat/pages/WebChatPage.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open New version on a generated image and send a change.",
+   "When the new version appears, look for the group of version arrows under the image.",
+   "Click Previous version to see the earlier image.",
+   "Compare: the original image is still there next to the new result."
+  ],
+  "where": "Chat with a generated image > New version > send a change > use the Previous version arrow to see the earlier image"
+ },
+ "S45.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Transparent"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   }
+  ],
+  "needs": "a model that supports edit",
+  "note": "The Transparent pill appears only when the image model supports edit; the alpha path through storage and download was not traced end to end.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click + > Create image, then turn on the Transparent pill and type a prompt.",
+   "Send it and wait for the image.",
+   "Download the image from the card.",
+   "Compare: the background is see-through, not white or filled."
+  ],
+  "where": "The result of a Transparent image (inner behaviour of the image pipeline); seen in the downloaded file"
+ }
+}

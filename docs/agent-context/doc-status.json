@@ -40,7 +40,8 @@
     "docs/standards/naming-conventions.md",
     "docs/development/agent-workflow.md",
     "docs/development/harness-rollout.md",
-    "docs/standards/service-layer.md"
+    "docs/standards/service-layer.md",
+    "docs/standards/working-method.md"
   ],
   "historicalOrCaution": [
     {

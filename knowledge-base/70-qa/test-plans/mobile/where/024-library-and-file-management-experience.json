@@ -1,0 +1,247 @@
+{
+ "S24.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Uploads"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   }
+  ],
+  "needs": "a signed-in account with at least one uploaded file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the menu with the button at the top left.",
+   "Tap Library.",
+   "Tap the chip Uploads in the row under the Library title.",
+   "Compare the grid with Expected: only files you uploaded should appear, and no generated files."
+  ],
+  "where": "Menu (button at top left) > Library > Uploads"
+ },
+ "S24.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Generated files"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   }
+  ],
+  "needs": "a signed-in account with at least one generated file",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the menu with the button at the top left.",
+   "Tap Library.",
+   "Tap the chip Generated files in the row under the Library title.",
+   "Compare the grid with Expected: only files the assistant generated should appear."
+  ],
+  "where": "Menu (button at top left) > Library > Generated files"
+ },
+ "S24.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Artifacts"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact",
+  "note": "Artifacts shown are filtered to the current app mode (Cloud or Local), so an artifact made in the other mode will not appear.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the menu with the button at the top left.",
+   "Tap Library.",
+   "Tap the chip Artifacts in the row under the Library title.",
+   "Tap one artifact card.",
+   "Compare with Expected: the list should show your artifacts and the tapped one should open in the Artifacts screen."
+  ],
+  "where": "Menu (button at top left) > Library > Artifacts"
+ },
+ "S24.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Images"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   }
+  ],
+  "needs": "a signed-in account with at least one image",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the menu with the button at the top left.",
+   "Tap Library.",
+   "Tap the chip Images in the row under the Library title.",
+   "Tap one image card.",
+   "Compare with Expected: the Images view should list your images and the tapped image should open full screen in a viewer."
+  ],
+  "where": "Menu (button at top left) > Library > Images"
+ },
+ "S24.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Videos"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   }
+  ],
+  "needs": "a signed-in account with at least one video",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the menu with the button at the top left.",
+   "Tap Library.",
+   "Tap the chip Videos in the row under the Library title.",
+   "Tap one video card.",
+   "Compare with Expected: the video should open in a player and play."
+  ],
+  "where": "Menu (button at top left) > Library > Videos"
+ },
+ "S24.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Sort saved files"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Recently added"
+   }
+  ],
+  "needs": "a signed-in account with several files",
+  "note": "There is no separate recent-files view. The sort is labelled Recently added and maps to the modified sort key, so it is not based on when a file was last used.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and tap Library in the menu.",
+   "Tap the ... button at the top right (Library options).",
+   "Tap Sort saved files, then Recently added.",
+   "Compare with Expected: the newest files should be at the top of the grid."
+  ],
+  "where": "Library > Library options (the ... button at top right) > Sort saved files > Recently added"
+ },
+ "S24.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Search library"
+   }
+  ],
+  "needs": "a signed-in account with several named files",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and tap Library in the menu.",
+   "Tap the search field at the bottom that says Search library.",
+   "Type part of a file name you know exists.",
+   "Compare with Expected: the grid should narrow to files whose name matches."
+  ],
+  "where": "Library > search field at the bottom labelled Search library"
+ },
+ "S24.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Documents"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Images"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Videos"
+   }
+  ],
+  "needs": "a signed-in account with files of more than one type",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and tap Library in the menu.",
+   "Swipe the chip row sideways to reach the chips.",
+   "Tap Documents, then Images, then Videos.",
+   "Compare with Expected: the grid should show only the chosen file type each time."
+  ],
+  "where": "Library > filter chips row under the Library title: Images, Videos, Documents, Code, Charts, Research"
+ },
+ "S24.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Add to chat"
+   }
+  ],
+  "needs": "a signed-in account with a document file",
+  "note": "The Add to chat option is not offered for videos, and only appears in Cloud mode.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and tap Library in the menu.",
+   "Press and hold a document card (not a video).",
+   "Tap Add to chat in the menu that opens with the file name as title.",
+   "Compare with Expected: the app should open the chat screen with the file attached in the message box."
+  ],
+  "where": "Library > long press a file card > Add to chat"
+ },
+ "S24.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "file storage used"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Storage"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The line only appears when the server returns storage numbers, and it is hidden inside Recently deleted.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and tap Library in the menu. Look just under the filter chips for a line ending in file storage used.",
+   "Compare the amount used with the limit shown in that line.",
+   "Open the menu, tap Settings, then tap Storage.",
+   "Compare with Expected: the storage breakdown should show how much your files use against the allowance."
+  ],
+  "where": "Library > top of the file grid (text ending in file storage used); and Settings > Storage"
+ },
+ "S24.34": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Recently deleted"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Delete from Library?"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "a signed-in account with at least one file",
+  "note": "The Recently deleted screen says files are erased after 30 days, and Delete permanently is also offered there.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, tap Library in the menu, then long press a file card and tap Delete.",
+   "Tap Delete on the Delete from Library? dialog.",
+   "Tap Library options (... at top right), then Recently deleted.",
+   "Long press the file, tap Restore, then go back to Library and check the file is back in the grid."
+  ],
+  "where": "Library > Library options (... at top right) > Recently deleted; to delete: long press a file > Delete"
+ }
+}

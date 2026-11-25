@@ -1,0 +1,355 @@
+{
+ "S21.01": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Expand code"
+   }
+  ],
+  "needs": "none",
+  "note": "The language word is written from the fence language (the span shows {language}), so the tester sees the language the model wrote in the fence, not a fixed label.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in the chat that asks for a short Python script",
+   "Wait for the answer to finish and look at the code block that appears",
+   "Read the header bar at the top of the code block",
+   "Compare the word at the left of the header with the language of the code"
+  ],
+  "where": "Ask in chat for code in any language, so the answer has a code block; the header bar of the block shows the language name (for example python) on the left, next to the buttons 'Copy', 'Edit', download and 'Expand code'"
+ },
+ "S21.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "Highlighting is done by HighlightedCode and shikiHighlighter; there is no control. It is turned off while the answer is still streaming.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a message in the chat that asks for a short Python script with a comment and a string",
+   "Look at the colours of keywords, strings and comments in the code block",
+   "Compare with Expected: code should be coloured by its language"
+  ],
+  "where": "Inside any code block in an answer; colours come from the block's highlighter"
+ },
+ "S21.03": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Copy"
+   }
+  ],
+  "needs": "none",
+  "note": "The button changes to 'Copied' for about 2 seconds, and to 'Copy failed' if the clipboard is blocked. The visible text 'Copy' comes from the default value of markdown.copy in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in the chat that asks for a short Python script",
+   "Click the 'Copy' button in the top bar of the code block",
+   "Paste into a text field (for example the message box) with Command+V",
+   "Compare the pasted text with the code in the block: it should match exactly, with no extra header or line numbers"
+  ],
+  "where": "Any code block in an answer > 'Copy' button in the block header bar (tooltip-free text button; its accessible name is 'Copy code')"
+ },
+ "S21.04": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Download {{fileName}}"
+   }
+  ],
+  "needs": "none",
+  "note": "The file name comes from codeFileName.ts; the tooltip is the literal template 'Download {{fileName}}' filled with the file name.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in the chat that asks for a short Python script",
+   "Hover over the download icon in the code block header and read the tooltip",
+   "Click the download icon",
+   "Open the downloaded file and check its extension matches the language (for example .py for Python)"
+  ],
+  "where": "Any code block in an answer > download icon in the header bar (no visible words; hover shows the name 'Download' followed by the file name, for example 'Download script.py')"
+ },
+ "S21.08": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Expand code"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Close expanded code"
+   }
+  ],
+  "needs": "none",
+  "note": "The dialog title uses the template '{{language}} code'.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in the chat that asks for a long Python script",
+   "Hover over the expand icon and read the tooltip 'Expand code'",
+   "Click the expand icon",
+   "Look for the full-screen dialog with the title like 'python code', the code, and the 'Close expanded code' icon at the top right"
+  ],
+  "where": "Any code block in an answer > expand icon in the header bar (tooltip 'Expand code'); it opens a large dialog titled with the language followed by 'code'"
+ },
+ "S21.09": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Copy"
+   }
+  ],
+  "needs": "none",
+  "note": "The highlighting is in the DiffLines component of CodeBlock.tsx, which only runs for fence language 'diff'. The separate artifact changes view (apps/web/features/chat/components/artifacts/ArtifactChangesView.tsx) was not walked through; its path is not confirmed from the chat.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in the chat that asks for a short unified diff of a code change, in a diff code block",
+   "Look at the code block with the lines that start with + and -",
+   "Check that added lines have a green background and removed lines have a red background",
+   "Compare with Expected: changed lines are highlighted"
+  ],
+  "where": "Send a message that asks for a diff, so the answer has a code block whose fence language is 'diff' (lines starting with + and -); the lines are coloured green for added and red for removed"
+ },
+ "S21.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Copy"
+   }
+  ],
+  "needs": "none",
+  "note": "Formatting is DiffLines plus the syntax highlighter for diff; no separate hunk header control was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in the chat that asks for a diff of a small change",
+   "Look at the diff block: each line should be on its own row with + or - at the start",
+   "Check that hunk header lines (starting with @@) are readable in the block"
+  ],
+  "where": "Same as S21.09: a code block whose fence language is 'diff' in an answer; the lines show the +/- diff formatting"
+ },
+ "S21.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Run code"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Code Execution"
+   }
+  ],
+  "needs": "a model that can run code (Auto works); deployment must have code execution switched on (see note)",
+  "note": "The '+' button's exact label was not confirmed in the code. Running needs the e2b execution gate on (AGI_E2B_EXECUTION=1 and E2B_API_KEY, apps/web/lib/e2b/gate.ts); the plan says this is not yet switched on.",
+  "reachable": "yes",
+  "steps": [
+   "Open the message box in the chat",
+   "Open the '+' menu next to the message box",
+   "Click 'Run code' to turn it on",
+   "Send a message that asks for a Python calculation",
+   "Look for the 'Code Execution' block under the answer and check that it shows 'Running Python\u2026' and then the result"
+  ],
+  "where": "Message box > the '+' menu (the plus button, exact label not confirmed in code) > 'Run code' toggle row"
+ },
+ "S21.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Coding harness"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Environments"
+   }
+  ],
+  "needs": "a signed-in account; the Code page for the account",
+  "note": "Runtime choice is in CodeComposer.tsx (the select with CODE_COPY.defaultRuntimeOption). The exact visible heading text and the path to the Code page were not fully confirmed; the select is not the chat code-run runtime.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Code page of the app",
+   "Open the environment section of the new task form",
+   "Open the select field for the environment",
+   "Compare the options: default runtime plus coding harness and image groups"
+  ],
+  "where": "The /code page (Code workspace), in the environment select field: the first option is the default runtime, followed by optgroups for coding harnesses and images"
+ },
+ "S21.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Output"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Code Execution"
+   }
+  ],
+  "needs": "a model that can run code and an execution gate that is on",
+  "note": "Output only shows when the run produced stdout; the execution gate is not yet switched on per the plan.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on 'Run code' in the '+' menu",
+   "Send a message that asks for code that prints a line of text",
+   "Click the 'Code Execution' block header if it is collapsed",
+   "Look for the 'Output' label and the printed text in a monospace box"
+  ],
+  "where": "After a code run in the chat (see S21.12), the 'Code Execution' block under the answer > 'Output' section"
+ },
+ "S21.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Stderr"
+   }
+  ],
+  "needs": "a model that can run code and an execution gate that is on",
+  "note": "The red colour is the destructive text token in the same file.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on 'Run code' in the '+' menu",
+   "Send a message that asks for Python code that raises an error",
+   "Look at the 'Code Execution' block under the answer",
+   "Check that the 'Stderr' label and its box are shown in red, separate from 'Output'"
+  ],
+  "where": "After a code run that writes to error output, in the 'Code Execution' block under the answer > 'Stderr' section (red label)"
+ },
+ "S21.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Exit code:"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Code Execution"
+   }
+  ],
+  "needs": "a model that can run code and an execution gate that is on",
+  "note": "A successful run shows only the tick icon, with no text.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on 'Run code' in the '+' menu",
+   "Send a message that asks for Python code that calls exit with the number 3",
+   "Look at the 'Code Execution' header icon: it should be a cross",
+   "Read the text 'Exit code: 3' inside the block and compare with Expected"
+  ],
+  "where": "The 'Code Execution' block under an answer: the status icon in its header (a tick for success, a cross for failure) and the text 'Exit code:' when the code failed"
+ },
+ "S21.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Office files"
+   }
+  ],
+  "needs": "a paid account that allows file creation (not confirmed); no file to upload",
+  "note": "The chip's own visible text was not found; the rendering is in MessageBubble.tsx (generated files block) and downloadGeneratedFile. Plan requirements for the account were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the '+' menu next to the message box",
+   "Choose 'Office files' and pick an output format",
+   "Send a message that asks for a small spreadsheet",
+   "Look under the answer for the generated file: an image preview, a spreadsheet preview, or a download chip with the file name",
+   "Click the file and check that it opens or downloads"
+  ],
+  "where": "Chat '+' menu > 'Office files' (option to create files), then the answer shows a generated file as a download chip or preview under the answer"
+ },
+ "S21.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Plot {{i}}"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+    "text": "Code Execution"
+   }
+  ],
+  "needs": "a model that can run code and an execution gate that is on",
+  "note": "Images are shown only for the allowed image types (gif, jpeg, png, webp).",
+  "reachable": "yes",
+  "steps": [
+   "Turn on 'Run code' in the '+' menu",
+   "Send a message that asks for a Python script that plots a sine wave with matplotlib and saves it as a PNG image",
+   "Look at the 'Code Execution' block under the answer",
+   "Check that the label 'Plot 1' is shown above a picture of the chart"
+  ],
+  "where": "After a code run that draws a chart (see S21.12), the 'Code Execution' block shows a 'Plot 1' label and the image under the answer"
+ },
+ "S21.21": {
+  "labels": [],
+  "needs": "none",
+  "note": "No retry control was found in CodeExecutionBlock.tsx or in apps/web/lib/e2b/gate.ts. The 'Retry' button in MessageBubble.tsx regenerates the answer, not the run. The plan marks this partial.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.22": {
+  "labels": [],
+  "needs": "a running code execution, a model that can run code, and an execution gate that is on",
+  "note": "No stop control specific to a code run was found. The composer has a turn-level stop (onStop in ChatComposerNew.tsx); its visible label was not confirmed. The run-stopped text is CODE_RUN_STOPPED_MESSAGE in apps/web/lib/e2b/types.ts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S21.25": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Edit"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Edit this code beside the chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The button appears only when an editor is available on the surface (openInEditor from useCodeBlockEditor).",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in the chat that asks for a short Python script",
+   "Wait until the answer has finished (the Edit button is hidden while streaming)",
+   "Click the 'Edit' button in the code block header",
+   "Look for an editable code panel that opens beside the chat with the same code"
+  ],
+  "where": "Any code block in an answer > 'Edit' button in the header bar (accessible name 'Edit this code beside the chat')"
+ },
+ "S21.29": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Capabilities"
+   },
+   {
+    "file": "apps/web/features/settings/sections/CapabilitiesSection.tsx",
+    "text": "Code execution and file creation"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The path to Settings from the app menu was not confirmed. The text is in CapabilitiesSection.tsx; it explains the sandbox and its allowed hosts, not a per-run prompt.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the app menu",
+   "Click 'Capabilities' in the Settings list",
+   "Find the section 'Code execution and file creation'",
+   "Read the line under the switch: 'Run code and create files in a sandbox that can reach only GitHub, npm and PyPI.' and compare with Expected"
+  ],
+  "where": "Settings > Capabilities > 'Code execution and file creation' (switch 'Cloud code execution and file creation')"
+ },
+ "S21.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Run code"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Run code isn't available for this model on this deployment. Choose Auto or a model that can run code."
+   }
+  ],
+  "needs": "a model without code execution in the model picker",
+  "note": "The tooltip text is passed as codeExecutionTitle; whether it shows as a native hover title on the disabled row was not checked in the browser.",
+  "reachable": "yes",
+  "steps": [
+   "Choose a model that cannot run code in the model picker (not Auto)",
+   "Open the '+' menu next to the message box",
+   "Hover over the 'Run code' row and read the tooltip",
+   "Check that the row is disabled and the text says: Run code isn't available for this model on this deployment. Choose Auto or a model that can run code."
+  ],
+  "where": "Message box > '+' menu > 'Run code' row when the model cannot run code: the row is greyed out and its hover text says that code is not available for this model"
+ }
+}

@@ -1,0 +1,580 @@
+{
+ "page": {
+  "summary": "The web app (apps/web) is a Next.js 16 App Router site plus the server API (apps/web/app/api) that every other app and third parties call. It hosts Cloud chat, accounts, billing, admin and marketing pages, and it is the UI the public Electron desktop loads. Sign-in is Clerk behind an identity port. Web is Cloud-only (Free and paid plans); Local runs only inside the Electron host; BYOK is not on web.",
+  "sections": [
+   {
+    "heading": "What it is and who uses it",
+    "markdown": "**What it is.** `apps/web` is two things in one deployable: (1) the Next.js web application (marketing pages, sign-in, chat, projects, artifacts, settings, billing, admin) and (2) the server API under `apps/web/app/api` (88 top-level route folders) that Desktop, Mobile, CLI, VS Code, Chrome and third parties call. [code] (apps/web/app/api; docs/product/surface-feature-matrix.md:29 describes the API as 'the HTTP surface under apps/web/app/api that the other six and third parties call').\n\n**Users.**\n- Visitors: public marketing, legal, help, pricing and download pages. [code] (apps/web/app)\n- Signed-in Free users: managed Cloud chat on the Free plan. [code] (packages/contracts/types/src/billing-catalog.ts:323, `free` is in `CLOUD_CHAT_TIERS`)\n- Subscribed users: the same chat plus paid capabilities (connectors, deep research, image and video generation, developer surfaces, team admin). [code] (billing-catalog.ts:346-361)\n- Admins and workspace owners: `apps/web/app/admin`, `apps/web/features/admin`, `apps/web/features/workspace-console`.\n- Guests: a small anonymous chat route exists, off unless a feature flag is on. [code] (apps/web/app/api/llm/v1/chat/completions/guest/route.ts; apps/web/lib/guest-chat/guest-chat-access.ts)\n- Public Electron Desktop users: the Electron window shows the hosted web app, so they use web UI. [requirement] (ARCHITECTURE.md, 'The desktop is two shells'; docs/architecture/overview.md 'Public Electron Desktop uses the hosted web settings surface')\n\n**Role in the product.** suite.md names Web as: account, projects, synced app chats, artifacts, admin, Free managed access, and the owner of waitlist/access-code-gated paid acquisition. [requirement] (docs/product/suite.md:31)\n\n**Published state label.** The website marks only Web as 'Available now'; Desktop, CLI, Mobile, VS Code and Chrome read 'Coming soon'. [code] (apps/web/lib/surface-status.ts:6-13)"
+   },
+   {
+    "heading": "How it is built",
+    "markdown": "| Layer | Choice | Evidence |\n| --- | --- | --- |\n| Framework | Next.js 16, App Router, React 19 | [code] (apps/web/package.json: next ^16.4.5, react 19.3.0; ARCHITECTURE.md Surfaces table) |\n| Routing middleware | `apps/web/proxy.ts` exporting `proxy` (not `middleware.ts`) | [requirement] (AGENTS.md section 5); [code] (apps/web/proxy.ts) |\n| Identity | Clerk (`@clerk/nextjs`) behind an `IdentityProvider` port; default provider name `clerk`, chosen by env `AGI_IDENTITY_PROVIDER` | [code] (packages/platform/identity/src/factory.ts:9-11; apps/web/lib/server/identity.ts) |\n| Database | Neon Postgres via `@neondatabase/serverless` and `@agiworkforce/data-layer`; migrations in `apps/web/db/neon` (577 entries in the folder) | [code] (apps/web/package.json; apps/web/db/neon) |\n| Payments | Stripe (checkout route); Apple store library also a dependency (mobile IAP route `apps/web/app/api/mobile/iap`) | [code] (apps/web/app/api/checkout/route.ts; package.json `@apple/app-store-server-library`) |\n| Storage | S3-compatible object storage (`@aws-sdk/client-s3`, `@agiworkforce/object-storage`) | [code] (package.json) |\n| Code sandbox | `@e2b/code-interpreter` | [code] (package.json) |\n| Providers | One adapter per provider under `packages/ai/providers/*` (anthropic, openai, google, xai, deepseek, groq, minimax, moonshot, nvidia, ollama, lmstudio, openrouter, perplexity, qwen, zhipu, workers-ai, vercel-gateway, factory); web also depends on `@agiworkforce/provider-runtime`, `providers-factory`, `providers-vercel-gateway`, `routing` | [code] (ls packages/ai/providers; apps/web/package.json) |\n| Models | Not written in web code; the generated catalog and family slots own them: `packages/ai/model-registry/catalog/models.curation.json`, `packages/ai/model-registry/catalog/model-families.json`, generated `packages/contracts/types/src/models.json` | [requirement] (AGENTS.md section 4) |\n| Observability | OpenTelemetry packages, Sentry shared helper, pino-style logger | [code] (package.json; apps/web/lib/sentry-shared.ts; apps/web/lib/logger.ts) |\n| Hosting | Vercel (`vercel.json`: build via `apps/web/scripts/build-with-chat.sh`, cron list, git auto-deploy disabled); also a container build `apps/web/Dockerfile` (standalone output, node 24) | [code] (vercel.json:3,9-11; apps/web/Dockerfile) |\n| Tests | Vitest 5 (jsdom) plus Playwright e2e | [code] (apps/web/vitest.config.ts; package.json) |\n\n**Chat turn path (managed Cloud).** The client calls `POST /api/llm/v1/chat/completions`. The route runs an auth gate (`lib/auth-gate.ts`), the managed-compute kill switch, workspace policy gates, spend limits, and then dispatches through the shared provider adapters; usage is accounted in `managed-usage-accounting-service`. [code] (apps/web/app/api/llm/v1/chat/completions/route.ts:40; lib/auth-gate.ts; apps/web/lib/managed-compute-gate.ts; apps/web/lib/services/managed-usage-accounting-service.ts). See SYS-chat-turn-pipeline for the full pipeline.\n\n**Public API.** The same adapters back a public OpenAI-compatible v1 route. [requirement] (ARCHITECTURE.md 'Provider strategy')"
+   },
+   {
+    "heading": "Folder map and entry points",
+    "markdown": "| Path (under apps/web) | What it holds |\n| --- | --- |\n| `app/` | App Router pages (about 130 route folders: chat, agi-work, agi-code, code, settings, billing, pricing, admin, connectors, skills, plugins, download, help, legal, login, signup, device-auth, share, shared-artifact, waitlist, upgrade...) and `app/api/*` handlers |\n| `app/layout.tsx`, `app/Providers.tsx`, `app/ProductRuntimeProviders.tsx` | Root layout and client providers |\n| `app/chat/[sessionId]/page.tsx` | Chat route; renders `features/chat/components/WebChatRoot.tsx`, which mounts `features/chat/pages/WebChatPage.tsx` (the main chat screen) |\n| `proxy.ts` | Request middleware: identity session, CSP nonce, region gate, API-host rewrite, CORS and security headers |\n| `features/` | Product features by area (chat, projects, settings, billing, admin, agents, connectors, code, media, memory, study, workspaces, marketing, desktop-host, remote-dispatch...) |\n| `shared/` | Web-wide components, stores (`shared/stores/web-chat-store.ts`), hooks, services, config |\n| `lib/` | Server and client helpers: auth, billing, guest-chat, managed-compute-gate, free-chat-surface-policy, surface-status, connectors, moderation, rate-limit, `lib/server/*`, `lib/services/*` |\n| `db/neon/` | Append-only, checksummed SQL migration chain (never edit an applied file) |\n| `config/` | `free-pools.json`, `free-model-promotion.json` (free inference pools and promotion) |\n| `content/` | `api-docs`, `legal`, `support` content |\n| `e2e/` | Playwright specs (164 files in the folder) |\n| `__tests__/`, `*.test.ts` beside code | Vitest tests |\n| `scripts/` | Build helpers (`build-with-chat.sh`, `verify-built-css.mjs`, notices, support corpus) |\n| `instrumentation.ts`, `instrumentation-client.ts` | Telemetry bootstrap |\n| `Dockerfile` | Container build; context is the repo root |\n\n**Main API entry points** (all under `app/api`): `llm/v1/chat/completions` (chat turns, with `guest`, `runs`, `approve`, `resume-*` children), `llm/v1/models`, `llm/v1/credits/balance`, `me`, `models`, `checkout`, `upgrade`, `billing/*`, `usage`, `projects`, `artifacts`, `memory`, `connectors`, `skills`, `plugins`, `code/sessions`, `media/image/generate`, `media/video/generate`, `voice/live/sessions`, `search`, `files/uploads`, `auth/device/*`, `auth/desktop/*`, `mobile/*`, `waitlist`, `cron/*`, `stripe-webhook`, `health`, `version`. [code] (ls apps/web/app/api)\n\nNo `README` exists in apps/web. [code] (ls apps/web). `apps/web/AGENTS.md` and `CLAUDE.md` are written by `next dev` and are committed. [requirement] (AGENTS.md section 5)"
+   },
+   {
+    "heading": "Sign-in",
+    "markdown": "**Provider.** Clerk, accessed only through the identity port `getIdentityProvider()` so the provider can be swapped by environment plus one adapter. [code] (apps/web/lib/server/identity.ts:11-24; packages/platform/identity/src/factory.ts:9-11; adapters `clerk.ts`, `clerk-sessions.ts`)\n\n**Web sign-in screens.** `app/login` (combined log-in or sign-up entry `AuthEntryScreen.tsx`), `app/signup` (with `TermsGate`), `app/auth/*` (callback, sso-callback, reset-password, update-password, desktop, device, chrome-extension). [code] (apps/web/app/login, app/signup, app/auth)\n\n**Middleware.** `proxy.ts` takes the identity middleware from the port. Public API routes served without identity are only `/api/health`, `/api/download`, `/api/models`, `/api/waitlist/public` and the OG image. Product routes and `/api/(.*)` run through the identity session. [code] (apps/web/proxy.ts:155-164, 170-200)\n\n**How other apps sign in.**\n- Browser-origin tokens: the token's authorized party (`azp`) decides the bound surface; `chrome-extension://` origins bind to `chrome`, other origins to `web`. Mobile mints tokens from a Clerk JWT template that carries a surface claim. A token with neither binds to nothing and the plan gate fails closed. [code] (apps/web/lib/free-chat-surface-policy.ts:53-67)\n- Desktop (Electron) and Chrome carry a web-minted token and may refine the surface by header `x-agi-surface`. [code] (free-chat-surface-policy.ts:31-33, 97-112)\n- CLI and VS Code: device code flow (`api:POST /api/auth/device/code`, `/token`, `/approve`, `/refresh`) and API keys; the page `app/device-auth`. [code] (apps/web/app/api/auth/device; apps/web/app/device-auth)\n- Desktop sign-in handoff: `/api/auth/desktop/grant` and `/redeem`. [code] (apps/web/app/api/auth/desktop)\n\n**Account rules checked on the chat route.** Terms version standing, adult (18+) eligibility, MFA/passkey policy, IP allow list, CSRF and rate limits are checked in the auth gate. [code] (apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:5-35)\n\n**Anonymous use.** A guest chat route (`api:POST /api/llm/v1/chat/completions/guest`) exists with bot challenge, per-device and per-IP daily caps (defaults 20 and 100 messages) and spend caps; it is available only when bot protection is ready and the flag `guest.chat` is enabled. [code] (apps/web/lib/guest-chat/config.ts:3-30; guest-chat-access.ts:15-33)"
+   },
+   {
+    "heading": "Modes: Local, own key, Cloud",
+    "markdown": "The product names three modes. Here is what the web app does with each. Implementation status is separate from verification status; no run is recorded in the documents read, so every row is unverified by execution.\n\n| Mode | Web in a plain browser | Web inside the Electron desktop host | Evidence |\n| --- | --- | --- | --- |\n| mode:cloud (managed Cloud) | Supported and the only inference path. Free and all paid plans can use managed chat. | Same hosted UI | [code] (billing-catalog.ts:346 `managed_chat: CLOUD_CHAT_TIERS`; free-chat-surface-policy.ts:97-112 maps `web` to `managed_chat`) |\n| mode:local | Not supported. Local calls need the desktop host bridge; with no bridge `startLocalChat` throws `DesktopHostUnavailable`. | Supported through the host bridge (`local_chat_start`) to local model servers; text only, attachments refused; a chat that holds local turns cannot continue on a cloud model | [code] (apps/web/features/desktop-host/lib/runtime-client.ts:621-646; apps/web/features/chat/lib/local-turn.ts:15-70) |\n| mode:own-key (BYOK) | Not supported. Web never stores a provider key; BYOK belongs to the CLI and VS Code. | Same: Desktop chat takes no provider keys | [code] (apps/web/features/settings/sections/CapabilitiesSection.tsx:224); [requirement] (docs/product/suite.md:44 'Must not: expose BYOK/free env-key chat or pretend Local compute is available in-browser without a connected host') |\n\n**Local to own-key crossing.** Web contains the handoff dialog and preview logic for a Local conversation moving to a BYOK model as an explicit fork (`routeLocalToByokSend`, `LocalByokHandoffDialog`). This is code for the consent step; it does not mean web holds keys. [code] (apps/web/features/chat/lib/localByokHandoff.ts:81-103; WebChatPage.tsx:412) Whether the BYOK target is reachable from web at all is [unknown].\n\n**Free vs subscribed on web.**\n- plan:free: managed chat, tools, projects, memory, skills, cloud sync. Not included: connectors, remote control, AGI Work, deep research, image generation, managed API, developer surfaces. [code] (billing-catalog.ts:322-361)\n- Paid plans (ids `basic`, `pro` labelled Premium, `max`, `max_15x` labelled Ultra, `team`, `team_premium`, `enterprise`): `connectors` from all paid; `agi_work`, `deep_research`, `image_generation`, `managed_api`, `developer_surfaces` from `pro` up; `video_generation` only `max_15x` and `enterprise`. [code] (billing-catalog.ts:166-232, 346-361)\n- Plan ids `local-only` and `byok` exist as free-of-charge plan tiers; they carry no managed Cloud capability. [code] (billing-catalog.ts:168-179, 296-299)\n- Paid acquisition is staged: checkout requires waitlist or access-code access unless the run-time switch opens it (`AGI_BILLING_WAITLIST_OPEN=1` forces it open). [code] (apps/web/lib/server/billing-waitlist-access.ts:28-52; checkout route.ts:300-308) The doc says the same. [requirement] (docs/product/suite.md:19-24)\n- Kill switch: env `AGI_MANAGED_COMPUTE_PRIVATE_BETA`; unless set to 0, false or off the gate allows managed compute; when off, chat returns 403 `public_launch_blocked`. [code] (apps/web/lib/managed-compute-gate.ts:40,50-83)\n\n**Subscription system.** Entitlements are resolved on the server (`lib/services/entitlement-resolution.ts`, `effective-subscription-service.ts`) and returned by `api:GET /api/me`; usage accounting is in `managed-usage-accounting-service.ts` and `credit-service.ts`. Clients do not compute quotas. [code] (apps/web/app/api/me/route.ts:20; apps/web/lib/services); [requirement] (ARCHITECTURE.md 'Data ownership across surfaces')\n\n**Free inference pools.** `apps/web/config/free-pools.json` lists promo pools with terms review fields (`reviewedBy` is null in the first entry read). [code] (apps/web/config/free-pools.json:1-30)"
+   },
+   {
+    "heading": "Shared code",
+    "markdown": "Web depends on these workspace packages (from `apps/web/package.json`): `@agiworkforce/types` (contracts, billing catalog, product names), `cloud-contracts`, `local-runtime-contract`, `unified-chat`, `ui`, `design-tokens`, `i18n`, `icons`, `identity`, `data-layer`, `key-value`, `object-storage`, `observability`, `provider-protocol`, `provider-runtime`, `providers-factory`, `providers-vercel-gateway`, `routing`, `search`, `skills`, `mcp`, `apply-patch`, `artifacts`, `agent-core`, `client-runtime`, `sync`, `context`, `context-engine`, `compliance`, `utils`. [code] (apps/web/package.json:19-52)\n\n| Shared piece | Used by | Evidence |\n| --- | --- | --- |\n| `packages/ui/unified-chat` | Desktop, web, Chrome, VS Code (must not assume one surface's routing or billing) | [requirement] (AGENTS.md section 5); [code] (WebChatPage.tsx:91,412) |\n| `packages/contracts/types` billing catalog and model catalog | all apps | [code] (billing-catalog.ts) |\n| Provider adapters `packages/ai/providers/*` | web API and other TS surfaces | [requirement] (ARCHITECTURE.md 'Provider strategy') |\n| Rust protocol types exported into `packages/contracts/types/src/generated/protocol` | web and others | [requirement] (AGENTS.md section 5) |\n| Neon schema `apps/web/db/neon` | canonical for every surface | [requirement] (docs/architecture/overview.md 'Shared Contracts') |\n\n**Who consumes web.** Public Electron Desktop loads the hosted web app, so a change to `apps/desktop/src` never reaches it. [requirement] (AGENTS.md section 5). Mobile, CLI, VS Code and Chrome call the API. Packages must not import from apps and apps must not import other apps; `pnpm check:boundaries` enforces entrypoint use. [requirement] (docs/architecture/overview.md; AGENTS.md section 3)\n\n**Web-private feature code.** Many features live only under `apps/web/features` (e.g. `features/chat`, `features/billing`), as the architecture doc assigns web feature roots there. [requirement] (docs/architecture/overview.md 'Surface Feature Roots')"
+   },
+   {
+    "heading": "Build, run and test",
+    "markdown": "Commands come from `docs/agent-context/commands.json` (surfaces.web) and `apps/web/package.json`. They were not run for this page. [code] (docs/agent-context/commands.json:125-135)\n\n| Task | Command |\n| --- | --- |\n| Dev server | `pnpm --filter @agiworkforce/web dev` |\n| Build | `pnpm --filter @agiworkforce/web build` (runs `pnpm notices` then `next build`) |\n| Typecheck (web only) | `pnpm --filter @agiworkforce/web typecheck`; whole repo `pnpm typecheck:all` |\n| Unit tests | `pnpm --filter @agiworkforce/web test` (Vitest, workers set by `AGI_VITEST_MAX_WORKERS`, default 2) |\n| One test | `pnpm --filter @agiworkforce/web test <file-or-pattern>` |\n| End to end | `pnpm --filter @agiworkforce/web test:e2e` (Playwright) |\n| Lint | `pnpm --filter @agiworkforce/web lint` (max-warnings 0) |\n| Container | `docker build -f apps/web/Dockerfile .` from the repo root |\n| Guard chain | `pnpm check:llm-operability` (runs on pre-push) |\n\n**Gotchas.** [requirement] (AGENTS.md section 12)\n- `apps/web` uses its own Vitest major; run through the package script, never the root binary.\n- `tsc --noEmit` in apps/web needs `NODE_OPTIONS=--max-old-space-size=8192` or it dies with SIGABRT.\n- Guards read the working tree, so stage first, then run.\n- Migrations: `pnpm db:migrate -- status`, `apply --target <env>`; production apply needs `--confirm-production`.\n- On the owner's 16 GB machine, heavy jobs (builds, full suites, tsc, dev servers, browsers) must go through `scripts/dev/heavy-job.sh`; a hook denies unwrapped ones. [requirement] (CLAUDE.md 'Delegation')\n\n**Test layout.** `apps/web/__tests__` (proxy, security headers, trust boundary, page claims), `apps/web/app/**/*.test.ts(x)`, `apps/web/lib/**/*.test.ts`, `apps/web/e2e/*.spec.ts`. Priority tiers `priority-level-1` and `security` resolve. [code] (ls); [requirement] (AGENTS.md section 12)"
+   },
+   {
+    "heading": "Release state",
+    "markdown": "**Implementation status.** The web app and API code are present and wired: chat route chain `app/chat/[sessionId]/page.tsx` to `WebChatRoot` to `WebChatPage`, and API routes under `app/api`. [code] (apps/web/app/chat/[sessionId]/page.tsx:2; features/chat/components/WebChatRoot.tsx)\n\n**Published label.** Web is the only surface with the label 'Available now'. [code] (apps/web/lib/surface-status.ts:6-13)\n\n**Deploy path.** Vercel, with git-triggered deployments disabled in `vercel.json`; the workflow `.github/workflows/deploy-production.yml` runs after CI, has a daily drift alarm comparing production against main, and a rollback input. [code] (vercel.json:9-11; .github/workflows/deploy-production.yml:1-30). The matrix states whether a release workflow has ever run is not recorded in the tree. [requirement] (docs/product/surface-feature-matrix.md:23)\n\n**Database state.** The committed ledger says migrations are applied through 425, recorded 2026-11-21 against ledger commit 57bf292f5d. [code] (scripts/config/production-migrations-applied.json:3-5)\n\n**Verification status.** No document in the tree records a real run of the web chat in production for this page; the feature matrix says its 'Present' cells are located, not exercised. [requirement] (docs/product/surface-feature-matrix.md:7-13). Status of what production serves today is [unknown]; `api:GET /api/version` reports the served commit. [code] (apps/web/app/api/version/route.ts exists)\n\n**Paid sales.** Paid upgrades on web remain waitlist or access-code gated. [requirement] (docs/product/suite.md:19-24). Free managed access is documented as public alpha, enabled for signed-in users (founder decision 2026-06-27). [requirement] (docs/product/suite.md:21)"
+   },
+   {
+    "heading": "Differences from the unified experience",
+    "markdown": "The intended unified product is one experience across six apps over one contract layer, with Local, own-key and Cloud as separate trust boundaries. [requirement] (docs/product/suite.md; ARCHITECTURE.md)\n\n| Area | Unified intent | What web does |\n| --- | --- | --- |\n| Chat UI | Shared `unified-chat` package | Uses `unified-chat` pieces but keeps a very large web-only screen, `features/chat/pages/WebChatPage.tsx`, plus its own store `shared/stores/web-chat-store.ts` [code] |\n| Modes | Local, own key, Cloud everywhere it fits | Cloud only in a browser; Local only through the Electron bridge; no own-key [code] (see Modes) |\n| Local-free promise | Local inference on desktop and mobile needs no paid plan | Web itself has no local inference; the Electron-hosted web UI reaches local models through the host bridge. Whether signing in is needed for Local in that host is [unknown] |\n| Plan names | One AGI Subscription | Server plan ids differ from labels: `pro` is shown as Premium, `max_15x` as Ultra [code] (billing-catalog.ts:192-206) |\n| Developer work | Host-owned runtime for Desktop Code, CLI and VS Code | Web has its own cloud code sessions (`api/code/sessions`, `lib/services/cloud-code-session-service.ts`); the matrix marks terminal use and git as absent on web [code]; [requirement] (surface-feature-matrix.md:414-444) |\n| Screen and device tools | present on desktop | Web cannot capture the screen; terminal absent [requirement] (surface-feature-matrix.md:344, 434) |\n| Copy about other apps | One truth | Web marketing and settings copy states availability of other apps from `surface-status.ts`, so those labels must be edited there [code] (apps/web/lib/surface-status.ts) |\n\nWeb is also the policy owner for entitlements, usage and moderation for all apps, so it carries server logic the other apps only consume. [code] (apps/web/app/api/me/route.ts; apps/web/lib/services)"
+   },
+   {
+    "heading": "Gaps",
+    "markdown": "Largest known gaps, each with its basis.\n\n1. **Open Web defects.** `audit/registers/known-flaws.md` has a Web section with many rows, mostly account and workspace erasure, export and session revocation (several rated High, for example WEB-WORKSPACE-DELETION-LIFECYCLE-01, WEB-WORKSPACE-ERASURE-LOCKDOWN-01, WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01, WEB-SESSION-REVOCATION-CLASSIFICATION-01). Most say 'runtime acceptance open'. [requirement] (audit/registers/known-flaws.md:15-40)\n2. **Nothing recorded as run.** The feature matrix says no cell was produced by running the feature; whether the release workflow has ever run is not in the tree. [requirement] (docs/product/surface-feature-matrix.md:7-13, 23)\n3. **No browser Local, no own-key.** By design in the browser; users wanting Local or BYOK must use CLI, VS Code or the desktop host. [code] (CapabilitiesSection.tsx:224)\n4. **Large chat files.** The large-file path (up to 500 MiB) is built but was off when documented: `CHAT_LARGE_FILES_ENABLED` unset, scanner protocol not live. Current state is [unknown] (the doc date is 2026-11-15, the migration ledger is now 425). [requirement] (docs/architecture/overview.md 'Chat File Uploads')\n5. **Paid acquisition gated.** Waitlist or access code required unless the switch is open. [code] (billing-waitlist-access.ts)\n6. **Free pool terms.** The first pool entry in `free-pools.json` has `reviewedBy` and `verifiedAtMs` null and an expiry timestamp, so its terms review is not recorded there. [code] (apps/web/config/free-pools.json)\n7. **Web size.** Many routes and features in one app (88 API folders, 164 e2e specs, 577 migration-folder entries); a single chat screen file holds most chat logic. [inferred] (folder counts; WebChatPage.tsx imports)\n8. **Matrix cells unverified for web:** Chat, Library, Search, slash commands, attachments and repository context are marked unverified by the matrix generator (a limit of its import search, not a proven absence). [requirement] (surface-feature-matrix.md:44-60, 154, 194, 214, 334, 424)"
+   },
+   {
+    "heading": "How to verify",
+    "markdown": "Nothing below was run for this page. [unknown] for outcomes.\n\n1. Read the surface label: `apps/web/lib/surface-status.ts` (`SURFACE_STATUS`).\n2. Check what production serves: call `GET /api/version` on the production origin and compare with main; the scheduled workflow `production-drift` does this daily. [code] (.github/workflows/deploy-production.yml:30-50)\n3. Run web unit tests: `pnpm --filter @agiworkforce/web test`; trust boundary specifically: `apps/web/__tests__/trust-boundary.test.ts`; page claims: `apps/web/__tests__/surface-page-claims.test.ts`; proxy rules: `apps/web/__tests__/proxy-*.test.ts`.\n4. Run e2e: `pnpm --filter @agiworkforce/web test:e2e` (specs in `apps/web/e2e`, e.g. `chat-functional-conversations.spec.ts`, `checkout.spec.ts`, `e10-desktop-login.spec.ts`).\n5. Check plan gating: read `packages/contracts/types/src/billing-catalog.ts` and its test `packages/contracts/types/src/__tests__/billing-catalog.test.ts`.\n6. Check applied migrations: `pnpm db:migrate -- status` and `scripts/config/production-migrations-applied.json`.\n7. Run the guard chain: `pnpm check:llm-operability` after staging changes.\n8. For human-level proof, drive the built app (not `next dev`) with a test account and look at Free and subscribed states; the project asks for this rather than relying on tests alone. [requirement] (owner guidance in project memory; AGENTS.md section 12 'say what you ran')"
+   }
+  ],
+  "key_facts": [
+   {
+    "fact": "apps/web is both the Next.js web app and the server API that all other apps and third parties call.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/product/surface-feature-matrix.md:29",
+     "apps/web/app/api (88 route folders)"
+    ]
+   },
+   {
+    "fact": "Stack is Next.js 16 App Router with React 19; routing middleware is proxy.ts exporting proxy, not middleware.ts.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/package.json (next ^16.4.5, react 19.3.0)",
+     "AGENTS.md section 5",
+     "apps/web/proxy.ts"
+    ]
+   },
+   {
+    "fact": "Sign-in uses Clerk behind an identity port; default provider is clerk, selected by env AGI_IDENTITY_PROVIDER.",
+    "basis": "code",
+    "evidence": [
+     "packages/platform/identity/src/factory.ts:9-11",
+     "apps/web/lib/server/identity.ts:11-24"
+    ]
+   },
+   {
+    "fact": "A verified token is bound to a surface from signed claims: chrome-extension origin to chrome, other origins to web, mobile via JWT template claim; no claim means unbound and the plan gate fails closed.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/free-chat-surface-policy.ts:53-67"
+    ]
+   },
+   {
+    "fact": "Web chat is managed Cloud only for all signed-in tiers including free; managed_chat capability is granted to free, basic, pro, max, max_15x, team, team_premium and enterprise.",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:322-346",
+     "apps/web/lib/free-chat-surface-policy.ts:97-112"
+    ]
+   },
+   {
+    "fact": "Web never stores a provider key; own-key (BYOK) belongs to the CLI and VS Code.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/features/settings/sections/CapabilitiesSection.tsx:224",
+     "docs/product/suite.md:44"
+    ]
+   },
+   {
+    "fact": "Local model chat from web works only when the Electron desktop host bridge exists; without it startLocalChat throws DesktopHostUnavailable. Local turns are text only.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/features/desktop-host/lib/runtime-client.ts:621-646",
+     "apps/web/features/chat/lib/local-turn.ts:15-70"
+    ]
+   },
+   {
+    "fact": "Plan ids differ from display labels: pro is labelled Premium, max_15x is labelled Ultra; local-only and byok plan ids exist and are free.",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:166-232"
+    ]
+   },
+   {
+    "fact": "Capability tiers: connectors from any paid plan; agi_work, deep_research, image_generation, managed_api, developer_surfaces from pro up; video_generation only max_15x and enterprise.",
+    "basis": "code",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:346-361"
+    ]
+   },
+   {
+    "fact": "Paid checkout requires waitlist or access-code access unless the run-time flag opens upgrades or AGI_BILLING_WAITLIST_OPEN=1.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/server/billing-waitlist-access.ts:28-52",
+     "apps/web/app/api/checkout/route.ts:300-308"
+    ]
+   },
+   {
+    "fact": "Env AGI_MANAGED_COMPUTE_PRIVATE_BETA acts as an incident kill switch: only values 0, false or off block managed compute with 403 public_launch_blocked.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/managed-compute-gate.ts:40-83"
+    ]
+   },
+   {
+    "fact": "A guest chat route exists (POST /api/llm/v1/chat/completions/guest) with defaults of 20 messages per device and 100 per IP per day; it is on only when bot protection is ready and flag guest.chat is enabled.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/guest-chat/config.ts:3-30",
+     "apps/web/lib/guest-chat/guest-chat-access.ts:15-33"
+    ]
+   },
+   {
+    "fact": "Only /api/health, /api/download, /api/models, /api/waitlist/public and the OG image are served without identity.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/proxy.ts:155-161"
+    ]
+   },
+   {
+    "fact": "Website surface labels mark Web 'Available now' and Desktop, CLI, Mobile, VS Code, Chrome 'Coming soon'.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/lib/surface-status.ts:6-13"
+    ]
+   },
+   {
+    "fact": "Hosting is Vercel with git auto-deploy disabled; a container build via apps/web/Dockerfile also exists; deploy workflow runs after CI and has a daily drift alarm and a rollback input.",
+    "basis": "code",
+    "evidence": [
+     "vercel.json:3,9-11",
+     "apps/web/Dockerfile",
+     "\u200b.github/workflows/deploy-production.yml:1-30"
+    ]
+   },
+   {
+    "fact": "Committed migration ledger says production migrations applied through 425 as of 2026-11-21.",
+    "basis": "code",
+    "evidence": [
+     "scripts/config/production-migrations-applied.json:3-5"
+    ]
+   },
+   {
+    "fact": "Chat screen mount chain is app/chat/[sessionId]/page.tsx to WebChatRoot to WebChatPage.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/app/chat/[sessionId]/page.tsx:2",
+     "apps/web/features/chat/components/WebChatRoot.tsx"
+    ]
+   },
+   {
+    "fact": "Public Electron Desktop shows the hosted web app, so apps/desktop/src changes never reach it.",
+    "basis": "requirement",
+    "evidence": [
+     "AGENTS.md section 5",
+     "ARCHITECTURE.md 'The desktop is two shells'"
+    ]
+   },
+   {
+    "fact": "Web test commands: pnpm --filter @agiworkforce/web test (Vitest, jsdom), test:e2e (Playwright); typecheck needs 8 GB heap; web uses its own Vitest major.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/agent-context/commands.json:125-135",
+     "AGENTS.md section 12",
+     "apps/web/vitest.config.ts"
+    ]
+   },
+   {
+    "fact": "apps/web/db/neon is an append-only checksummed migration chain; tables seen include profiles, subscriptions, conversations, messages, usage_events, media_assets, chat_file_intakes, feature_flag_definitions, feature_flags, beta_invites, beta_redemptions, api_keys, organizations.",
+    "basis": "code",
+    "evidence": [
+     "apps/web/db/neon/*.sql",
+     "AGENTS.md section 5"
+    ]
+   },
+   {
+    "fact": "Entitlements, quota and plan values are computed on the server and returned by GET /api/me; clients never compute them.",
+    "basis": "requirement",
+    "evidence": [
+     "ARCHITECTURE.md 'Data ownership across surfaces'",
+     "apps/web/app/api/me/route.ts:20"
+    ]
+   },
+   {
+    "fact": "Open Web defects are tracked in audit/registers/known-flaws.md (Web section), many rated High on erasure, export and session revocation, with runtime acceptance open.",
+    "basis": "requirement",
+    "evidence": [
+     "audit/registers/known-flaws.md:15-40"
+    ]
+   },
+   {
+    "fact": "No document in the tree records a real run of the web release or features; feature-matrix 'Present' means located, not exercised.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/product/surface-feature-matrix.md:7-13,23"
+    ]
+   },
+   {
+    "fact": "Large chat file path (up to 500 MiB) was built but gated off (CHAT_LARGE_FILES_ENABLED unset) when documented on 2026-11-15.",
+    "basis": "requirement",
+    "evidence": [
+     "docs/architecture/overview.md 'Chat File Uploads'"
+    ]
+   },
+   {
+    "fact": "Model identifiers are not written in web code; the catalog files own them.",
+    "basis": "requirement",
+    "evidence": [
+     "AGENTS.md section 4",
+     "packages/ai/model-registry/catalog/models.curation.json",
+     "packages/ai/model-registry/catalog/model-families.json"
+    ]
+   }
+  ],
+  "relationships": [
+   {
+    "from": "surface:web",
+    "rel": "implemented_by",
+    "to": "file:apps/web/app/layout.tsx",
+    "evidence": [
+     "apps/web/app/layout.tsx"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/pages/WebChatPage.tsx",
+    "evidence": [
+     "apps/web/app/chat/[sessionId]/page.tsx:2",
+     "apps/web/features/chat/components/WebChatRoot.tsx"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "implemented_by",
+    "to": "file:apps/web/proxy.ts",
+    "evidence": [
+     "AGENTS.md section 5",
+     "apps/web/proxy.ts:155"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "configured_by",
+    "to": "file:apps/web/lib/surface-status.ts",
+    "evidence": [
+     "apps/web/lib/surface-status.ts:6-13"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "exposes_api",
+    "to": "api:POST /api/llm/v1/chat/completions",
+    "evidence": [
+     "apps/web/app/api/llm/v1/chat/completions/route.ts"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "exposes_api",
+    "to": "api:POST /api/llm/v1/chat/completions/guest",
+    "evidence": [
+     "apps/web/app/api/llm/v1/chat/completions/guest/route.ts"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "exposes_api",
+    "to": "api:GET /api/me",
+    "evidence": [
+     "apps/web/app/api/me/route.ts"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "exposes_api",
+    "to": "api:POST /api/checkout",
+    "evidence": [
+     "apps/web/app/api/checkout/route.ts"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "exposes_api",
+    "to": "api:POST /api/auth/device/code",
+    "evidence": [
+     "apps/web/app/api/auth/device/code/route.ts"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "exposes_api",
+    "to": "api:GET /api/version",
+    "evidence": [
+     "apps/web/app/api/version/route.ts"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "depends_on",
+    "to": "file:packages/platform/identity/src/factory.ts",
+    "evidence": [
+     "apps/web/lib/server/identity.ts:1-24"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "depends_on",
+    "to": "file:packages/contracts/types/src/billing-catalog.ts",
+    "evidence": [
+     "apps/web/lib/free-chat-surface-policy.ts:1-8",
+     "billing-catalog.ts:346"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "depends_on",
+    "to": "file:packages/ui/unified-chat",
+    "evidence": [
+     "apps/web/features/chat/pages/WebChatPage.tsx:91,412",
+     "AGENTS.md section 5"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "available_on",
+    "to": "mode:cloud",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:346",
+     "apps/web/lib/free-chat-surface-policy.ts:97-112"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "available_on",
+    "to": "mode:local",
+    "evidence": [
+     "apps/web/features/desktop-host/lib/runtime-client.ts:621-646 (only through the Electron host bridge)"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "blocked_by",
+    "to": "mode:own-key",
+    "evidence": [
+     "apps/web/features/settings/sections/CapabilitiesSection.tsx:224",
+     "docs/product/suite.md:44"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "governed_by_subscription",
+    "to": "plan:free",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:180,323"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "governed_by_subscription",
+    "to": "plan:pro",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:192-196 (label Premium)"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "governed_by_subscription",
+    "to": "plan:max_15x",
+    "evidence": [
+     "packages/contracts/types/src/billing-catalog.ts:204-208 (label Ultra); video_generation line 357"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "stores_data_in",
+    "to": "table:subscriptions",
+    "evidence": [
+     "apps/web/db/neon/0003_subscriptions.sql",
+     "apps/web/app/api/checkout/route.ts (SubscriptionRow)"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "stores_data_in",
+    "to": "table:profiles",
+    "evidence": [
+     "apps/web/db/neon/0002_profiles.sql",
+     "apps/web/app/api/me/route.ts (ProfileRow)"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "stores_data_in",
+    "to": "table:beta_redemptions",
+    "evidence": [
+     "apps/web/lib/server/billing-waitlist-access.ts:42-52"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "stores_data_in",
+    "to": "table:chat_file_intakes",
+    "evidence": [
+     "docs/architecture/overview.md 'Chat File Uploads'"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "uses_provider",
+    "to": "provider:anthropic",
+    "evidence": [
+     "packages/ai/providers/anthropic",
+     "apps/web/package.json @anthropic-ai/sdk"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "uses_provider",
+    "to": "provider:vercel-gateway",
+    "evidence": [
+     "apps/web/package.json (@agiworkforce/providers-vercel-gateway)"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "uses_provider",
+    "to": "provider:openai",
+    "evidence": [
+     "packages/ai/providers/openai",
+     "ARCHITECTURE.md 'Provider strategy'"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "tested_by",
+    "to": "test:apps/web/__tests__/trust-boundary.test.ts",
+    "evidence": [
+     "apps/web/__tests__/trust-boundary.test.ts:1-20"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "tested_by",
+    "to": "test:apps/web/__tests__/surface-page-claims.test.ts",
+    "evidence": [
+     "apps/web/__tests__"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "tested_by",
+    "to": "test:apps/web/e2e/checkout.spec.ts",
+    "evidence": [
+     "apps/web/e2e/checkout.spec.ts"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "configured_by",
+    "to": "file:vercel.json",
+    "evidence": [
+     "vercel.json:3-11"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "documented_in",
+    "to": "file:docs/product/surface-feature-matrix.md",
+    "evidence": [
+     "docs/product/surface-feature-matrix.md:23-29"
+    ]
+   },
+   {
+    "from": "surface:web",
+    "rel": "documented_in",
+    "to": "SYS-chat-turn-pipeline",
+    "evidence": [
+     "apps/web/app/api/llm/v1/chat/completions/route.ts"
+    ]
+   },
+   {
+    "from": "surface:desktop",
+    "rel": "depends_on",
+    "to": "surface:web",
+    "evidence": [
+     "ARCHITECTURE.md 'The desktop is two shells'",
+     "AGENTS.md section 5"
+    ]
+   },
+   {
+    "from": "surface:mobile",
+    "rel": "depends_on",
+    "to": "api:POST /api/llm/v1/chat/completions",
+    "evidence": [
+     "apps/web/lib/free-chat-surface-policy.ts:97-112 (mobile maps to managed_chat)"
+    ]
+   }
+  ],
+  "open_questions": [
+   "Is web chat currently serving production users, and at which commit? Only GET /api/version or the deploy workflow run history can say; the tree records no run.",
+   "Does the Electron-hosted web UI require sign-in for Local chat? The web code reaches local models through the host bridge but the sign-in requirement for that path was not traced.",
+   "Can a BYOK target ever be reached from web? The handoff dialog exists in web but no web key storage was found.",
+   "Is CHAT_LARGE_FILES_ENABLED on in production now, and is the scanner at protocol 2? Documented as off on 2026-11-15; ledger has since advanced to migration 425.",
+   "Has the first free-pool entry in apps/web/config/free-pools.json been reviewed? Its reviewedBy and verifiedAtMs are null.",
+   "Product choice left open: when to open paid acquisition on web to everyone (the waitlist switch is a run-time flag).",
+   "Whether the guest chat flag guest.chat is on in production is unknown.",
+   "Which of the surface-feature-matrix 'Unverified' web cells (Chat, Library, Search) are truly absent or only missed by its import search was not settled."
+  ],
+  "outdated_documents": [
+   {
+    "document": "docs/architecture/overview.md (Chat File Uploads)",
+    "what_is_outdated": "States that on 2026-11-15 migration 0422 is unapplied (appliedThrough 421).",
+    "what_the_code_says": "The committed ledger records appliedThrough 425 recorded 2026-11-21.",
+    "evidence": "scripts/config/production-migrations-applied.json:3-5"
+   },
+   {
+    "document": "docs/product/surface-feature-matrix.md",
+    "what_is_outdated": "Marks web Chat as Unverified because no import of WebChatPage was found.",
+    "what_the_code_says": "The chat route imports WebChatRoot, which mounts WebChatPage (generated file dated 2026-09-20).",
+    "evidence": "apps/web/app/chat/[sessionId]/page.tsx:2; apps/web/features/chat/components/WebChatRoot.tsx; docs/product/surface-feature-matrix.md:154"
+   },
+   {
+    "document": "docs/product/suite.md",
+    "what_is_outdated": "Describes Mobile as 'Unpublished client' and the Web role without the guest chat route.",
+    "what_the_code_says": "Code includes a guest chat route behind a flag and the website labels all non-web surfaces 'Coming soon' consistently with unpublished state; guest chat is not mentioned in suite.md.",
+    "evidence": "apps/web/app/api/llm/v1/chat/completions/guest/route.ts; apps/web/lib/surface-status.ts:6-13; docs/product/suite.md:33"
+   }
+  ]
+ },
+ "issues": [
+  {
+   "page_a": "30-surfaces/web.md (summary line 12; Modes table lines 100 and 179; claims at 223 and 246)",
+   "says_a": "Local runs inside the Electron host. The Modes table says Local is 'Supported through the host bridge (local_chat_start)' in the Electron desktop host. It also calls the Electron-hosted web UI a way to reach local models and leaves open whether that needs sign-in.",
+   "page_b": "30-surfaces/desktop.md (lines 82, 86, 127, 167); 40-systems/local-inference.md (summary; Desktop section; 'Web composer local section' row); 40-systems/execution-boundaries.md (lines 51 and 300-304); 00-start/glossary.md line 182",
+   "says_b": "The public Electron Desktop refuses every local-inference command and reports localModels false. The web Local row appears only when the host shell is `tauri`, the retained internal build.",
+   "which_is_right": "desktop.md, local-inference.md, execution-boundaries.md and the glossary are right. web.md is wrong, and its sign-in question has no object.",
+   "evidence": "apps/desktop/electron/runtime/dispatcher.ts:3242-3244 sets LOCAL_INFERENCE_UNSUPPORTED ('answers every conversation in the cloud') and builds the refusal set. dispatcher.ts:3366-3367 returns runtimeFailure('unsupported-platform') for it. packages/contracts/local-runtime/src/host-bridge.ts:680-692: hostHasLocalMode returns bridge?.shell === 'tauri', and the comment says AGI Cloud is the Electron shell and offers no on-device model. apps/web/features/desktop-host/lib/runtime-client.ts:621-646 only calls host.local_chat_start through that bridge."
+  },
+  {
+   "page_a": "00-start/product-overview.md (line 138: 'nothing has been released to the public')",
+   "says_a": "No app has been released to the public.",
+   "page_b": "30-surfaces/web.md (line 28); 30-surfaces/cli.md (line 176); 00-start/glossary.md (lines 56, 69); 70-qa/start-here/where-things-stand.md (line 296: 'Production is older than all three')",
+   "says_b": "Web is marked 'Available now' and is the only released app. Production exists and is older than the three local builds.",
+   "which_is_right": "web.md, cli.md and the glossary are right. The overview should say that every app except Web is unreleased.",
+   "evidence": "apps/web/lib/surface-status.ts:6-13: web is AVAILABLE_NOW_LABEL and desktop, cli, mobile, vscode and chrome are COMING_SOON_LABEL."
+  }
+ ]
+}

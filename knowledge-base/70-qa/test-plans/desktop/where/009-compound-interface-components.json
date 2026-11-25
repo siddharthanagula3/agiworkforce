@@ -1,0 +1,867 @@
+{
+ "S9.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Search library files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Work"
+   }
+  ],
+  "needs": "a paid account with Work available (not a Free trial) and at least two library files",
+  "note": "The Files menu is also reachable from the plus button, which offers \"Add photos & files\"; the search box only appears in the Files menu.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Work mode from the composer mode choice labelled \"Work\".",
+   "Click \"Files\" in the work bar under the message box.",
+   "Type part of a file name in the box \"Search library files\".",
+   "Look: the list shows only files whose names match what you typed, compared with Expected."
+  ],
+  "where": "Chat composer > Work mode > \"Files\" in the work bar above the message box > \"Search library files\""
+ },
+ "S9.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Search models"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Change model"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat.",
+   "Click the model name button at the bottom of the message box.",
+   "Type a model name in \"Search models\" and click a different model.",
+   "Look: the model name on the button changes to the one you picked, compared with Expected."
+  ],
+  "where": "Chat composer, bottom row > the model name button (screen-reader name ends \"Change model\") > \"Models\" list > \"Search models\""
+ },
+ "S9.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Add a source"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Only this site"
+   }
+  ],
+  "needs": "a paid account with Deep Research; a connected app for the Connected app option",
+  "note": "The source choice is part of the research run plan, not a picker on the first screen of a normal chat.",
+  "reachable": "yes",
+  "steps": [
+   "Click the plus button and choose \"Deep Research\".",
+   "Send a research question so the \"Research plan\" panel opens.",
+   "In \"Add a source\" pick a kind: \"Only this site\", \"Never this site\", \"My files\" or \"Connected app\", type or choose a value, then click \"Add\".",
+   "Look: the chip list \"Sources for this run\" shows the added source, compared with Expected."
+  ],
+  "where": "Chat composer > plus button (screen-reader name \"More composer options\") > \"Deep Research\" > \"Research plan\" panel > \"Add a source\""
+ },
+ "S9.04": {
+  "labels": [],
+  "needs": "a connector with two linked accounts",
+  "note": "Searched for account pickers (\"Choose account\", \"Select account\", \"accounts.map\", \"Connected account\") under apps/web/features and packages/ui. Found only a read-only list of accounts, \"Connected account\" heading, in apps/web/features/connectors/components/ConnectorAccountSummary.tsx, with no control to pick one.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S9.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Workspace"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Personal"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Manage workspaces"
+   }
+  ],
+  "needs": "a team workspace on the account",
+  "note": "The account button's screen-reader name is \"Account menu for <name>\" in apps/web/shared/components/layout/WebAppShell.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu from the sidebar.",
+   "Hover or click \"Workspace\".",
+   "Look at the list: \"Personal\" and any team workspaces.",
+   "Click a different workspace; a confirmation may appear, then check the active workspace changed, compared with Expected."
+  ],
+  "where": "Account menu for your name (sidebar) > \"Workspace\" > \"Personal\" or a team workspace name"
+ },
+ "S9.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Project"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Search projects..."
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Project or folder"
+   }
+  ],
+  "needs": "a paid account with Work available and at least one project",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Work mode in the composer.",
+   "Click \"Project\" in the work bar under the message box.",
+   "Type a project name in \"Search projects...\".",
+   "Click a project and look: the button shows that project name, compared with Expected."
+  ],
+  "where": "Chat composer > \"Project\" in the work bar (reads \"Project or folder\" in Work mode) > \"Search projects...\""
+ },
+ "S9.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Select repository"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Search repositories"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change repository"
+   }
+  ],
+  "needs": "a connected GitHub account with repositories, or a public repository URL",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Code from the sidebar.",
+   "Click the \"Select repository\" chip.",
+   "Type in \"Search repositories\" to narrow the list, or type a URL such as the placeholder \"https://github.com/owner/repository\".",
+   "Click a repository and look: the chip shows its name, compared with Expected."
+  ],
+  "where": "Code (sidebar) > composer > \"Select repository\" chip > \"Search repositories\" or the URL box"
+ },
+ "S9.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change the branch"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Search or type a branch name"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Branches"
+   }
+  ],
+  "needs": "a repository with more than one branch",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Choose a repository in Code.",
+   "Click the branch chip.",
+   "Look at the \"Branches\" list, then type in \"Search or type a branch name\" to filter.",
+   "Click another branch and look: the chip shows that branch, compared with Expected."
+  ],
+  "where": "Code (sidebar) > choose a repository > branch chip (screen-reader name \"Change the branch\") > \"Search or type a branch name\""
+ },
+ "S9.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/AudioRoutePicker.tsx",
+    "text": "Audio output"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/AudioRoutePicker.tsx",
+    "text": "System default"
+   }
+  ],
+  "needs": "a microphone and a second audio output device to see a real choice",
+  "note": "Only an audio output picker was found. No microphone or camera picker was found in AudioRoutePicker.tsx or VoiceComposer.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Start voice mode\" in the composer.",
+   "Click the \"Audio output\" button.",
+   "Look at the list \"Audio output device\" with \"System default\" and any other speakers.",
+   "Pick a device and look: the button shows that device, compared with Expected."
+  ],
+  "where": "Chat > \"Start voice mode\" > \"Audio output\" button in the voice screen"
+ },
+ "S9.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AccountSection.tsx",
+    "text": "API keys"
+   },
+   {
+    "file": "apps/web/lib/api-key-scopes.ts",
+    "text": "Read model catalog"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Tool approvals"
+   }
+  ],
+  "needs": "a signed-in account; creating a key is only needed to see the result",
+  "note": "Once-versus-always choices are on the approval card: \"Allow\", \"Allow for this chat\" and \"Deny\" in packages/contracts/types/src/tool-approval-policy.ts. Site automation scope was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Account and click the \"API keys\" row.",
+   "Click \"Generate Key\".",
+   "Look at the scope list: \"Read model catalog\", \"Run inference\", \"Read usage\", and tick only some of them.",
+   "Create the key and look at the key list: it shows only the scopes you ticked, compared with Expected."
+  ],
+  "where": "Settings > Account > \"API keys\" > \"Generate Key\" (scope checkboxes); also chat composer > \"Tool approvals\" in Work mode"
+ },
+ "S9.11": {
+  "labels": [
+   {
+    "file": "apps/web/app/chat/projects/[id]/page.tsx",
+    "text": "Share"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectShareDialog.tsx",
+    "text": "Copy link"
+   },
+   {
+    "file": "apps/web/features/projects/components/ProjectSharingControls.tsx",
+    "text": "Only people you invite"
+   }
+  ],
+  "needs": "a second account in the same workspace",
+  "note": "No search-by-name or email input was found. Only a list of existing members with per-person access choices, so the picker part of Expected is not present.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects and open one of your projects.",
+   "Open the more-options menu and click \"Share\".",
+   "Look at the dialog: the list \"People with access to <project>\", each person with a Read, Write or None choice, and the sharing select \"Everyone in the workspace can view\" or \"Only people you invite\".",
+   "Change one person's access and look: the choice is saved and shown, compared with Expected."
+  ],
+  "where": "Projects (sidebar) > open a project > the more-options menu > \"Share\" > \"Share <project name>\" dialog"
+ },
+ "S9.12": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "New task"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Frequency"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Scheduled and click \"New task\".",
+   "Fill \"Schedule Name\" and \"Task Instructions\".",
+   "Open \"Frequency\" and choose \"One Time\", \"Daily\", \"Weekly\", \"Monthly\", \"Interval\", \"Custom Cron\" or \"Recurrence Rule\"; the fields below change to match.",
+   "Save and look at the schedule row: its cadence matches what you chose, compared with Expected."
+  ],
+  "where": "Scheduled (sidebar) > \"New task\" > \"Frequency\""
+ },
+ "S9.13": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Library"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Search the library by name"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Generated files"
+   }
+  ],
+  "needs": "a few uploaded or generated files",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Library.",
+   "Look at the tabs: \"All\", \"Images\", \"Videos\", \"Documents\", \"Artifacts\", \"Uploads\", \"Generated files\".",
+   "Type a name in \"Search the library by name\".",
+   "Click a file and look: it opens in the file viewer (\"Close file viewer\"), compared with Expected."
+  ],
+  "where": "Library (sidebar) > \"All\" tab"
+ },
+ "S9.14": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Skills"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Skill files"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Customize"
+   }
+  ],
+  "needs": "a skill with folders in its files",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click \"Skills\".",
+   "Open a skill that has folders.",
+   "In the \"Skill files\" tree, click a folder row to expand it, then click again to collapse it.",
+   "Look: the folder opens and closes and the file inside is reached, compared with Expected."
+  ],
+  "where": "Settings > Skills (under the Customize group) > open a skill > \"Skill files\" tree"
+ },
+ "S9.15": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+    "text": "Sort by"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+    "text": "Worksheets"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Open artifacts panel"
+   }
+  ],
+  "needs": "a spreadsheet artifact",
+  "note": "The sort is reached through a title on the heading, so a tester may need to hover to see it.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a spreadsheet in a chat and open the artifact.",
+   "Open the artifacts panel if it is closed.",
+   "Click a column heading; its title reads \"Sort by <column>\". Click again to reverse, then clear.",
+   "Look: the rows reorder by that column, compared with Expected."
+  ],
+  "where": "Chat > open a spreadsheet artifact (\"Open artifacts panel\") > click a column heading"
+ },
+ "S9.16": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Grid view"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Library layout"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "List view"
+   }
+  ],
+  "needs": "a few library items",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Library.",
+   "Click the \"Grid view\" button in the \"Library layout\" group.",
+   "Look: files and artifacts appear as cards with a preview.",
+   "Click \"List view\" to switch back, compared with Expected."
+  ],
+  "where": "Library (sidebar) > \"Grid view\" button in the toolbar"
+ },
+ "S9.17": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Images"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+    "text": "Close file viewer"
+   }
+  ],
+  "needs": "at least one image in the library",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Library and click the \"Images\" tab.",
+   "Look at the picture tiles in the grid.",
+   "Click one picture to open it in the larger viewer.",
+   "Look at the enlarged picture, then click \"Close file viewer\", compared with Expected."
+  ],
+  "where": "Library (sidebar) > \"Images\" tab (or \"Videos\")"
+ },
+ "S9.19": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Agent activity"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Work"
+   }
+  ],
+  "needs": "a paid account with Work available",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Work mode and send a task that uses tools.",
+   "Look at the \"Agent activity\" section while it runs.",
+   "Check the steps are listed in order, each with its state and a running seconds counter where shown.",
+   "Compare with Expected once the run finishes."
+  ],
+  "where": "Chat in Work mode > run a task > \"Agent activity\" section"
+ },
+ "S9.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/RecentActivityPanel.tsx",
+    "text": "Recent activity"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Account"
+   }
+  ],
+  "needs": "an account with some activity",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click \"Account\".",
+   "Scroll to the bottom to the \"Recent activity\" panel.",
+   "Make a small change elsewhere in settings, then come back.",
+   "Look: the newest event is at the top, compared with Expected."
+  ],
+  "where": "Settings > Account > \"Recent activity\""
+ },
+ "S9.21": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Work history"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Task layout"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+    "text": "Board"
+   },
+   {
+    "file": "packages/contracts/types/src/cross-device.ts",
+    "text": "Needs approval"
+   }
+  ],
+  "needs": "a few work runs in different states",
+  "note": "The sidebar label \"Work\" comes from packages/ui/i18n/locales/en/v3.json; the sidebar entry itself was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Work from the sidebar to reach \"Work history\" (or go to /tasks).",
+   "Click \"Board\" in the \"Task layout\" control.",
+   "Look: columns with headings \"Queued\", \"Running\", \"Needs approval\", \"Done\" (and others with runs) and a count per column.",
+   "Click \"List\" to switch back, compared with Expected."
+  ],
+  "where": "Work (sidebar) > \"Work history\" > \"Task layout\" > \"Board\""
+ },
+ "S9.22": {
+  "labels": [
+   {
+    "file": "apps/web/app/gallery/GalleryClient.tsx",
+    "text": "Create artifact"
+   },
+   {
+    "file": "apps/web/app/gallery/GalleryClient.tsx",
+    "text": "Next"
+   },
+   {
+    "file": "apps/web/app/gallery/GalleryClient.tsx",
+    "text": "Skip and start now"
+   }
+  ],
+  "needs": "none",
+  "note": "No \"Back\" control was found in GalleryClient.tsx, so going back is not visible; Expected says it should be.",
+  "reachable": "yes",
+  "steps": [
+   "Open /gallery and click \"Create artifact\".",
+   "Look at the step counter text \"Step <n> of <total>\" and the step dots.",
+   "Click \"Next\" to move forward; the counter and dots advance.",
+   "Look: the counter matches the step shown, compared with Expected."
+  ],
+  "where": "Gallery page (/gallery) > \"Create artifact\" > pick a type > \"Next\" steps"
+ },
+ "S9.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What should we call you?"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "Preferred name"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What do you want to do first?"
+   }
+  ],
+  "needs": "a new account",
+  "note": "The wizard has two steps (name, first task). No model or sign-in choice step was found in OnboardingWizard.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Create a new account and reach the welcome page.",
+   "Look for \"Step 1 of 2\" and the \"Preferred name\" field.",
+   "Type a name and continue; check \"Step 2 of 2\" with \"What do you want to do first?\".",
+   "Finish and check the name appears, compared with Expected."
+  ],
+  "where": "New account sign-up > welcome page (/welcome) > \"What should we call you?\""
+ },
+ "S9.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Open artifacts panel"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Resize artifacts panel"
+   }
+  ],
+  "needs": "a desktop-width window and an artifact",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has an artifact and click \"Open artifacts panel\".",
+   "Drag the separator named \"Resize artifacts panel\" left or right.",
+   "Or click the separator and press the Left or Right arrow key.",
+   "Look: the artifact pane gets wider or narrower and the chat pane adjusts, compared with Expected."
+  ],
+  "where": "Chat > \"Open artifacts panel\" > separator \"Resize artifacts panel\" between chat and artifact"
+ },
+ "S9.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Version history"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactVersionHistory.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "an artifact with at least two versions",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open an artifact that has been edited more than once.",
+   "Click the version counter (screen-reader name \"Version <n> of <total>. Show version history\").",
+   "Look at the \"Version history\" panel: each saved version and its count.",
+   "Click \"Restore version <n>\" on an older one and look: the artifact shows that version, compared with Expected."
+  ],
+  "where": "Chat > open an artifact > version counter \"Version <n> of <total>\" > \"Version history\""
+ },
+ "S9.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Filter changed files"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Refresh the changes"
+   }
+  ],
+  "needs": "a coding session with uncommitted or committed changes",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a coding session that has changed files.",
+   "Click \"Changes\" in the header; the panel opens.",
+   "Use \"Filter changed files\" if needed and click a file to read its diff.",
+   "Look: added and removed lines are marked, compared with Expected. Do not click \"Discard\" controls."
+  ],
+  "where": "Code > a coding session with file changes > \"Changes\" in the header"
+ },
+ "S9.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "No sources yet"
+   }
+  ],
+  "needs": "a web-search answer (a question that triggers web sources)",
+  "note": "Whether a web-search answer is produced depends on the model and the question; the Sources button only appears when the answer has sources.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and ask a question that needs web search, such as a current news topic.",
+   "Wait until the answer finishes, then click the Sources button under the answer.",
+   "In the research panel, read the Sources tab: each row shows the title, the publisher and date line (with Retrieved date) and a short snippet.",
+   "Click a source row; it opens the page in a new tab. Compare with Expected: title, origin, excerpt, and open."
+  ],
+  "where": "Chat > send a question that uses web search > under the answer, click Sources > click a source row"
+ },
+ "S9.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Plan usage limits"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Current session"
+   }
+  ],
+  "needs": "a paid account (a Free account sees Upgrade for higher capacity instead)",
+  "note": "The meter is labelled for assistive tech with '<name> usage' and the percent as its value; screen-reader output was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and click Settings, then click Usage.",
+   "Find the card titled Plan usage limits.",
+   "Look at each bar: Current session, This week and, when shown, Most capable models. Each shows a percent used.",
+   "Read the reset line under a bar (Resets at ... or a time left until reset) and compare with Expected: percent, window and reset time."
+  ],
+  "where": "Account menu > Settings > Usage > Plan usage limits"
+ },
+ "S9.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Credit balances"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Buy credits"
+   }
+  ],
+  "needs": "a paid account (the card is hidden on Free plans and on contract-priced accounts)",
+  "note": "The card only appears once the usage data has loaded; the Buy credits button uses the billing settings section.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, click Settings, then click Usage.",
+   "Find the card titled Credit balances.",
+   "Read the rows Bonus credits and Purchased credits with their amounts.",
+   "Click Buy credits and see that it opens the Billing section. Compare with Expected: balance and an add-credits button in one place."
+  ],
+  "where": "Account menu > Settings > Usage > Credit balances"
+ },
+ "S9.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorScopeList.tsx",
+    "text": "Permissions requested"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Allow"
+   }
+  ],
+  "needs": "a connector that uses OAuth permissions; an outside account (for example Google) to finish connecting",
+  "note": "Connectors with no OAuth scopes show a note instead: This provider does not use OAuth scopes.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then click Connectors.",
+   "Click a connector that asks for sign-in permissions.",
+   "Find the Permissions requested box and read each permission sentence with its Read or Write badge.",
+   "Click Connect; the dialog Connect <name>? repeats the list with Deny and Allow buttons. Compare with Expected: what the connector may do and whether it is read or write."
+  ],
+  "where": "Settings > Connectors > click a connector that uses sign-in > Permissions requested"
+ },
+ "S9.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx",
+    "text": "Tool approvals"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Ask before every action"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   }
+  ],
+  "needs": "a tool that asks for approval (the policy setting above must be on); a paid account may be needed for some tools",
+  "note": "Which tools trigger an approval card was not confirmed from the code; Allow for this chat is hidden for high-risk tools.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Capabilities, find the Tool approvals box and choose Ask before every action.",
+   "Go to a chat and send a request that makes the assistant use a tool (for example a connected app or site action).",
+   "When the action pauses, read the inline line that says the tool requires approval, and the buttons Allow, Allow for this chat and Deny.",
+   "Click Deny and check that the run stops; repeat and click Allow and check that the run continues. Compare with Expected."
+  ],
+  "where": "Settings > Capabilities > Tool approvals > Ask before every action, then in chat send a request that uses a tool"
+ },
+ "S9.33": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Connected"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "an outside account for the connector (for example Google)",
+  "note": "No Expired word exists in the code; a connection that needs signing in again shows the notice '<name> needs reconnecting' and a Reconnect button (packages/ui/ui/src/directory/constants.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Connectors, then click a connector that is not connected.",
+   "Read the notice You're not connected to <name> yet. and the Connect button.",
+   "Click Connect and finish the sign-in; the button should change to Connected.",
+   "Open the remove control for a connected card (Disconnect) and check that the state returns to not connected. Compare with Expected."
+  ],
+  "where": "Settings > Connectors > click a connector"
+ },
+ "S9.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/model-compatibility.ts",
+    "text": "cannot read images, so the images in this conversation will be ignored."
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/model-compatibility.ts",
+    "text": "Older messages will be left out of the next reply."
+   }
+  ],
+  "needs": "a file to upload (an image); a model that cannot read images in your list",
+  "note": "Which models lack image or tool support depends on the live model catalogue, so the tester must pick one from the list; the notice is a visible line, its aria label Model compatibility is not visible.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, choose a model from the model picker below the message box.",
+   "Attach an image file to the message, without sending.",
+   "Read the notice above the message box that says the chosen model cannot read images.",
+   "Change to a model that reads images and check the notice disappears. Compare with Expected: warning shown before sending."
+  ],
+  "where": "Chat > choose a model that cannot read images (model picker under the message box) > attach an image > read the notice above the message box"
+ },
+ "S9.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "Progress"
+   },
+   {
+    "file": "apps/web/features/chat/lib/agi-work.ts",
+    "text": "session steps"
+   }
+  ],
+  "needs": "a task that runs several steps (agent or work mode)",
+  "note": "The count only shows when the task has steps; which tasks produce steps depends on the model and request.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that makes the assistant run a multi-step task.",
+   "While it runs, click the Progress panel at the bottom of the chat.",
+   "Read the count (for example 1/4) and the current action line; wait and see them change.",
+   "When the task ends, check the final state and the count. Compare with Expected: state, progress and latest action updating."
+  ],
+  "where": "Chat > start a task that runs several steps > open the Progress panel at the bottom of the chat"
+ },
+ "S9.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx",
+    "text": "Send answers"
+   }
+  ],
+  "needs": "none",
+  "note": "Showing the card depends on the assistant deciding to ask; other interactive cards (map, answer cards) also render in InteractiveCardBlock.tsx and were not separately tested.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a vague request that needs a choice, such as planning a trip without a destination.",
+   "When a card with options appears in the answer, click one or more options.",
+   "Click Send answers and check that the card shows Sending, then that the answer continues using your choice."
+  ],
+  "where": "Chat > ask a question the assistant needs to clarify > pick options on the card > Send answers"
+ },
+ "S9.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/notifications/components/NotificationBell.tsx",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/web/features/notifications/components/NotificationBell.tsx",
+    "text": "Mark all as read"
+   }
+  ],
+  "needs": "at least one notification (for example a finished scheduled run)",
+  "note": "Unread state is also announced to screen readers with the hidden text ', unread'; the screen-reader output itself was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click the bell icon in the sidebar next to the app name.",
+   "Read the Notifications list: newest first, unread items in bold with a dot.",
+   "Click one unread item; it opens its page and is marked read.",
+   "Click Mark all as read and check that the unread marks go away. Compare with Expected."
+  ],
+  "where": "Sidebar > the bell icon next to the app name > Notifications"
+ },
+ "S9.38": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+    "text": "Search chats and actions"
+   },
+   {
+    "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+    "text": "Go to Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "The Return key behaviour was not confirmed in the file; the shortcut is handled as metaKey or ctrlKey plus k in CommandPaletteProvider.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Press Command+K on the Mac keyboard.",
+   "Type part of a command or chat name, such as Settings.",
+   "Check that the list narrows as you type.",
+   "Use the arrow keys and press Return on Go to Settings and check that the app opens Settings."
+  ],
+  "where": "Any signed-in screen > press Command+K (Ctrl+K on Windows or Linux) > type in the box Search chats and actions > press Return"
+ }
+}

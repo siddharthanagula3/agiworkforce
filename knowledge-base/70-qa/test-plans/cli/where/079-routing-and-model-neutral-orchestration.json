@@ -1,0 +1,439 @@
+{
+ "S79.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Choose one with /route <profile>."
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/route"
+   }
+  ],
+  "needs": "a signed-in managed cloud account and session saving on (not the default for --no-session-persistence)",
+  "note": "How a session enters Managed mode is only implied by the error text (Switch to Managed with /model first); the exact step was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Start the CLI with agi and sign in to a managed cloud account.",
+   "Type /model and pick a managed cloud model, so the session runs in Managed mode.",
+   "Type /route with no argument and read the Routing and Profiles lines.",
+   "Type /route auto, then send a normal prompt and look for the model named in the Auto route notice or the Routing set to message, to compare with Expected."
+  ],
+  "where": "agi, then /route (then /route auto)"
+ },
+ "S79.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/model"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Switched to"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Model to use (must match the shared model catalog/provider metadata)"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /model in the chat to open the model picker.",
+   "Pick a model row and press Enter.",
+   "Type a message and check the reply and the model shown in the status or banner.",
+   "Compare with Expected: the request should run on the chosen model."
+  ],
+  "where": "/model (picker), or agi --model <name>"
+ },
+ "S79.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Choose one with /route <profile>."
+   },
+   {
+    "file": "apps/cli/src/routing/profile.rs",
+    "text": "quality"
+   }
+  ],
+  "needs": "a signed-in managed cloud account and session saving on",
+  "note": "The quality profile maps to the server selection auto-premium; the task-specific premium choice for coding and reasoning is made by the registry, not visible on its own.",
+  "reachable": "yes",
+  "steps": [
+   "Start with a managed cloud account and session saving on, as in S79.01.",
+   "Type /route quality.",
+   "Read the line Routing set to ... for the quality profile; the label comes from the server catalog.",
+   "Send a coding or reasoning prompt and check the model named in the reply or notice."
+  ],
+  "where": "/route quality"
+ },
+ "S79.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/routing/profile.rs",
+    "text": "speed"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/route"
+   }
+  ],
+  "needs": "a signed-in managed cloud account and session saving on",
+  "note": "Speed maps to the auto-economy selection with speed-first set; the speed-first effect itself is not shown on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Start with a managed cloud account and session saving on.",
+   "Type /route speed.",
+   "Read the Routing set to message, which shows the speed profile label from the server.",
+   "Send a prompt and compare the response speed and model with Expected."
+  ],
+  "where": "/route speed"
+ },
+ "S79.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/routing/profile.rs",
+    "text": "quality"
+   },
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Choose one with /route <profile>."
+   }
+  ],
+  "needs": "a signed-in managed cloud account and session saving on",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start with a managed cloud account and session saving on.",
+   "Type /route quality.",
+   "Read the Routing set to message.",
+   "Send a prompt and compare the chosen model with Expected."
+  ],
+  "where": "/route quality"
+ },
+ "S79.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/routing/profile.rs",
+    "text": "cost"
+   },
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Choose one with /route <profile>."
+   }
+  ],
+  "needs": "a signed-in managed cloud account and session saving on",
+  "note": "Cost maps to the auto-economy selection; the cheapest-route ranking is not shown on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Start with a managed cloud account and session saving on.",
+   "Type /route cost.",
+   "Read the Routing set to message.",
+   "Send a prompt and compare the chosen model with Expected."
+  ],
+  "where": "/route cost"
+ },
+ "S79.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/privacy-mode"
+   }
+  ],
+  "needs": "none",
+  "note": "Local mode is the privacy setting; the zero-retention route option is not shown as a separate control.",
+  "reachable": "yes",
+  "steps": [
+   "Type /privacy-settings and read the current mode and its description.",
+   "Type /privacy-mode local.",
+   "Type /privacy-settings again and confirm the mode is local.",
+   "Send a prompt and check that no cloud model name appears as the route, to compare with Expected."
+  ],
+  "where": "/privacy-mode local (or /privacy-settings to view)"
+ },
+ "S79.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   }
+  ],
+  "needs": "a signed-in managed cloud account with /route auto set",
+  "note": "The intent classification itself has no control; the notice appears only when the chosen model changes.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Use a managed cloud Auto session (/route auto) and send a coding question, then a plain chat question.",
+   "Look for an Auto route: notice in the chat when the model changes between the two messages."
+  ],
+  "where": "Inner behaviour: each message is classified by intent; the effect shows as an Auto route notice when the model changes"
+ },
+ "S79.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   }
+  ],
+  "needs": "a signed-in managed cloud account with /route auto set",
+  "note": "No separate control exists; the tool classification is applied to the request without a visible setting.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In a managed Auto session, ask for a task that needs tools (for example a file or search action).",
+   "Look for an Auto route: notice in the chat, and compare the model with a plain chat question."
+  ],
+  "where": "Inner behaviour: tool needs change the routing task; the effect shows as an Auto route notice"
+ },
+ "S79.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   }
+  ],
+  "needs": "a signed-in managed cloud account with /route auto set, and an image file to attach",
+  "note": "The routing rule is in the classifier; no screen names image routing directly.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In a managed Auto session, attach an image and ask a question about it.",
+   "Look for an Auto route: notice showing a different model than for a text-only question."
+  ],
+  "where": "Inner behaviour: attached images route the request to a multimodal model; the effect shows as an Auto route notice"
+ },
+ "S79.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   }
+  ],
+  "needs": "a signed-in managed cloud account with /route auto set",
+  "note": "Effort classification is not shown as its own control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In a managed Auto session, send a simple greeting, then a long multi-step analysis request.",
+   "Compare the model named by any Auto route notice with Expected: the harder request should not drop to a weaker model."
+  ],
+  "where": "Inner behaviour: request complexity sets a quality floor; the effect shows as the model in an Auto route notice"
+ },
+ "S79.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   }
+  ],
+  "needs": "a signed-in managed cloud account with /route auto set",
+  "note": "No separate freshness control was found; the search step itself is not confirmed on screen.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In a managed Auto session, ask for today's news or a current price.",
+   "Look for an Auto route: notice or a search-related reply, and compare with Expected."
+  ],
+  "where": "Inner behaviour: current-information requests are detected and sent to search-capable handling; the effect is visible only through the routing notice"
+ },
+ "S79.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/model"
+   }
+  ],
+  "needs": "a Free account (so some models are locked)",
+  "note": "The lock annotation text was not found as a visible string; only a code comment describes it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type /model to open the picker.",
+   "Look for model rows marked as locked or unavailable for the current plan, and compare with Expected: they are listed but cannot be used."
+  ],
+  "where": "Inner behaviour: ineligible models are filtered out before ranking; locked rows show in the /model picker"
+ },
+ "S79.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   }
+  ],
+  "needs": "a signed-in managed cloud account with /route auto set",
+  "note": "The route ranking lives in the server-side auto routing; the visible output shows only provider and model.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Run an Auto session and send a prompt.",
+   "Look for the Auto route notice, which names the provider and model used."
+  ],
+  "where": "Inner behaviour: one provider route is picked by health, cost and cache; no screen names the chosen route"
+ },
+ "S79.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Switched to"
+   },
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   }
+  ],
+  "needs": "none",
+  "note": "Fallback chains from -m a,b,c can still move a request to another model when the primary fails (see S79.20).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type /model and pick one specific model, then type a message.",
+   "Look for the Switched to line and check that no Auto route notice names a different model."
+  ],
+  "where": "Inner behaviour: a model chosen with /model is not swapped; the effect shows as no Auto route notice"
+ },
+ "S79.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Provider override (anthropic, openai, google, ollama)"
+   }
+  ],
+  "needs": "credentials for the chosen provider, or a local Ollama install for ollama",
+  "note": "A provider lock setting beyond this flag was not found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Start the CLI with agi --provider anthropic (or openai, google, ollama) plus --model for a model on that provider.",
+   "Type a prompt.",
+   "Check the banner line showing the model and provider, and compare with Expected."
+  ],
+  "where": "agi --provider <name>"
+ },
+ "S79.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   }
+  ],
+  "needs": "a signed-in account with some usage",
+  "note": "The budget-aware route choice is applied on the server; the code path was not confirmed from the CLI side.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Check your remaining usage with /usage or agi usage.",
+   "Send a prompt in an Auto session and compare the model with Expected."
+  ],
+  "where": "Inner behaviour: remaining budget is considered when choosing a route; no control shows it"
+ },
+ "S79.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Fallback chain:"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "No fallback chain set. Restart with `--fallback-model <model>` or `-m a,b,c`."
+   }
+  ],
+  "needs": "none",
+  "note": "Demotion of unhealthy routes is not shown on screen; only the chain is visible.",
+  "reachable": "yes",
+  "steps": [
+   "Start the CLI with agi --fallback-model <model> (or -m primary,backup).",
+   "Type /fallback and read the Fallback chain line.",
+   "Compare with Expected: when the primary fails, the reply names the backup model."
+  ],
+  "where": "agi --fallback-model <model>, then /fallback"
+ },
+ "S79.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Switch to"
+   }
+  ],
+  "needs": "a Free account (a model outside the plan)",
+  "note": "The offer is a typed command in the message, not a one-click button; no one-click control was found.",
+  "reachable": "yes",
+  "steps": [
+   "Choose a model your plan does not include, such as one the error names as unavailable.",
+   "Read the error text that appears in the chat.",
+   "Compare with Expected: the text suggests a switch command, which you type yourself."
+  ],
+  "where": "Shown in the error text when a model is unavailable, for example: Switch to ... with /model <name>"
+ },
+ "S79.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "/agents"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Agents"
+   }
+  ],
+  "needs": "none",
+  "note": "Agent definitions take an optional model field (apps/cli/src/agents.rs); the exact view of the agent's model was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Type /agents and read the list of agents.",
+   "Open an agent definition that has a model field, or run a task that uses that agent.",
+   "Compare the model shown for that agent with Expected: the worker should use its own model."
+  ],
+  "where": "/agents"
+ },
+ "S79.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   },
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Routing set to"
+   }
+  ],
+  "needs": "a signed-in managed cloud account and session saving on",
+  "note": "The notice shows only when the model changes; it does not explain why.",
+  "reachable": "yes",
+  "steps": [
+   "Start with a managed cloud account and session saving on.",
+   "Type /route auto.",
+   "Send prompts of different kinds (a coding question, then a plain chat question).",
+   "Look for the Auto route: notice that names the route when the model changes, and compare with Expected."
+  ],
+  "where": "/route auto, then send a prompt and read the Auto route notice"
+ },
+ "S79.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/chat.rs",
+    "text": "Auto route:"
+   }
+  ],
+  "needs": "none",
+  "note": "The banner at startup shows the model and provider (apps/cli/src/output.rs), and the Auto route notice names the model on change; no per-answer model label was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S79.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "The routing policy version is stored with the saved session (apps/cli/src/platform/runtime/session.rs), but no screen or command that displays it was found in apps/cli.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S79.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/agent/mod.rs",
+    "text": "Routing: off. Every message goes to"
+   }
+  ],
+  "needs": "a signed-in managed cloud account with /route auto set",
+  "note": "Behaviour is in code (apps/cli/src/agent/chat.rs re_resolve_auto_route_for_turn); the failure itself is hard to trigger on demand.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In a managed Auto session, send a prompt that is hard to classify (for example one short ambiguous word).",
+   "Check the reply still arrives and no Auto route notice appears."
+  ],
+  "where": "Inner behaviour: when routing classification fails, the current model is kept and the turn still runs; the effect shows as no error and the model staying the same"
+ }
+}

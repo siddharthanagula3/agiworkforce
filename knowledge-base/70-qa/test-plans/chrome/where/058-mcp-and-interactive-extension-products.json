@@ -1,0 +1,46 @@
+{
+ "S58.24": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   },
+   {
+    "file": "apps/extension/src/features/computer-use/describeAction.ts",
+    "text": "Discover tools supplied by this website."
+   }
+  ],
+  "needs": "A Free or paid account, and a site that declares WebMCP tools (for example through navigator.modelContext). The repo has no test site for this.",
+  "note": "Site tools reach the assistant as two model tools, discover_site_tools and call_site_tool (apps/extension/src/features/computer-use/browserToolDefinitions.ts), and are shown in the activity log only; there is no separate category label in the UI, and connectors are labelled \"Coming soon\" in the side panel. The cited lines (background.ts:4325, agentLoop.ts:527) no longer hold the quoted code; the current site-tool handling is agentLoop.ts around lines 383-400 and background.ts WEBMCP handlers around lines 5735-5825.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the side panel and click the \"Computer Use\" tab.",
+   "Start a browser task on a page that declares WebMCP tools (the repo contains no such test site, so one must be supplied).",
+   "Let the assistant run its tool discovery. The activity log shows \"Discover tools supplied by this website.\"",
+   "Compare: the site's tools are listed as a separate step from connectors. Connectors are not used in the Computer Use flow."
+  ],
+  "where": "No control of its own. Seen in the Computer Use tab of the side panel: start a browser task on a page that declares WebMCP tools, then read the activity log line for the assistant's tool discovery."
+ },
+ "S58.25": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   },
+   {
+    "file": "apps/extension/src/features/computer-use/describeAction.ts",
+    "text": "Discover tools supplied by this website."
+   }
+  ],
+  "needs": "A Free or paid account, and a site whose WebMCP tool set changes with page state. The repo has no such test site.",
+  "note": "Tool updates come from content.ts (WEBMCP_TOOLS_CHANGED, startToolChangeReporting) and background.ts clears the per-tab list on navigation (invalidateWebMCPToolsForNavigation). The assistant only sees the change when it calls discover_site_tools again, so the tester cannot force the update from a visible control. The cited lines (agentLoop.ts:636, background.ts:4326) no longer hold the quoted code; the current handling is in webmcp.ts (watchForToolChanges) and background.ts around lines 2279-2314.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the side panel and click the \"Computer Use\" tab.",
+   "Start a browser task on a page that declares WebMCP tools, then let the assistant run \"Discover tools supplied by this website.\" and note the tool names listed.",
+   "Change the page state (for example sign in, or open a different section) so the page declares a different set of tools, then start a new task or have the assistant discover again.",
+   "Compare: the second discovery lists the tools present in the new page state, not the old ones."
+  ],
+  "where": "No control of its own. Seen in the Computer Use tab of the side panel: run a browser task, change the page state, then have the assistant discover tools again and compare the activity log."
+ }
+}

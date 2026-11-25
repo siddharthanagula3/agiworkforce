@@ -1,0 +1,516 @@
+{
+ "S64.01": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add the browser page"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Chat"
+   }
+  ],
+  "needs": "a normal website tab open",
+  "note": "The site may first ask for access with a card 'AGI needs access to <host>' (Allow for this task, Always allow on this site, Decline).",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal website in a tab and open the side panel (toolbar AGI icon).",
+   "In the Chat tab, click the + button labelled Add attachment, then click Add the browser page.",
+   "Type a question that depends on the page, such as what the page says about a named topic, and send it.",
+   "Check the answer uses the content of the open page, and that the page chip shows the site's host."
+  ],
+  "where": "Chat tab > + (Add attachment) > Add the browser page"
+ },
+ "S64.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add selected text"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   }
+  ],
+  "needs": "a normal website and the site approved in Extension settings",
+  "note": "If the site is not approved the notice reads 'Approve <host> in Extension settings to add text selected there.' Right-clicking a selection also offers 'Explain this' and 'Translate this' in apps/extension/src/background.ts.",
+  "reachable": "yes",
+  "steps": [
+   "On a normal website, highlight a sentence or paragraph with the mouse.",
+   "Open the side panel and click the + button labelled Add attachment.",
+   "Click Add selected text, then type a question about the highlighted text and send it.",
+   "Check the answer refers to the highlighted text."
+  ],
+  "where": "Chat tab > + (Add attachment) > Add selected text"
+ },
+ "S64.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Summarize this page"
+   }
+  ],
+  "needs": "a normal website tab",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal website and right-click an empty part of the page (not a link, image or text).",
+   "Click Summarize this page in the menu.",
+   "The side panel opens with the page attached; wait for the reply.",
+   "Check the reply summarizes the page that is open in the tab."
+  ],
+  "where": "Right-click page background > Summarize this page"
+ },
+ "S64.06": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/launcher.ts",
+    "text": "Ask AGI"
+   },
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/panel.ts",
+    "text": "Ask one question about this page\u2026"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Page assistant overlay"
+   }
+  ],
+  "needs": "an approved website and the Page assistant overlay setting on",
+  "note": "The overlay mounts only on approved origins when the setting is on (apps/extension/src/inPagePanel/setup.ts). Its default state was not found in the code. The Options page setting is in the Options section (apps/extension/src/features/options/preference-rows.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open a website that you have approved for AGI, and make sure the side panel is closed (the launcher hides while it is open).",
+   "Click the round Ask AGI launcher button on the page.",
+   "Type a question about the page into the box labelled Ask one question about this page\u2026 and press Enter.",
+   "Check the streamed answer uses the visible text of this page."
+  ],
+  "where": "Website tab > Ask AGI launcher (round button at the edge of the page) > text box 'Ask one question about this page\u2026'"
+ },
+ "S64.07": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/pageActions.ts",
+    "text": "Summarize video"
+   },
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/pageActions.ts",
+    "text": "Key timestamps"
+   },
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/launcher.ts",
+    "text": "Ask AGI"
+   }
+  ],
+  "needs": "a YouTube video with captions",
+  "note": "Typed questions in the box send the visible page text, not the transcript (apps/extension/src/features/content/in-page-panel/panel.ts submitComposer); only the three video chips read captions. Videos without captions get a 'no captions' reply.",
+  "reachable": "yes",
+  "steps": [
+   "Open a YouTube video that has captions, on an approved site.",
+   "Click the Ask AGI launcher on the page.",
+   "Click the chip Summarize video (or Key timestamps, or Q&A).",
+   "Wait for 'Reading the video captions\u2026', then check the answer is about what is said in the video."
+  ],
+  "where": "YouTube watch page > Ask AGI launcher > Summarize video, Key timestamps or Q&A"
+ },
+ "S64.08": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Chat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open AGI side panel"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The shortcut is set in the manifest (apps/extension/manifest.json) and can be changed in Chrome's shortcut page.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel with the toolbar AGI icon, or the shortcut Command+Shift+K on Mac.",
+   "In the Chat tab, ask a question and wait for the answer.",
+   "Switch to a different website tab and come back to the side panel.",
+   "Check the same conversation is still shown, then click New chat and check a new empty conversation starts."
+  ],
+  "where": "Toolbar AGI icon (or Open AGI side panel shortcut) > Chat tab"
+ },
+ "S64.10": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Task"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Start"
+   }
+  ],
+  "needs": "a signed-in AGI account and an approved site",
+  "note": "No separate Open URL control was found; the navigate tool is used inside a Computer Use task. Only http and https addresses are allowed.",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal website tab and open the side panel, then click the Computer Use tab.",
+   "If the panel asks, click the Allow browser control button for the site.",
+   "Type in the Task box a goal such as 'Open https://example.com' and click Start.",
+   "Check the tab goes to that address and the Assistant steps list shows the opening step."
+  ],
+  "where": "Computer Use tab > Task > Start"
+ },
+ "S64.14": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Task"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Start"
+   }
+  ],
+  "needs": "a signed-in AGI account and an approved site",
+  "note": "No separate search control was found; website search is done as a Computer Use task.",
+  "reachable": "yes",
+  "steps": [
+   "Open a website that has its own search box and open the Computer Use tab.",
+   "In the Task box type a goal such as 'Search this site for a term and read me the first three results', then click Start.",
+   "Watch the Assistant steps list as the search is typed and submitted.",
+   "Check the reply reads back the results shown on the page."
+  ],
+  "where": "Computer Use tab > Task > Start"
+ },
+ "S64.15": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Run Autofill"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Task"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   }
+  ],
+  "needs": "a web form and a signed-in AGI account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a job application form on an approved site (Greenhouse, Lever or Ashby for Run Autofill).",
+   "Open the Computer Use tab and click Run Autofill.",
+   "For another form, type in the Task box a goal such as 'Fill the name and email fields with the details I give you' and click Start.",
+   "Check the fields show the values that were asked for, and that password and payment fields were left alone."
+  ],
+  "where": "Computer Use tab > Run Autofill (job application pages), or Computer Use tab > Task > Start (other forms)"
+ },
+ "S64.16": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Task"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Start"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   }
+  ],
+  "needs": "a signed-in AGI account and an approved site",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a website with several linked pages and open the Computer Use tab.",
+   "In the Task box type a goal with several steps, such as 'Find the contact phone number on this site, then open the pricing page and read the first price', and click Start.",
+   "Watch the Steps counter (Steps: n/max) and the Assistant steps list climb over several actions.",
+   "Check the run ends with an 'Agent finished' entry and the answer covers both parts of the goal."
+  ],
+  "where": "Computer Use tab > Task > Start"
+ },
+ "S64.17": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Start"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   }
+  ],
+  "needs": "a website that declares WebMCP tools",
+  "note": "The agent's tools discover_site_tools and call_site_tool are in apps/extension/src/features/computer-use/browserToolDefinitions.ts. Whether the agent picks a site tool is its choice, and the write-tool dialog is window.confirm in apps/extension/src/webmcp.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a website that publishes WebMCP tools (none is named in the code, so find one first).",
+   "In the Computer Use tab type a task the site's tool can do, and click Start.",
+   "Check Assistant steps shows a call to the site's tool rather than only clicks.",
+   "For a tool that changes data, check the page shows a confirmation dialog that must be accepted before the call runs."
+  ],
+  "where": "Computer Use tab > Task > Start, on a website that declares its own tools"
+ },
+ "S64.18": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Task"
+   }
+  ],
+  "needs": "a signed-in AGI account and an approved site",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start any Computer Use task (see Task and Start).",
+   "While it runs, click the Assistant steps toggle to open the list.",
+   "Watch each action appear as it happens, with its time.",
+   "Check the list matches the actions the tab takes, and the last entry is the final report."
+  ],
+  "where": "Computer Use tab > Assistant steps"
+ },
+ "S64.19": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Screenshot captured"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   }
+  ],
+  "needs": "a signed-in AGI account and an approved site",
+  "note": "The code shows screenshot thumbnails added as the agent takes them, not a continuous live stream. The live view is the Chrome tab the task runs in.",
+  "reachable": "yes",
+  "steps": [
+   "Start a Computer Use task and open Assistant steps.",
+   "Watch the browser tab itself, which is the task's visible page.",
+   "When an entry titled 'Screenshot captured' appears, click its thumbnail to view it larger.",
+   "Check the thumbnail shows the current state of the page."
+  ],
+  "where": "Computer Use tab > Assistant steps > Screenshot captured"
+ },
+ "S64.20": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add Tab to AGI Group"
+   },
+   {
+    "file": "apps/extension/src/background.ts",
+    "text": "AGI"
+   }
+  ],
+  "needs": "none",
+  "note": "A tab already in a Chrome tab group is not regrouped (apps/extension/src/background.ts markComputerUseTab). The right-click item Add Tab to AGI Group is a separate manual control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a normal website tab that is not already in a Chrome tab group.",
+   "Start a Computer Use task on that tab (Computer Use tab > Task > Start).",
+   "Look at the Chrome tab strip for a blue group titled AGI around that tab.",
+   "After the run ends, check the tab has left the group."
+  ],
+  "where": "Chrome tab strip: during a Computer Use run the tab is put in a blue tab group titled AGI"
+ },
+ "S64.21": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Your turn"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Take over"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a site that asks you to sign in during a task, a signed-in AGI account, an approved site",
+  "note": "The hand-off is requested by the agent's ask_user_to_take_over tool (apps/extension/src/features/computer-use/agentLoop.ts). The Take over and Continue controls are the same ones used here.",
+  "reachable": "yes",
+  "steps": [
+   "Start a Computer Use task on a site that needs you to sign in (for example a site with a login page).",
+   "Wait for the banner titled 'Your turn' to appear.",
+   "Click Take over, sign in on the page, then click Continue.",
+   "Check AGI carries on with the task after Continue and the run reaches Agent finished."
+  ],
+  "where": "Computer Use tab > Task > Start, on a site that asks you to sign in during the task"
+ },
+ "S64.22": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Your turn"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Take over"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a page that shows a CAPTCHA or human check, a signed-in AGI account, an approved site",
+  "note": "The agent is told never to solve a CAPTCHA itself (apps/extension/src/features/computer-use/agentLoop.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Start a Computer Use task on a page that shows a CAPTCHA or 'I am not a robot' check.",
+   "Wait for the banner titled 'Your turn' to appear.",
+   "Click Take over, solve the check on the page, then click Continue.",
+   "Check AGI resumes the task after Continue."
+  ],
+  "where": "Computer Use tab > Task > Start, on a page that shows a CAPTCHA or human check"
+ },
+ "S64.25": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Stop"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Take over"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Browser control stopped"
+   }
+  ],
+  "needs": "a signed-in AGI account and an approved site",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a Computer Use task that takes several actions.",
+   "While it runs, click Stop, or click Take over to pause AGI.",
+   "Check the Stop control changes to Stopping\u2026 and the run ends.",
+   "Check a banner titled 'Browser control stopped' appears and no more actions happen on the page."
+  ],
+  "where": "Computer Use tab > Stop (shown while a run is active), or Take over"
+ },
+ "S64.26": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Skip"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Approve action"
+   }
+  ],
+  "needs": "a page that offers a file to download",
+  "note": "Downloads are always asked for (apps/extension/src/features/computer-use/approvalPolicy.ts). The code shows the approval card and the step list; no separate downloads list was found.",
+  "reachable": "yes",
+  "steps": [
+   "Start a Computer Use task that downloads a file from a page.",
+   "Before the download, check an approval card appears titled 'Approve action: download_file'.",
+   "Read the card, then click Allow or Skip.",
+   "Check the step 'Download: <address>' is listed in Assistant steps."
+  ],
+  "where": "Computer Use tab > Task > Start, on a page that offers a file to download"
+ },
+ "S64.27": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Approve file upload"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Choose files to upload"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "Upload is always asked for (apps/extension/src/features/computer-use/approvalPolicy.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Have a small file ready on the computer.",
+   "Start a Computer Use task that needs to upload that file to a page.",
+   "When the card 'Approve file upload' appears, click Choose files to upload and pick the file. Check the preview lists it and nothing has been sent yet.",
+   "Click Allow to send it, or Skip, and check the result shown in Assistant steps."
+  ],
+  "where": "Computer Use tab > Task > Start, on a page with a file upload control"
+ },
+ "S64.28": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Blocked sites"
+   }
+  ],
+  "needs": "a normal website tab to test with",
+  "note": "The site-access card in chat offers Allow for this task, Always allow on this site and Decline (apps/extension/_locales/en/messages.json).",
+  "reachable": "yes",
+  "steps": [
+   "Click More in the side panel, then Extension settings.",
+   "Click Permissions and find the Browser access section and the Browser control choice (Auto, Ask first, Full access, YOLO).",
+   "Open a normal website, then reopen Options and use Add or Remove for the current site in the approved sites list.",
+   "Under Blocked sites click Block for a site, then check that site is removed from approved sites and AGI no longer reads it."
+  ],
+  "where": "More > Extension settings > Permissions"
+ },
+ "S64.32": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Agent finished"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   }
+  ],
+  "needs": "a signed-in AGI account and an approved site",
+  "note": "The chat summary text is in apps/extension/src/side_panel.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Run a short Computer Use task and wait for it to finish.",
+   "Open Assistant steps and look at the last entry titled 'Agent finished'.",
+   "Check its text lists what was done and the result.",
+   "Open the Chat tab and check it shows 'The browser task finished.' followed by the report."
+  ],
+  "where": "Computer Use tab > Assistant steps > Agent finished"
+ }
+}

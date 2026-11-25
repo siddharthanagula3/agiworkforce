@@ -1,0 +1,187 @@
+{
+ "S84.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/appearance/index.tsx",
+    "text": "Dark"
+   }
+  ],
+  "needs": "none",
+  "note": "The choice is stored separately for Local and Cloud mode (appearance/index.tsx picks the store by app mode), so check the choice in the mode you are in.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Under Device, tap Appearance.",
+   "Tap Dark. The screen and app colours should switch to dark.",
+   "Tap Light, then System. Each tap should move the selected tick and change the colours to match.",
+   "Close the app completely, reopen it, and open Appearance again. The last choice should still be selected."
+  ],
+  "where": "Settings > Device > Appearance (open Settings from the side menu, then tap Appearance)"
+ },
+ "S84.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Accent Color"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/accent-color/index.tsx",
+    "text": "Blue"
+   }
+  ],
+  "needs": "none",
+  "note": "The accent is not applied while the system high-contrast setting is on (apps/mobile/src/ui/theme/useTheme.ts line 34), and the screen shows no notice of that; Neutral is the default.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Under Device, tap Accent Color.",
+   "Tap Blue. A tick should appear on Blue.",
+   "Go back and look at selected controls and highlights. They should use the blue accent.",
+   "Tap Neutral to return to the default and check the colours go back."
+  ],
+  "where": "Settings > Device > Accent Color (open Settings from the side menu, then tap Accent Color)"
+ },
+ "S84.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "General"
+   },
+   {
+    "file": "apps/mobile/app/(app)/models.tsx",
+    "text": "Favorites"
+   }
+  ],
+  "needs": "a Free account can pick free models; a paid account is needed for paid models",
+  "note": "The Models screen has no 'default' wording; the tap sets the one selected model (models.tsx setModel). That new chats start with it was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Under Device, tap General.",
+   "Tap Models. The row on General shows the current model name.",
+   "Tap a different model name in the list (a model that cannot be picked opens the model picker instead).",
+   "Go back to General and read the Models row, then start a new chat and check the model shown there matches."
+  ],
+  "where": "Settings > Device > General > Models (then tap a model name)"
+ },
+ "S84.11": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Default effort"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "General"
+   }
+  ],
+  "needs": "a model that offers effort levels",
+  "note": "The slider is shown only when the selected model has effort steps (general/index.tsx line 156); whether a new turn uses the saved value was not traced past the store.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Under Device, tap General.",
+   "Find the Default effort slider. If it is missing, the selected model has no effort steps, so choose a model with reasoning first on the Models row.",
+   "Drag the Default effort slider to another step.",
+   "Leave the screen, come back, and check the slider stays on the new step."
+  ],
+  "where": "Settings > Device > General > Default effort (slider)"
+ },
+ "S84.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "No Settings control for a default agent mode was found. The only default written from Settings is effort (setProjectDefault is called only from EffortSlider.tsx); the built-in default is mode 'auto' in apps/mobile/stores/agentControlStore.ts. The Chat or Work switch (WorkModeSwitch.tsx, label 'Chat or Work') is per chat, not a default. Searched apps/mobile for AGENT_MODE_LABEL, 'Ask before edits', 'Edit automatically', useScopedMode and setProjectDefault.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S84.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "Haptic Feedback"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "General"
+   }
+  ],
+  "needs": "a real phone with haptics (a simulator will not vibrate)",
+  "note": "Haptics are gated in apps/mobile/src/shared/utils/haptics.ts, useCopyAction.ts and ApprovalModal.tsx; the exact visible label of the copy control was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Under Device, tap General.",
+   "Turn the Haptic Feedback switch off.",
+   "On a phone with haptics, copy a chat reply with its copy control, or trigger an approval prompt, and feel for a vibration. There should be none.",
+   "Turn Haptic Feedback on and repeat the same action. A short vibration should be felt."
+  ],
+  "where": "Settings > Device > General > Haptic Feedback (switch)"
+ },
+ "S84.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/index.tsx",
+    "text": "Notification Types"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/NotificationCategoryDetailScreen.tsx",
+    "text": "Push notifications"
+   }
+  ],
+  "needs": "none; a device that has allowed notifications for push",
+  "note": "Only push can be switched in the app. Email shows 'On the web' and cannot be changed here, and no in-app or browser channel switch was found on the category screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Under Device, tap Notifications.",
+   "Under Notification Types, tap a category such as Chat replies.",
+   "Read the Push notifications switch and the Email notifications row under Delivery channels.",
+   "Turn Push notifications off, go back, and check the category now shows Off."
+  ],
+  "where": "Settings > Device > Notifications > Notification Types > Chat replies > Push notifications (switch)"
+ },
+ "S84.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Time and focus"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/TimeFocusScreen.tsx",
+    "text": "Enable quiet hours"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/notifications/index.tsx",
+    "text": "Quiet hours"
+   }
+  ],
+  "needs": "none",
+  "note": "The app's own reminder says 'This is a reminder, not a lock' (TimeFocusReminder.tsx), and the screen footnote says agent failures and approvals still come through. Whether notifications are actually held on the server was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Under Device, tap Time and focus.",
+   "Turn on Enable quiet hours.",
+   "Tap a day chip to choose days, then set Quiet Hours Start and Quiet Hours End times.",
+   "Go back to Notifications and check the Quiet hours row now reads On. Then check the held-notification behaviour against the note on this screen."
+  ],
+  "where": "Settings > Device > Time and focus > Enable quiet hours (or Settings > Device > Notifications > Quiet hours row, which opens Time and focus)"
+ }
+}

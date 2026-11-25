@@ -1,0 +1,307 @@
+{
+ "S58.01": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Connected"
+   }
+  ],
+  "needs": "a Free account or a paid account",
+  "note": "The path from the first screen to Settings was not traced; only the Settings nav entry was found. Workspace-level servers are under S58.15.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Settings, then open Connectors.",
+   "Look at the connector list. Check the Connected tab.",
+   "Compare with Expected: the connectors configured for the account appear in the list, and the Connected tab shows the ones linked to it."
+  ],
+  "where": "Settings > Connectors (tabs All, Connected, Not connected)"
+ },
+ "S58.03": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Add custom connector"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Remote MCP server URL"
+   }
+  ],
+  "needs": "a remote MCP server URL",
+  "note": "The submit button text was not read; the mutation is in AddCustomConnectorForm in SettingsModal.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors.",
+   "Click Add, then Add custom connector.",
+   "Type a name in My connector and a remote MCP server URL in Remote MCP server URL, then click Add connector.",
+   "Look for the new server in the Connectors list, and ask the assistant to use one of its tools."
+  ],
+  "where": "Settings > Connectors > Add > Add custom connector"
+ },
+ "S58.06": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Advanced settings"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "OAuth Client ID"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+    "text": "Sent only to this MCP server and never shown again."
+   }
+  ],
+  "needs": "a remote MCP server that uses a token or OAuth",
+  "note": "No explicit OAuth sign-in button text was found in this form; the Bearer token field label was not captured. Secure storage is not visible from the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open Add custom connector as in S58.03.",
+   "Fill the required fields. Look at the Bearer token field if it is shown.",
+   "Click Advanced settings to show OAuth Client ID and OAuth Client Secret.",
+   "Check the help text: Sent only to this MCP server and never shown again. Compare with Expected."
+  ],
+  "where": "Settings > Connectors > Add > Add custom connector > Advanced settings"
+ },
+ "S58.07": {
+  "labels": [],
+  "needs": "a connected MCP server",
+  "note": "No Test connection control was found. Discovery runs on connect and shows Retry discovery on failure (ConnectorCapabilitiesPanel.tsx). Searched for Test connection, Test and Connection in connectors features.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S58.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Tools"
+   }
+  ],
+  "needs": "a connected MCP server",
+  "note": "The connector detail opening step was inferred from ConnectorDetail in SettingsModal.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Connectors, then Connected.",
+   "Click a connected connector.",
+   "Look for the Tools group with its list of tool names.",
+   "Compare with Expected: connecting shows the tools the server offers."
+  ],
+  "where": "Settings > Connectors > [a connected connector] > Tools"
+ },
+ "S58.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Resources"
+   }
+  ],
+  "needs": "a connected MCP server that offers resources",
+  "note": "Attach action is in the Resources group onSelect handler; the exact button text was not captured.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector as in S58.08.",
+   "Look for the Resources group.",
+   "Click a resource to attach it, then compare with Expected."
+  ],
+  "where": "Settings > Connectors > [a connected connector] > Resources"
+ },
+ "S58.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Prompts"
+   }
+  ],
+  "needs": "a connected MCP server that offers prompts",
+  "note": "Shown only where the server offers prompts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector as in S58.08.",
+   "Look for the Prompts group.",
+   "Click a prompt to run it, fill its arguments if asked, then compare with Expected."
+  ],
+  "where": "Settings > Connectors > [a connected connector] > Prompts"
+ },
+ "S58.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Protocol"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Compatibility"
+   }
+  ],
+  "needs": "a connected MCP server",
+  "note": "Transport, server name and version appear in the same panel; no separate inspector screen was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector as in S58.08.",
+   "Read the Protocol line and the Tools, Resources and Prompts groups.",
+   "Open the Compatibility section and compare with Expected."
+  ],
+  "where": "Settings > Connectors > [a connected connector] > Compatibility"
+ },
+ "S58.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCallLog.tsx",
+    "text": "Recent calls"
+   }
+  ],
+  "needs": "a connected MCP server that has been used",
+  "note": "Recent calls is shown; no health indicator was found. The dialog that holds it was found in ToolPermissionsPanel.tsx but its opener was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector as in S58.08.",
+   "Find the Recent calls section at the bottom.",
+   "Use a connector tool in chat, then reopen Recent calls and compare with Expected."
+  ],
+  "where": "Settings > Connectors > [a connected connector] > Recent calls"
+ },
+ "S58.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "a connected MCP server",
+  "note": "The row label comes from the connector; the + menu opening was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the + button in the message box.",
+   "Click Connectors.",
+   "Switch the connector row off, then on, and compare with Expected."
+  ],
+  "where": "Composer + menu > Connectors > toggle the connector row"
+ },
+ "S58.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "MCP servers"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceMcpServers.tsx",
+    "text": "Publish to everyone"
+   }
+  ],
+  "needs": "a workspace admin account",
+  "note": "Members see the same servers but cannot change them, per the page copy.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a workspace admin and open Workspace administration.",
+   "Click MCP servers under Connectors.",
+   "Read the list under Published MCP servers and the states Published to everyone or Draft, not yet published.",
+   "Click Publish to everyone or Unpublish and compare with Expected."
+  ],
+  "where": "Workspace > Connectors > MCP servers"
+ },
+ "S58.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/McpAppCard.tsx",
+    "text": "Allow once"
+   }
+  ],
+  "needs": "a connected MCP server that ships an app",
+  "note": "No fixed menu path; depends on the server offering an app tool.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that asks the assistant to use a connected server's app tool.",
+   "Look for an interactive panel inside the reply.",
+   "Compare with Expected: the app panel renders in the chat."
+  ],
+  "where": "Chat > a message where a connected server's app tool runs"
+ },
+ "S58.18": {
+  "labels": [],
+  "needs": "a connected MCP server that ships an app",
+  "note": "Handshake happens inside the embedded app panel; its effect is seen only when the app panel loads in chat (S58.17).",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S58.19": {
+  "labels": [],
+  "needs": "a connected MCP server that ships an app",
+  "note": "Host passes input, result and theme to the widget; visible only as the panel showing its content (S58.17).",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S58.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/cards/McpAppCard.tsx",
+    "text": "Allow once"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/cards/McpAppCard.tsx",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a connected MCP server that ships an app and asks for an action",
+  "note": "The approval prompts were found in McpAppCard.tsx; the tool-call approval path was not traced separately.",
+  "reachable": "yes",
+  "steps": [
+   "Open an app panel in chat as in S58.17.",
+   "When the app asks for a device or tool action, read the prompt.",
+   "Click Allow once or Deny and compare with Expected."
+  ],
+  "where": "Chat > app panel > Allow once / Deny prompt"
+ },
+ "S58.21": {
+  "labels": [],
+  "needs": "a connected MCP server that ships an app",
+  "note": "Height changes show as the panel resizing inside the chat (S58.17).",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S58.22": {
+  "labels": [],
+  "needs": "a connected MCP server that ships an app",
+  "note": "Credentials are handled by the host; no control in the UI. Only the result of using the app is visible.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S58.23": {
+  "labels": [],
+  "needs": "two accounts, one that can see an app and one that cannot",
+  "note": "Authorization is enforced by the server; visible only as the app loading or refusing for a given account.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": ""
+ },
+ "S58.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Compatibility"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
+    "text": "Unavailable during discovery:"
+   }
+  ],
+  "needs": "a connected MCP server with a partial or older protocol",
+  "note": "The mismatch text appears only when the server reports a problem; the exact messages are built from the protocol data.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector as in S58.08.",
+   "Open the Compatibility section.",
+   "Read the Unavailable during discovery line if shown, and compare with Expected."
+  ],
+  "where": "Settings > Connectors > [a connected connector] > Compatibility"
+ }
+}

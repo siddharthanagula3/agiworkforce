@@ -1,0 +1,21 @@
+{
+ "S36.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/sources.rs",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a signed-in account whose model route offers web search, and a network connection",
+  "note": "The code audit's cited lines do not match: apps/cli/src/markdown.rs:373 is inline Markdown link rendering, apps/cli/src/claude_parity.rs:998 is table sorting and apps/cli/src/tui/tui_app.rs:5881 is the /models listing. The real footer is apps/cli/src/sources.rs render_footer, shown in apps/cli/src/tui/tui_app.rs:8665 and apps/cli/src/repl/mod.rs:833. The footer only appears when the turn used web search, and the URL is plain text, not a link. The Expected line's 'can be opened' depends on the tester copying the URL.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi` in a terminal and wait for the chat prompt.",
+   "Type a question that needs current web information, for example \"search the web for <a current topic>\", and press Enter.",
+   "Wait for the answer to finish. Look for a block that starts with the word \"Sources\" under the answer.",
+   "Check that each numbered line like \"[1] <title>  <URL>\" shows a full URL, and that the URL can be copied and opened in a browser (the CLI does not emit clickable links, so copy the text and paste it into a browser).",
+   "Compare with Expected: each cited source shows its URL and the URL opens."
+  ],
+  "where": "agi (start the chat), then ask a question that needs web search, for example \"search the web for today's news about <topic>\"; the \"Sources\" list appears under the answer"
+ }
+}

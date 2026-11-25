@@ -1,0 +1,616 @@
+{
+ "S20.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Paragraph rendering is part of every answer and has no control of its own.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box on the chat screen.",
+   "Type: Write three short paragraphs about the sea. Leave a blank line between each paragraph.",
+   "Click 'Send message'.",
+   "When the answer finishes, check that each paragraph is separate with space between them, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write a short guide with a # heading, a ## heading and a ### heading, one line under each.",
+   "Click 'Send message'.",
+   "Check that the three lines show as headings of different sizes and no # signs appear, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No custom style for strikethrough was found in the code I read; it uses the default text style, so check it looks struck through.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write three sentences: one with **bold** words, one with *italic* words, one with ~~strikethrough~~ words.",
+   "Click 'Send message'.",
+   "Check that bold, italic and struck-through text show with the right style and no asterisks or tildes remain."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write a numbered list of four steps to make tea, starting the numbering at 3.",
+   "Click 'Send message'.",
+   "Check that the list is numbered and the first item shows the number 3, with indented items, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write a bulleted list of four fruits.",
+   "Click 'Send message'.",
+   "Check that each fruit has a bullet marker and is indented, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The list rules are at packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx lines 450-480, not lines 349; nesting uses the default list items.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write a bulleted list of three countries. Under the second country add a nested bulleted list of two cities.",
+   "Click 'Send message'.",
+   "Check that the two cities sit one level deeper than their country, with more indent, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "In chat answers the checkboxes only show their state; clicking them changes nothing, because only the artifact preview passes a toggle handler.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write a to-do list in Markdown with one item done using - [x] and one item not done using - [ ].",
+   "Click 'Send message'.",
+   "Check that the first item shows a ticked box and the second an empty box, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Quote one famous line from a book, written as a Markdown blockquote starting with >.",
+   "Click 'Send message'.",
+   "Check that the quote is indented with a vertical bar at its left and looks different from normal text, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "No custom divider component was found; the line comes from the default page styles, so check it is visible in light and dark themes.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write one paragraph, then a line with only three dashes, then one more paragraph.",
+   "Click 'Send message'.",
+   "Check that a horizontal divider line appears between the two paragraphs, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Inline code is handled by the code component mapped in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx line 772.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write one sentence that names the command `ls -la` in backticks.",
+   "Click 'Send message'.",
+   "Check that the command shows in a monospace font, different from the sentence, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.11": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx",
+    "text": "Copy code"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write a Python function in a fenced code block that prints hello, with normal indentation.",
+   "Click 'Send message'.",
+   "Hover the code block and check the monospace text keeps its indentation and the 'Copy code' button is there, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message' > hover the code block"
+ },
+ "S20.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write one sentence with the link [example site](https://example.com) in it.",
+   "Click 'Send message'.",
+   "Click the link and check it opens in a new browser tab, with the link text underlined and an arrow icon after it, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message' > click the link in the answer"
+ },
+ "S20.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Bare links are turned into links by remark-gfm (packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts line 1).",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write one sentence that ends with the bare address https://example.com, with no brackets.",
+   "Click 'Send message'.",
+   "Check the address shows as an underlined link, click it and see it open in a new tab, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message' > click the address in the answer"
+ },
+ "S20.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Footnote links are handled in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx lines 336-360; no superscript style was found in the code I read, so check the marker looks raised.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write one sentence and put the footnote marker [^1] after it, then end the answer with the note [^1]: a short source note.",
+   "Click 'Send message'.",
+   "Click the marker and check it jumps to the note at the bottom, and that the note links back, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message' > click the footnote marker"
+ },
+ "S20.15": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MarkdownTable.tsx",
+    "text": "Table"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write a table with columns Name, Colour and Price, three rows of fruit, and right-align the Price column using ---:.",
+   "Click 'Send message'.",
+   "Check the table has a header row, grid cells, and the Price values sit on the right, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.16": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MarkdownTable.tsx",
+    "text": "Table"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "a signed-in account; phone width optional",
+  "note": "The sideways scroll is in packages/ui/unified-chat/src/components/markdown/MarkdownTable.tsx line 146, not MarkdownContent.tsx line 460; a table with more cells in a row than its header is shown as a read-only code block instead.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write a table with 12 columns named C1 to C12 and two rows of short values.",
+   "Click 'Send message'.",
+   "Scroll the table sideways inside the answer (or swipe on a phone width) and check the page does not overflow and the last columns can be reached, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message' > scroll the table sideways"
+ },
+ "S20.18": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MarkdownTable.tsx",
+    "text": "Download as CSV"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MarkdownTable.tsx",
+    "text": "Expand table"
+   }
+  ],
+  "needs": "a signed-in account and a table in an answer",
+  "note": "Only CSV download exists in the code read; no XLSX option was found, so Expected's XLSX part cannot be checked.",
+  "reachable": "yes",
+  "steps": [
+   "Get an answer with a table, as in S20.15.",
+   "Hover over the table so its buttons appear.",
+   "Click the 'Download as CSV' button (icon only).",
+   "Open the downloaded table.csv and check its rows match the table, as Expected says."
+  ],
+  "where": "Chat screen > hover over a table in an answer (on touch screens the buttons always show) > click the 'Download as CSV' button at the top right of the table"
+ },
+ "S20.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write one sentence that includes the formula $E = mc^2$ in the middle of it.",
+   "Click 'Send message'.",
+   "Check the formula shows as typeset maths inside the sentence, not as raw dollar signs, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Centring was not confirmed in the code read; the display block comes from packages/ui/unified-chat/src/components/markdown/preprocessMath.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write one sentence, then put $$ on its own line, the formula \\int_0^1 x^2 dx = 1/3, $$ on its own line, then one more sentence.",
+   "Click 'Send message'.",
+   "Check the formula is on its own centred line, typeset, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The model may rewrite the escapes; judge what the rendered answer shows.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write one sentence with \\$5, \\*stars\\* and snake\\_case in it.",
+   "Click 'Send message'.",
+   "Check the answer shows $5, *stars* and snake_case with no backslashes left, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message'"
+ },
+ "S20.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Streaming rendering is shown only while the reply streams; it has no control of its own.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the message box and type: Write a 300-word article with a heading, some bold words and a bulleted list.",
+   "Click 'Send message'.",
+   "Watch the answer while it types: headings and bold text should show as formatted, not as raw # or ** marks.",
+   "When it finishes, compare with the same text in the final answer, as Expected says."
+  ],
+  "where": "Chat screen, while an answer is still typing in after 'Send message' is clicked"
+ },
+ "S20.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The fence closing is handled in packages/platform/utils/src/markdownSource.ts (closeUnterminatedCodeFence); a streaming-only effect.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the message box and type: Write a 20-line Python script in a fenced code block.",
+   "Click 'Send message'.",
+   "Watch while the answer streams: the code should appear inside a code box as soon as the opening fence arrives, before the closing fence.",
+   "When it finishes, check the code box stays whole, as Expected says."
+  ],
+  "where": "Chat screen, while an answer that contains a code block is still streaming in"
+ },
+ "S20.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The model decides whether HTML appears; the sanitizer runs in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx around line 821, and user messages show tags as plain text.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the message box and type: Reply with exactly this text: <b>bold</b> and <script>alert('x')</script>",
+   "Click 'Send message'.",
+   "Check no alert box or popup appears and no script runs.",
+   "Check the tags show as text or are removed, not as active page content, as Expected says."
+  ],
+  "where": "Any assistant answer that contains HTML tags"
+ },
+ "S20.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The refusal of javascript: and data: links is done in code and is not visible as a control; a tester can only see the link shown as plain text.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box.",
+   "Type: Write one sentence with the link [example](https://example.com) in it.",
+   "Click 'Send message'.",
+   "Click the link and check a new browser tab opens, and the app tab stays where it was, as Expected says."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message' > click the link in the answer"
+ },
+ "S20.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Copy message"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "a signed-in account, a mouse or trackpad",
+  "note": "No rule that blocks selection was found in the code read, but selection inside code blocks was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type: Write a heading, a paragraph, a bulleted list and a short Python code block.",
+   "Click 'Send message'.",
+   "Press the mouse at the start of the heading and drag down past the list and into the code block.",
+   "Check the selection stays continuous across all the blocks, with no gaps, as Expected says. Then click 'Copy message' to see the copied text."
+  ],
+  "where": "Chat screen > type in the box 'Ask anything. Type / for commands' > click 'Send message' > drag-select in the answer"
+ },
+ "S20.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageSearch.tsx",
+    "text": "Search messages..."
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageSearch.tsx",
+    "text": "Go to next match"
+   }
+  ],
+  "needs": "a conversation with an answer (any signed-in account that has one)",
+  "note": "Command+F is handled in apps/web/features/chat/components/messages/ChatMessageList.tsx and accepts Command or Ctrl; the match count display was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation whose answer has several paragraphs and repeated words.",
+   "Press Command+F. The \"Search messages...\" field opens and is selected.",
+   "Type a word that appears in the answer.",
+   "Look at the rendered answer: the matching words should be highlighted in the text itself, not only in the search field.",
+   "Press Enter for the next match and Shift+Enter for the previous one, or use \"Go to next match\" and \"Go to previous match\"; check that the view moves to each match.",
+   "Press Escape or click \"Close search\" to end the search."
+  ],
+  "where": "Open a conversation with an answer > press Command+F (Ctrl+F also works) > the \"Search messages...\" field at the top of the message list"
+ },
+ "S20.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Print"
+   },
+   {
+    "file": "apps/web/features/chat/components/ConversationTitleMenu.tsx",
+    "text": "Export\u2026"
+   },
+   {
+    "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+    "text": "Export Chat History"
+   }
+  ],
+  "needs": "a conversation with a formatted answer (heading, list, table, code, math)",
+  "note": "The menu shows only when the conversation has messages and a title; the header button's visible name is only the aria label \"Conversation options\"; the export button label is built as \"Export\" plus the format name (EnhancedExportDialog.tsx line 286), and export builds the file from the conversation's Markdown.",
+  "reachable": "yes",
+  "steps": [
+   "Open a conversation with an answer that has a heading, a list, a table, a code block and a math formula.",
+   "Click the Conversation options button at the top of the chat, then click Print.",
+   "In the print preview, compare the headings, lists, table, code and math with the screen.",
+   "Cancel the print. Click the Conversation options button, then click Export\u2026.",
+   "Choose PDF in Export Chat History, click the Export PDF button, open the downloaded file and compare its headings, lists, table, code and math with the screen."
+  ],
+  "where": "Open a conversation > the Conversation options button at the top of the chat (icon button, no visible text) > Print, or Export\u2026 > Export Chat History dialog > Export PDF"
+ },
+ "S20.29": {
+  "labels": [],
+  "needs": "a keyboard that types Arabic or Hebrew",
+  "note": "No control exists; the message text sets dir=\"auto\" (apps/web/features/chat/components/messages/MessageBubble.tsx:2839), so direction follows each message's text.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Type a message in Arabic or Hebrew in the message box and send it.",
+   "Ask the assistant for a short answer written in Arabic or Hebrew.",
+   "Look at the user and assistant bubbles: the text should start from the right edge and be right-aligned, with the direction following the text."
+  ],
+  "where": "Any chat message that contains Arabic or Hebrew text (sent by you or written by the assistant)"
+ },
+ "S20.30": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+    "text": "This diagram could not be drawn"
+   }
+  ],
+  "needs": "a diagram that fails to draw (hard to force from the app; the tester may not be able to produce one)",
+  "note": "Unknown code languages fall back to plain text (apps/web/features/chat/components/messages/MessageBubble.tsx and packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:677), and unknown interactive cards show a fallback headline (apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:229); no tester-facing trigger for those was confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the assistant for a Mermaid flowchart diagram in an answer.",
+   "If the diagram fails to draw, look inside the answer for the text \"This diagram could not be drawn\".",
+   "Check that the diagram source is still shown below that text and that the rest of the message is still readable."
+  ],
+  "where": "Inside an answer, where a Mermaid diagram cannot be drawn: the message shows the text \"This diagram could not be drawn\" and the diagram source below it"
+ }
+}

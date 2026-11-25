@@ -1,0 +1,259 @@
+{
+ "S33.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Sites"
+   }
+  ],
+  "needs": "a published site (see S33.04)",
+  "note": "The Sites page is the dashboard; Settings > Privacy > Shared links > Manage also has a second list named Published artifacts (apps/web/features/settings/sections/PublishedArtifactsSection.tsx) with Open, Copy, History and Unpublish.",
+  "reachable": "yes",
+  "steps": [
+   "Click Sites in the sidebar.",
+   "Look at the list: one card per published site, with its name, its link, a visibility label and a More actions (\u22ef) button.",
+   "Click the \u22ef button on a card and check it offers Rename, Sharing and Unpublish.",
+   "Compare with Expected: the list shows each site's state and its actions."
+  ],
+  "where": "Sidebar > Sites"
+ },
+ "S33.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/sites/components/SitesPage.tsx",
+    "text": "Create"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Publish"
+   }
+  ],
+  "needs": "a chat that runs on the cloud (not Local or BYOK); the Web panel refuses cloud publishing for Local, BYOK or unknown origins",
+  "note": "The refusal for Local, BYOK and unknown origins is stated in apps/web/app/features/artifacts/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Click Sites in the sidebar, then click Create.",
+   "In the chat, ask AGI to build a small app or page, for example: build a page with a button that counts clicks. Wait for the artifact to appear in the side panel.",
+   "Click Publish in the artifact panel. If the panel is narrow, open the More (\u22ef) button and choose Publish.",
+   "Compare with Expected: the assistant built the app from your prompt, and a link now appears above the panel with a Copy link button."
+  ],
+  "where": "Sidebar > Sites > Create"
+ },
+ "S33.07": {
+  "labels": [],
+  "needs": "none",
+  "note": "No separate preview deployment or preview URL found; searched 'preview URL', 'preview link' and 'preview deployment' in apps/web/features/chat/components/artifacts, apps/web/features/sites, apps/web/app/shared-artifact and apps/web/lib/services/published-artifact-service.ts. The Publish link (S33.10) is the nearest match.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S33.10": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Sites"
+   },
+   {
+    "file": "apps/web/features/sites/components/SiteSettingsTab.tsx",
+    "text": "Copy link"
+   }
+  ],
+  "needs": "a published site (see S33.04) and a private browser window",
+  "note": "The artifact panel also shows the link after Publish, in a bar with a Copy link button (apps/web/features/chat/components/artifacts/ArtifactPreview.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Click Sites in the sidebar and click the name of a published site.",
+   "Open the Settings tab and find the URL section.",
+   "Click Copy link, then open a private browser window (not signed in) and paste the link.",
+   "Compare with Expected: the published site opens at its public address without signing in."
+  ],
+  "where": "Sidebar > Sites > open a site > Settings > URL > Copy link"
+ },
+ "S33.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/sites/components/SiteCard.tsx",
+    "text": "Sharing"
+   },
+   {
+    "file": "apps/web/features/sites/components/SiteSharingOptions.tsx",
+    "text": "Your workspace"
+   }
+  ],
+  "needs": "a workspace; a second member account is needed to check that members can open it",
+  "note": "The artifact panel uses different wording for the same choice ('Everyone in this workspace (N)' in apps/web/features/chat/components/artifacts/ArtifactPreview.tsx); the signed-out check is a tester step, not a confirmed behaviour in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Sites in the sidebar.",
+   "On a site card, click the \u22ef button, then Sharing.",
+   "Choose Your workspace. If you belong to no workspace the option is greyed out with the text 'Join or create a workspace to share with its members only.'",
+   "Compare with Expected: with a workspace, the site is saved as workspace-only; open its link from a signed-out private window and check it does not open for a visitor outside the workspace."
+  ],
+  "where": "Sidebar > Sites > \u22ef on a site card > Sharing > Your workspace"
+ },
+ "S33.20": {
+  "labels": [
+   {
+    "file": "apps/web/lib/services/artifact-runtime-service.ts",
+    "text": "No model on your plan can answer this app right now."
+   }
+  ],
+  "needs": "none",
+  "note": "The allowance is checked on the server per request (managed usage reservation in artifact-runtime-service.ts) and has no screen; the message is the failure text for an unavailable model route, not an allowance counter.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the public link of a published app that uses AI in a window.",
+   "Use the app's AI action.",
+   "Compare with Expected: the app answers. If no model is available for the request, the message 'No model on your plan can answer this app right now.' appears instead."
+  ],
+  "where": "Open the public link of a published app that uses AI, and use the app's own AI control"
+ },
+ "S33.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/sites/components/SiteSettingsTab.tsx",
+    "text": "Versions"
+   },
+   {
+    "file": "apps/web/features/sites/components/SiteSettingsTab.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "a published site with at least two publishes (republish it once after S33.04)",
+  "note": "Restore calls the server and then refreshes the site; the exact wording of the Live marker is 'Live'.",
+  "reachable": "yes",
+  "steps": [
+   "Click Sites in the sidebar and click the name of a site that has been published more than once.",
+   "Open the Settings tab and scroll to the Versions section.",
+   "Click Restore on an older version (not the one marked Live).",
+   "Compare with Expected: the restored version is now marked Live and is the newest entry; the section says restoring republishes it as the newest."
+  ],
+  "where": "Sidebar > Sites > site name > Settings > Versions > Restore"
+ },
+ "S33.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/sites/components/SiteCard.tsx",
+    "text": "Unpublish"
+   },
+   {
+    "file": "apps/web/features/sites/components/SiteSettingsTab.tsx",
+    "text": "Unpublish site"
+   }
+  ],
+  "needs": "a test site you can unpublish; this cannot be undone",
+  "note": "The same action is also at Sites > site name > Settings > Unpublish site; the confirm button text 'Unpublish' is in apps/web/features/sites/hooks/useSiteActions.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click Sites in the sidebar.",
+   "On a test site card, click the \u22ef button, then Unpublish.",
+   "Read the confirmation dialog, which names the site and says the link stops working; click Unpublish to confirm or Cancel to stop.",
+   "Compare with Expected: a toast says the site was unpublished and the link no longer works; open the old link in a private window to check it is unavailable."
+  ],
+  "where": "Sidebar > Sites > \u22ef on a site card > Unpublish"
+ },
+ "S33.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactMoreMenu.tsx",
+    "text": "More"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Duplicate"
+   }
+  ],
+  "needs": "a chat with an artifact",
+  "note": "Whether Duplicate is listed in every layout was not confirmed from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has an artifact and open the artifact in the side panel.",
+   "Click the More (\u22ef) button in the panel.",
+   "Click Duplicate.",
+   "Compare with Expected: a toast says 'Duplicated. Edits here no longer touch the original.' Edit the copy and open the original to check it did not change."
+  ],
+  "where": "Chat > open an artifact in the side panel > More (\u22ef) > Duplicate"
+ },
+ "S33.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download source (."
+   }
+  ],
+  "needs": "a text or code artifact",
+  "note": "The Download source item sits in the download menu for text artifacts; the exact condition under which the menu offers it was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a text or code artifact in the side panel.",
+   "Click the Download icon in the panel.",
+   "Click Download source (.<language>), for example .py or .html.",
+   "Compare with Expected: a file with the raw source downloads; open it in a text editor to check it matches the artifact."
+  ],
+  "where": "Chat > open a text artifact in the side panel > Download > Download source"
+ },
+ "S33.28": {
+  "labels": [
+   {
+    "file": "apps/web/app/copyright/report/ReportContentLink.tsx",
+    "text": "Report infringement or impersonation"
+   },
+   {
+    "file": "apps/web/app/copyright/report/page.tsx",
+    "text": "Report infringing or impersonating content"
+   }
+  ],
+  "needs": "none",
+  "note": "The only report link on a published site is for infringement or impersonation; no general abuse button was found, and takedown is an admin route (apps/web/app/api/admin/takedown/route.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Copy a published site's link from Sites (Settings > URL > Copy link) and open it in a window.",
+   "Scroll to the bottom of the page.",
+   "Click Report infringement or impersonation.",
+   "Compare with Expected: the report page titled 'Report infringing or impersonating content' opens with the published page's address filled in."
+  ],
+  "where": "Open a published site's public link > scroll to the bottom > Report infringement or impersonation"
+ },
+ "S33.29": {
+  "labels": [
+   {
+    "file": "apps/web/app/api/artifacts/publish/[token]/route.ts",
+    "text": "This name cannot be used because it violates the AGI Workforce usage policy."
+   }
+  ],
+  "needs": "a test site; do not use real or offensive content beyond what the policy check needs",
+  "note": "The rename path that reaches this check was not traced end to end; the refusal text is confirmed in the route, and review and takedown for a published page are operator-side only.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click Sites in the sidebar, then on a site card click the \u22ef button and Rename.",
+   "Type a name that breaks the usage policy and save.",
+   "Compare with Expected: the save is refused with 'This name cannot be used because it violates the AGI Workforce usage policy.' Other content moderation (review and takedown) has no screen for the visitor."
+  ],
+  "where": "Sidebar > Sites > \u22ef on a site card > Rename, then save a name that breaks the usage policy"
+ },
+ "S33.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/sites/components/SiteCard.tsx",
+    "text": "Unpublish"
+   },
+   {
+    "file": "apps/web/features/sites/components/SiteSettingsTab.tsx",
+    "text": "Unpublish site"
+   }
+  ],
+  "needs": "a test site you can unpublish; this cannot be undone",
+  "note": "No separate 'Delete app' control was found; Unpublish is the only removal, its confirmation says visitor data is deleted (apps/web/features/sites/hooks/useSiteActions.ts), and whether the app record itself is removed was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Sites in the sidebar and click a test site's name, then open the Data tab and note the Shared data and Personal data lists.",
+   "Go back, click the \u22ef button on the card, then Unpublish, and confirm.",
+   "Compare with Expected: the link stops working for everyone and the confirmation said visitor data is deleted; check the old link is unavailable."
+  ],
+  "where": "Sidebar > Sites > \u22ef on a site card > Unpublish"
+ }
+}

@@ -1,0 +1,194 @@
+{
+ "S53.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Loaded skills"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Skills"
+   }
+  ],
+  "needs": "at least one installed or created skill",
+  "note": "The cited commandSetup.ts:2309 and surfaces/index.ts:382 quotes are gone; the list is built in capabilityManagement.ts (manageSkills) and settingsWebviewContent.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click Settings in the app, then click Skills in the left list.",
+   "Read the Loaded skills list: each row shows a skill name and its description.",
+   "Or open the Command Palette and type Code: Show Skills to open the full list.",
+   "Compare with Expected: the skills installed or made for you should appear in the list."
+  ],
+  "where": "Settings > Skills > Loaded skills (full list: Settings > Skills > Manage skills, or Command Palette > Code: Show Skills)"
+ },
+ "S53.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Create a skill"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/skillAuthoring.ts",
+    "text": "Personal"
+   }
+  ],
+  "needs": "none",
+  "note": "The list shows the raw scope word user, not Personal; the personal folder path comes from code, not a run.",
+  "reachable": "yes",
+  "steps": [
+   "Click Settings, then Skills, then click Manage skills.",
+   "Click Create a skill and choose Personal.",
+   "Type a lowercase name with hyphens, such as release-notes, and a description, following the prompts.",
+   "The new skill file opens for editing. Check it saved under ~/.agiworkforce/skills (or AGIWORKFORCE_HOME if set), and that the list shows its scope as user.",
+   "Compare with Expected: the skill is yours and is not tied to one folder."
+  ],
+  "where": "Settings > Skills > Manage skills > Create a skill > Personal"
+ },
+ "S53.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/skillAuthoring.ts",
+    "text": "This project"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Allow this folder\u2019s project skills"
+   }
+  ],
+  "needs": "a project folder open in VS Code",
+  "note": "The project folder is <workspace>/.agiworkforce/skills per skillAuthoring.ts; the check in the other folder is inferred from that path, not run. The quoted capabilityManagement.ts:101 line is gone.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project folder in VS Code.",
+   "Click Settings, then Skills, then Manage skills.",
+   "Click Create a skill, choose This project, and name the skill.",
+   "Check the list: the new skill shows scope project and not allowed yet until you allow it.",
+   "Click Allow this folder\u2019s project skills, then open another folder and check the skill does not appear there.",
+   "Compare with Expected: the skill loads only in the project it was made for."
+  ],
+  "where": "Settings > Skills > Manage skills > Create a skill > This project"
+ },
+ "S53.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Loaded skills"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Skills"
+   }
+  ],
+  "needs": "at least one installed or created skill",
+  "note": "A skill not yet allowed in this folder shows Not allowed in this folder yet in place of its description (capabilityManagement.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click Settings, then Skills.",
+   "Look at each row in Loaded skills: the skill name is the title and its description is shown under it.",
+   "Open Command Palette, type Code: Show Skills, and check each entry shows the name, description and scope.",
+   "Compare with Expected: each skill shows its name and what it does."
+  ],
+  "where": "Settings > Skills > Loaded skills (also Command Palette > Code: Show Skills)"
+ },
+ "S53.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "Code shows the skill's bundled files are listed under its folder for the model (apps/cli/src/skills.rs:1218); that the model reads them was not confirmed by reading code.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Create a skill (Settings > Skills > Manage skills > Create a skill > Personal).",
+   "In its folder, next to SKILL.md, add a references folder with a text file that holds a made-up fact.",
+   "Make sure the skill is on, then in the chat ask a question that needs that fact and asks for the skill to be used.",
+   "Compare with Expected: the answer uses the fact from the reference file."
+  ],
+  "where": "Inside a skill run, seen in the chat answer"
+ },
+ "S53.11": {
+  "labels": [],
+  "needs": "none",
+  "note": "apps/cli/src/skills.rs hashes the scripts folder and lists it for the model (line 1218), but no code found that runs scripts automatically; that whether they run is unknown.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Create a skill and add a scripts folder with a small script that writes a marker file.",
+   "In SKILL.md, tell the model to run that script.",
+   "Make sure the skill is on, then in the chat ask for the task the skill covers.",
+   "Compare with Expected: the script runs and the marker file appears."
+  ],
+  "where": "Inside a skill run, seen in the chat answer or a command the chat runs"
+ },
+ "S53.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "so it will not load"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Manage skills"
+   }
+  ],
+  "needs": "a skill that lists required tools, such as one you write",
+  "note": "The Loaded skills rows show only the description; the requirement line appears only in the Manage skills list.",
+  "reachable": "yes",
+  "steps": [
+   "Click Settings, then Skills, then Manage skills.",
+   "Find a skill whose SKILL.md lists a tool it needs, or create one that names a tool.",
+   "Read the detail after its description: it shows Needs followed by the tool names.",
+   "Compare with Expected: a skill whose tool is missing shows Missing ... so it will not load, and does not load."
+  ],
+  "where": "Settings > Skills > Manage skills (read the detail line of a skill row)"
+ },
+ "S53.17": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Skills"
+   }
+  ],
+  "needs": "a skill that is on and allowed in this folder",
+  "note": "The start-screen group lists only skills that are on and allowed (startSuggestions.ts); the conditions for showing the start screen were not checked, and the /skills slash entry opens the manager, not a picker for a message.",
+  "reachable": "yes",
+  "steps": [
+   "Open the chat and start a new chat so the start screen shows.",
+   "Under the Skills heading, click a skill name; the message box fills with Use the <name> skill to.",
+   "Type the task after it and send.",
+   "Compare with Expected: the reply follows that skill."
+  ],
+  "where": "Chat start screen > Skills (group) > click the skill name"
+ },
+ "S53.18": {
+  "labels": [],
+  "needs": "a skill that is on and allowed",
+  "note": "The skill catalog is placed in the model prompt (apps/cli/src/agent/prompt.rs and apps/cli/src/skills.rs format_skill_catalog_for_prompt); the choice is made by the model, so the cited quote is gone and it is not a code rule. The description-matching itself was not run.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Create a skill with a clear description, such as one about writing release notes.",
+   "Make sure it is on and allowed (Settings > Skills > Loaded skills).",
+   "In the chat, ask for a task that matches the description without naming the skill.",
+   "Compare with Expected: the reply follows the skill's steps."
+  ],
+  "where": "Inside a chat request; seen in the chat answer"
+ },
+ "S53.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Loaded skills"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts",
+    "text": "Turn off"
+   }
+  ],
+  "needs": "a skill that is allowed in this folder (the switch is disabled otherwise)",
+  "note": "Removing a personal skill is a different action and deletes its folder; it is not part of this check.",
+  "reachable": "yes",
+  "steps": [
+   "Click Settings, then Skills.",
+   "In Loaded skills, flip the switch of a skill to off; the status line shows Turning <name> off.",
+   "Click Manage skills and check the row now shows the off icon.",
+   "Flip it back on, and check the skill is still listed (it was not deleted)."
+  ],
+  "where": "Settings > Skills > Loaded skills (switch on each row), or Settings > Skills > Manage skills > the skill row's Turn off / Turn on button"
+ }
+}

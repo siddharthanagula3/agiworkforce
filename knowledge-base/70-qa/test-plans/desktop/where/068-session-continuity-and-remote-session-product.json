@@ -1,0 +1,338 @@
+{
+ "S68.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Cloud sessions"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Code"
+   }
+  ],
+  "needs": "an account that has a cloud session, and the Desktop app",
+  "note": "Desktop app shows the same hosted web pages, so cloud sessions match by URL; local sessions are a separate list.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then click Code in the sidebar.",
+   "Click a session under Cloud sessions.",
+   "Note the session title and the address, which ends in /code/ and an ID.",
+   "Open the Desktop app, go to Code, and open the same session.",
+   "Compare the title and ID with the Expected line."
+  ],
+  "where": "Sidebar > Code > Cloud sessions > open a session"
+ },
+ "S68.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Cloud sessions"
+   }
+  ],
+  "needs": "an account with a cloud session that has several messages, and the Desktop app",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, click Code in the sidebar, and click a session under Cloud sessions.",
+   "Scroll the conversation and note the last message.",
+   "Open the same session in the Desktop app's Code view.",
+   "Compare the conversation history and the last message with the Expected line."
+  ],
+  "where": "Sidebar > Code > Cloud sessions > open a session"
+ },
+ "S68.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a session linked to a git repository, and a second client",
+  "note": "The branch name is data from the session, so the exact name cannot be taken from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Code in the sidebar and open a session that has a repository.",
+   "Click the Changes button in the session header.",
+   "Read the branch shown next to the git branch icon (base, arrow, working branch).",
+   "Open the same session in the other client and check the same branch name appears.",
+   "Compare the branch with the Expected line."
+  ],
+  "where": "Sidebar > Code > open a session > Changes"
+ },
+ "S68.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Select repository"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Repository URL"
+   }
+  ],
+  "needs": "a cloud session with a repository, and a second client",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Code in the sidebar and open a cloud session.",
+   "Read the small chip in the session header: network setting, then a dot and the repository name.",
+   "Open the same session in the other client and read the chip.",
+   "Compare the repository name on both clients with the Expected line."
+  ],
+  "where": "Sidebar > Code > open a session > header chip"
+ },
+ "S68.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Model for this agent"
+   }
+  ],
+  "needs": "an account that can see the Model for this agent dropdown, and a second client",
+  "note": "No code found for sharing instruction files across clients. The E2B gate cited in the plan is about sandbox provisioning, not model or instruction settings.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click Code in the sidebar, then New, and look at the composer.",
+   "Check the Model for this agent dropdown, shown only when models are offered.",
+   "Open the same session in the other client and compare the model shown."
+  ],
+  "where": "Code composer > Model for this agent"
+ },
+ "S68.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Continue in VS Code or the terminal"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Continue in VS Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "To continue in the terminal, run this in the same folder:"
+   }
+  ],
+  "needs": "the Desktop app with a local session; VS Code is optional for the link",
+  "note": "Only local sessions show this menu item; cloud sessions show Continue in VS Code in the Changes panel.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Desktop app, click Code, and open a local session.",
+   "Click the Session actions button (...) in the header.",
+   "Click Continue in VS Code or the terminal.",
+   "Look for the Continue in VS Code link and the text To continue in the terminal, run this in the same folder:, with a command below it.",
+   "Compare with the Expected line: the hand-off is explicit."
+  ],
+  "where": "Sidebar > Code > open a local session > Session actions (the ... button) > Continue in VS Code or the terminal"
+ },
+ "S68.14": {
+  "labels": [],
+  "needs": "a phone with the mobile app and the Desktop app",
+  "note": "Desktop side is in Settings > Capabilities > Remote Control (apps/web/features/desktop-host/components/RemoteControlSection.tsx), but I found no phone-side screen for continuing local execution in apps/desktop; the dispatcher line cited is a generic remote control start.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.15": {
+  "labels": [],
+  "needs": "a paid account, and cloud execution enabled on the server",
+  "note": "Cloud execution depends on the E2B provisioning gate (apps/web/lib/e2b/gate.ts, e2bProvisioningReady). I could not find a desktop control that continues a cloud session from the local app beyond the shared Code page.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.17": {
+  "labels": [],
+  "needs": "a cloud session that produced results, and a local folder",
+  "note": "Searched apps/web/features/code and apps/desktop/electron for return-to-local wording. apps/desktop/electron/windowPolicy.ts:85 only opens external links. The closest control is Apply to local (apps/web/features/code/local-code.ts:1610), which applies a local worktree, not cloud results.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Your computer"
+   },
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx",
+    "text": "Computers on your account"
+   }
+  ],
+  "needs": "a web browser and a Desktop app linked to the same account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in on a web browser (not the Desktop app, which hides this item).",
+   "Click Your computer in the Code sidebar.",
+   "Look for the heading Computers on your account and a list of computers."
+  ],
+  "where": "Sidebar > Your computer"
+ },
+ "S68.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Linked devices"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Desktop app"
+   }
+  ],
+  "needs": "a Desktop app linked to the account",
+  "note": "Rows are text lines; I did not confirm a card layout in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Settings, then Account.",
+   "Scroll to Linked devices.",
+   "Find a row for a Desktop app device and read its name, the surface label and its status."
+  ],
+  "where": "Settings > Account > Linked devices"
+ },
+ "S68.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Linked devices"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Local models"
+   }
+  ],
+  "needs": "a linked device with capabilities",
+  "note": "Code sessions are not in the capability list shown; the dispatcher line cited has moved.",
+  "reachable": "yes",
+  "steps": [
+   "Click Settings, then Account, and scroll to Linked devices.",
+   "Find a device row and read its Can use line.",
+   "Compare the listed items (Browser, Computer use, Local models, Local MCP, Remote Control) with the Expected line."
+  ],
+  "where": "Settings > Account > Linked devices"
+ },
+ "S68.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Pair a phone"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Remote Control"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Capabilities"
+   }
+  ],
+  "needs": "a paid plan, and a phone or second browser",
+  "note": "The claim route needs signaling settings (apps/web/app/api/pair/claim/route.ts); the plan says it was not live-checked, and I did not confirm it.",
+  "reachable": "yes",
+  "steps": [
+   "Click Settings, then Capabilities, and scroll to Remote Control.",
+   "Click Pair a phone.",
+   "Look for the pairing QR code and the Pairing code.",
+   "Pair the phone or a second browser, then check Settings > Account > Linked devices shows it.",
+   "Compare with the Expected line."
+  ],
+  "where": "Settings > Capabilities > Remote Control > Pair a phone"
+ },
+ "S68.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Disconnect phone"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Unlink device"
+   }
+  ],
+  "needs": "a paired phone, and a paid plan",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "With a paired phone shown, click Settings, Capabilities, Remote Control.",
+   "Click Disconnect phone and read the confirmation dialog.",
+   "Click Disconnect phone in the dialog.",
+   "Check the phone stops working, and see Settings > Account > Linked devices, where the device row has an Unlink device button."
+  ],
+  "where": "Settings > Capabilities > Remote Control > Disconnect phone"
+ },
+ "S68.24": {
+  "labels": [],
+  "needs": "a second client signed in to the account and a folder approved on the computer",
+  "note": "Approved folders are under Settings > Capabilities > Local access > Folders > Add a folder (apps/web/features/desktop-host/components/LocalAccessSection.tsx), but I found no screen on another client that starts a session; the plan says that screen is unverified and Remote Control is hidden in mobile v1.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Your computer"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Offline"
+   }
+  ],
+  "needs": "a linked computer that is offline or asleep",
+  "note": "Settings > Account > Linked devices shows only the word Offline; the explanation appears on the Your computer page.",
+  "reachable": "yes",
+  "steps": [
+   "In a web browser, click Your computer in the Code sidebar.",
+   "Open a computer that is offline or asleep, and read its status after its name.",
+   "Read the message: Your computer went offline. This page reconnects when it is back.",
+   "Compare with the Expected line."
+  ],
+  "where": "Sidebar > Your computer"
+ },
+ "S68.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Remote Control"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Connection lost. Reconnecting so your phone can pick up where it left off."
+   }
+  ],
+  "needs": "a paired phone and a paid plan",
+  "note": "The reconnect message only shows while the status is reconnecting.",
+  "reachable": "yes",
+  "steps": [
+   "With a phone paired, click Settings, Capabilities, Remote Control.",
+   "Turn off the phone's network for a moment.",
+   "Look for the message Connection lost. Reconnecting so your phone can pick up where it left off.",
+   "Turn the network back on and look for Connected to followed by the phone name."
+  ],
+  "where": "Settings > Capabilities > Remote Control"
+ },
+ "S68.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Agent run updates"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Notifications"
+   }
+  ],
+  "needs": "two clients on the same account, and a session that needs approval",
+  "note": "The line says This browser only, which conflicts with the cross-client Expected; apps/desktop/electron/runtime/codeSessionActivity.ts is gone, so only the reporting in apps/desktop/electron/main.ts remains.",
+  "reachable": "yes",
+  "steps": [
+   "Click Settings, then Notifications.",
+   "Find Agent run updates and read its line: Completions, failures and approval requests. This browser only.",
+   "Start an approval or a failing run in a session on another client.",
+   "Check whether this client shows a notification."
+  ],
+  "where": "Settings > Notifications > Agent run updates"
+ }
+}

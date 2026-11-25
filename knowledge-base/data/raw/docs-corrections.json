@@ -1,0 +1,1489 @@
+{
+  "summary": "Correct statements in the project's own documents that no longer match the code, one document per agent, on a branch",
+  "agentCount": 39,
+  "logs": [
+    "documents: 39; corrections applied: 42; not applied: 38"
+  ],
+  "result": {
+    "documents": [
+      {
+        "document": "docs/architecture/provider-routing.md",
+        "applied": [
+          {
+            "finding": "Chat picker described as showing the model, its developer and the routes that can serve it now",
+            "change": "Reworded line 64-65 to 'the chat picker shows each model with its guidance, capability icons, price band and plan lock.'; set Last updated to 2026-11-24",
+            "verified_at": "packages/ai/routing/src/model-picker.ts:82-90 (ModelPickerRowModel has guidance, capabilityKeys, priceBand, lock, isFavourite, familySlot; no route list or developer field). The web picker UI was not fully read, so this describes the shared row model."
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Capability matrix described as the product contract while the generated matrix owns harness wiring",
+            "reason": "The document already links docs/generated/provider-capability-matrix.md (lines 21-24) and says harness wiring is generated there, while the prose table stays as policy about what AGI may claim. The table is a policy and claims statement, not a derived fact, and harnesses.json does not settle it, so no edit."
+          }
+        ]
+      },
+      {
+        "document": "docs/architecture/byok-provider-strategy.md",
+        "applied": [],
+        "not_applied": [
+          {
+            "finding": "CLI and VS Code must support BYOK providers including Mistral, Hugging Face, Replicate, Bedrock; listed as P0/P1",
+            "reason": "Confirmed the code facts: apps/cli/src/models/mod.rs:102-192 pre-registers 11 OpenAI-compatible endpoints; no TS provider package for Mistral/HF/Replicate/Bedrock in packages/ai/providers; vscode/byok-chat is unwired in harnesses.json. But the document states a requirement and priority roadmap ('must support', P0/P1 tables), not current reality, so it is a product/roadmap decision the code cannot settle; fixing it would need rewriting the priority tables (more than a few lines). Bedrock is already marked as not claimable at line 60. Left for the owner."
+          },
+          {
+            "finding": "Public Electron Desktop chat is managed-cloud-only and must not expose BYOK routes",
+            "reason": "This is a trust-boundary policy rule (AGENTS.md section 6), not a plain fact. harnesses.json defines desktop/byok-chat (implemented) and desktop/local-chat (partial) profiles, but whether the Electron window uses them is not established, so the code does not settle it. Removing the rule to match profiles would weaken a rule. No edit."
+          }
+        ]
+      },
+      {
+        "document": "docs/product/suite.md",
+        "applied": [
+          {
+            "finding": "Trust Modes table names the third mode Managed, but users see Cloud",
+            "change": "Table row label 'Managed' changed to 'Cloud' (docs/product/suite.md:55-57 area), 'Local/BYOK/Managed wording' changed to 'Local/BYOK/Cloud wording' (line 59-60), and 'Last updated' set to 2026-11-24",
+            "verified_at": "packages/contracts/types/src/suite-contracts.ts:77-82 (PRIVACY_MODE_DISPLAY.managed has label 'Cloud')"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Mobile described as 'Unpublished client with small on-device Local LLM work' and Cloud as 'public-alpha'",
+            "reason": "Release status and the Local LLM scope are product statements the code does not settle, and the finding itself says it cannot confirm release status. The Suite Requirements row (small Local LLM default, public-alpha Cloud) is a launch requirement, not a plain fact. I did not re-read the Local chat code."
+          },
+          {
+            "finding": "Web role lacks the guest chat route; Mobile called 'Unpublished client'",
+            "reason": "The code does not conflict with the document. surface-status.ts marks desktop, cli, mobile, vscode and chrome as 'Coming soon', which matches 'unpublished'. Guest chat is flag-gated and describing it would add a feature claim or new text, which is a product call. I did not read the guest route."
+          }
+        ]
+      },
+      {
+        "document": "docs/architecture/trust-boundaries.md (unchanged)",
+        "applied": [],
+        "not_applied": [
+          {
+            "finding": "Policy table (lines 36-45) presents Local, own key and Cloud as uniform capabilities per app; code marks VS Code Local/BYOK unwired, mobile/desktop/CLI Local partial, Electron refuses local inference, CLI and VS Code Cloud need a higher tier than other apps",
+            "reason": "The finding misreads the document. The table does not list VS Code Local or BYOK as not offered (it shows both allowed) and does not list a Local Chrome profile as offered (it shows Chrome Local as not allowed). The document already says the table is policy and that a check mark means allowed, not shipped. It also already sends implementation status to the generated matrix, docs/generated/trust-mode-surface-matrix.md, which is built from harnesses.json, and it already says the Electron shell rejects local-inference commands (Desktop rule), which matches dispatcher.ts:3235-3244. Which modes each surface may expose is founder-stated policy, so I would not change the table to match unfinished code. Copying per-app implementation status (unwired or partial) into the table would duplicate the generated matrix and take more than a few lines. Free-chat-surface-policy.ts (lines 96-113) maps cli and vscode to the developer_surfaces capability and web, mobile, desktop and chrome to managed_chat. The document already says CLI and VS Code Managed Cloud needs a subscription, and the code does not settle which tier names belong in a policy document, so I added nothing."
+          }
+        ]
+      },
+      {
+        "document": "docs/architecture/credits.md",
+        "applied": [
+          {
+            "finding": "5-hour/weekly windows not described as rolling; top-ups described as web only",
+            "change": "Added a sentence under Plan allowances saying the 5-hour and weekly figures are rolling sums over the trailing hours, not fixed periods; changed 'Sold on the web only, at 50 credits' to 'Bought through Stripe, for Stripe-, Apple- and Google-billed paid plans, at 50 credits'. No Last updated line exists in the file.",
+            "verified_at": "apps/web/lib/server/rolling-usage.ts:47 (windowStart = now - windowHours hours); apps/web/app/api/billing/top-up/route.ts:157-162 (billingSource in stripe, apple, google)"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/architecture/desktop.md",
+        "applied": [
+          {
+            "finding": "Document said account credentials are stored only when Electron safeStorage reports OS encryption is available, otherwise persistence is refused.",
+            "change": "Replaced that sentence with: 'The account sign-in is the hosted web session, kept in the persistent `persist:agi-cloud` Electron session partition.' Also set Last updated to 2026-11-24.",
+            "verified_at": "apps/desktop/electron/config.ts:24 (REMOTE_SESSION_PARTITION = 'persist:agi-cloud'), used at apps/desktop/electron/main.ts:1116 and :2298. The only safeStorage hit in apps/desktop is a test mock at apps/desktop/electron/__tests__/deepLink.test.ts:133."
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/architecture/overview.md",
+        "applied": [
+          {
+            "finding": "Migration 0422 said to be unapplied (appliedThrough 421) on 2026-11-15 (reported three times by different reviewers)",
+            "change": "Removed the unapplied claim from the sentence and added 'Migration 0422 is applied (`appliedThrough` 425, recorded 2026-11-21).' The flag-unset and no-scanner statements stay dated 2026-11-15; 'Last updated' set to 2026-11-24.",
+            "verified_at": "scripts/config/production-migrations-applied.json:3-4 (appliedThrough 425, recordedAt 2026-11-21); edit at docs/architecture/overview.md:157-159"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Whether large files are offered now (flag CHAT_LARGE_FILES_ENABLED state, scanner protocol 2)",
+            "reason": "Not settled by the migration ledger. It depends on a deployed environment variable and scanner state, so I kept those statements dated 2026-11-15. Lines 167, 201 and 225 mention 0422 only as a condition and stay correct."
+          }
+        ]
+      },
+      {
+        "document": "docs/standards/http-api-surface.md",
+        "applied": [
+          {
+            "finding": "Run control list was incomplete: omitted resume/stream and steer/{steerId}, and said runs/{runId} only reads",
+            "change": "Rewrote the run paragraph: runs/{runId} now 'reads or cancels one' and carries pause, resume, resume/stream, steer, steer/{steerId} (withdraw a steer) and archive; Last updated set to 2026-11-24",
+            "verified_at": "apps/web/app/api/llm/v1/chat/completions/runs/[runId]/route.ts:111-112 (GET, POST cancel); runs/[runId]/resume/stream/route.ts:97; runs/[runId]/steer/[steerId]/route.ts:70 (DELETE); runs/[runId]/{pause,archive,resume,steer}/route.ts"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "chat/completions/guest route is not named in the document",
+            "reason": "The route exists (guest/route.ts) but is an anonymous, CSRF/bot-challenged, spend-capped guest chat. Documenting its credential and guarantees in the surface tables is a new table row and a product/auth statement, more than a plain fact fix, and whether it is part of the public contract is an owner call."
+          },
+          {
+            "finding": "OpenAPI file lists only runs/{runId}/resume for run control",
+            "reason": "That is a gap in apps/web/public/openapi.json, not in this document, and editing another file is out of scope."
+          }
+        ]
+      },
+      {
+        "document": "~/.cache/agi-audit/worktrees/agent-contract/docs/standards/api-rate-limits.md",
+        "applied": [],
+        "not_applied": [
+          {
+            "finding": "Table limits match code; Last updated date possibly stale",
+            "reason": "The finding reports no contradiction. Its date concern could not be dated, and the code settles nothing about it. The document was left unchanged and the date was not bumped."
+          },
+          {
+            "finding": "/chat/completions and /embeddings shown as flat limits, but llm-completion and chat-conversation are tier-scaled",
+            "reason": "The scaling exists (rate-limit.ts:934-947, 961-965), but with no plan tier it resolves to concurrency 1, which is the flat base (rate-limit.ts:954-955). Every developer-API call passes no tier. The /chat/completions call is withRateLimit(request,'llm-completion',`user:${userId}`) at auth-gate.ts:274, and embeddings calls withRateLimit(request,'chat-conversation') at embeddings/route.ts:126. Neither passes a tier, and no route under app/api/llm/v1 does. The document's line 64-66 (\"No developer-API route passes a plan tier today, so every limit above is the flat base value\") is therefore still true, and the table is correct. No edit."
+          }
+        ]
+      },
+      {
+        "document": "docs/product/surface-feature-matrix.md",
+        "applied": [
+          {
+            "finding": "Web Chat marked Unverified (no import of WebChatPage)",
+            "change": "Chat web table cell and detail line now Present, reached by WebChatRoot.tsx (import)",
+            "verified_at": "apps/web/features/chat/components/WebChatRoot.tsx:11,25; apps/web/app/chat/[sessionId]/page.tsx:2"
+          },
+          {
+            "finding": "Mobile plugins marked Absent (canUsePlugins false)",
+            "change": "Plugins mobile cell Present; detail line now cites apps/mobile/app/(app)/plugins/index.tsx via _layout.tsx (route)",
+            "verified_at": "packages/contracts/types/src/capabilities.ts:120 (MOBILE row, canUsePlugins true); apps/mobile/app/(app)/_layout.tsx:91-93; apps/mobile/src/features/plugins/sourcesService.ts:80-91"
+          },
+          {
+            "finding": "Mobile image generation marked Unverified",
+            "change": "Image generation mobile cell and detail line now Present, citing imagegen.ts reached by artifacts/index.tsx (import)",
+            "verified_at": "apps/mobile/src/features/image/services/imagegen.ts:70-100; apps/mobile/lib/v1FeatureFlags.ts imageGen true; apps/mobile/src/features/artifacts/index.tsx:44"
+          },
+          {
+            "finding": "Chrome video generation marked Absent",
+            "change": "Video generation chrome cell and detail line now Present, citing videoGenerationClient.ts reached by side_panel.ts (import)",
+            "verified_at": "apps/extension/src/side_panel.ts:395-401,6253; apps/extension/src/features/cloud-bridge/videoGenerationClient.ts:9-10"
+          },
+          {
+            "finding": "CLI remote control marked Absent (nothing under apps/cli/src is a host)",
+            "change": "Remote control cli cell and detail line now Present, citing remote_control/host.rs reached by remote_control/mod.rs (module)",
+            "verified_at": "apps/cli/src/lib.rs:60,894,6659; apps/cli/src/remote_control/{host.rs,mod.rs}"
+          },
+          {
+            "finding": "CLI mcp/mod.rs and safety/approval.rs marked Unverified (no import found)",
+            "change": "MCP cli and Tool approvals cli cells and detail lines now Present, reached by lib.rs (module) and safety/mod.rs (module)",
+            "verified_at": "apps/cli/src/lib.rs:44,63; apps/cli/src/safety/mod.rs:3"
+          },
+          {
+            "finding": "VS Code settings marked Unverified (features/settings is a directory)",
+            "change": "Settings vscode cell and detail line now Present, citing SettingsPanel.ts reached by commandSetup.ts (import)",
+            "verified_at": "apps/extension-vscode/src/core/commandSetup.ts:233,911; apps/extension-vscode/src/features/settings/SettingsPanel.ts"
+          },
+          {
+            "finding": "Chrome settings page options.ts marked Unverified",
+            "change": "Settings chrome cell and detail line now Present, citing options.ts reached by vite.config.ts",
+            "verified_at": "apps/extension/vite.config.ts:75; apps/extension/manifest.json:86"
+          },
+          {
+            "finding": "Last updated date",
+            "change": "Last updated set to 2026-11-24",
+            "verified_at": "docs/product/surface-feature-matrix.md:5"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "CLI image generation / Chrome event triggers with run journal",
+            "reason": "The chat image tool surface list does not settle the CLI row, since apps/cli/src/cloud/image.rs still exists. The Chrome run journal is for scheduled tasks, not event triggers, so the Absent cell for Chrome event triggers still stands."
+          },
+          {
+            "finding": "Desktop MCP marked Absent",
+            "reason": "The cell is about the public Electron desktop. The Tauri MCP module and MCPConfigEditor are retained internal code, which the document says does not make a feature public. The code does not settle which reading applies, and the canUseLocalMcp row reads differently from the cell's localMcp wording. Needs an owner call."
+          },
+          {
+            "finding": "Connectors listed as general_availability",
+            "reason": "That column is the feature registry's declared maturity, and packages/contracts/types/src/feature-registry.json still says general_availability for connectors. connector-release.ts coming_soon is a separate release state, so the cell is not wrong. Changing it would be a product or release claim."
+          },
+          {
+            "finding": "Mobile companion/agent/remote-control cells present although FEATURES.dispatch and FEATURES.companion are false",
+            "reason": "The document defines Present as code in the tree that something reaches, and the mobile files are still routed in _layout.tsx. The v1 flags describe release state, which the document says it does not claim. Marking them Absent would break its own definition."
+          },
+          {
+            "finding": "CLI cloud and repo modules marked unverified",
+            "reason": "The cloud row is already Present. For Repository context, a declared module (lib.rs:62) does not show that the CLI carries repository context into a turn, so the row is not settled."
+          },
+          {
+            "finding": "VS Code Help, Repository context, Filesystem and SSO cells marked unverified because the folders are directories",
+            "reason": "The files are imported (commandSetup.ts, extension.ts), but that does not show the feature itself. For example, editor-utilities does not show a filesystem capability and deviceAuth.ts does not show SSO. The code does not settle these."
+          },
+          {
+            "finding": "Chrome plan status 'nothing renders the plan'",
+            "reason": "The finding itself says a plan label was not found, so the row is only partly stale. freePlanNotices.ts shows a free-tier notice, not a plan or quota display. Left Unverified."
+          }
+        ]
+      },
+      {
+        "document": "docs/security/upload-scanning.md",
+        "applied": [
+          {
+            "finding": "Two paths store files; no web code calls POST /v2/scans",
+            "change": "Changed 'two paths' to 'three paths', added a bullet for apps/web/lib/server/chat-file-intake/steps.ts (calls inspectUploadHead and submitSourceScan), replaced 'No web code calls it yet' with a pointer to apps/web/lib/security/source-scan-client.ts, and set Last updated to 2026-11-24.",
+            "verified_at": "apps/web/lib/security/source-scan-client.ts:196-203; apps/web/lib/server/chat-file-intake/steps.ts:181,689; scripts/check-upload-inspection-coverage.mjs:30-41"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Web caller timeout is 15 seconds while the doc cites the service's 14-second deadline",
+            "reason": "No contradiction: the doc states only the service deadline (14 s), which is a different thing from the web's abort at upload-scan.ts:450 (15 s). The doc does not state the web timeout, so nothing is wrong to correct."
+          }
+        ]
+      },
+      {
+        "document": "docs/architecture/render-layer.md",
+        "applied": [
+          {
+            "finding": "The document cites artifact-store.ts line numbers that were not re-checked.",
+            "change": "Changed the three citations of artifact-store.ts:96 (pipeline diagram line 84, code comment line 683, section at line 902) to :107, and the push citation :102-105 to :113-116 (line 902).",
+            "verified_at": "packages/platform/artifacts/src/artifact-store.ts:107 (version: existing.version + 1) and :113-116 (versionsById append); header at :15-17 confirms that the same id with different content appends a version."
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "response-parts.ts files (types and cloud-contracts) do not exist, so the described contract is not implemented.",
+            "reason": "The document is a Draft for build whose file table marks both files as new, so it is a forward-looking spec and not a false claim about current code. Saying the files are missing would need a status or roadmap rewrite, which is a plan statement and not a plain fact. Left unchanged."
+          },
+          {
+            "finding": "The document does not describe the artifact sandbox origin, publishing or the Library.",
+            "reason": "Adding those would be a new section, which is more than a few lines and out of scope."
+          }
+        ]
+      },
+      {
+        "document": "docs/runbooks/free-quota-models.md",
+        "applied": [
+          {
+            "finding": "Mobile video UI described as paid-only; per-day cap sentence ignored monthly video-seconds cap",
+            "change": "Replaced 'its video UI remains paid-only despite media-capable transport' with 'its video is off in v1 (`videoGen: false`)'; changed 'not counted or capped per day.' to 'not counted or capped per day; video seconds are capped monthly by tier policy (`videoSecondsPerMonth`).'; set Last updated to 2026-11-24.",
+            "verified_at": "apps/mobile/lib/v1FeatureFlags.ts:28; apps/mobile/src/features/chat/components/MessageList.tsx:113-114; apps/web/lib/services/tier-unit-quota-service.ts:57-58"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Naming the Max product tier as the one with the monthly video cap",
+            "reason": "Left out of the text. I did not check which tier sets videoSecondsPerMonth (model-catalog.ts:1343 sets 300), and tier names are a product matter."
+          }
+        ]
+      },
+      {
+        "document": "docs/architecture/remote-control.md",
+        "applied": [
+          {
+            "finding": "Only the Electron desktop and VS Code extension were listed as hosts",
+            "change": "Host list now reads 'the Electron desktop shell, the VS Code extension, or the CLI's `agi remote-control`'.",
+            "verified_at": "apps/cli/src/lib.rs:6659-6678 (Command::RemoteControl runs remote_control::run)"
+          },
+          {
+            "finding": "Pairing route was said to apply an MFA policy gate and an IP allow-list gate",
+            "change": "Replaced with 'the standing refusal check (workspace `remote_control` policy, plan capability and the `screen_share` kill switch)'.",
+            "verified_at": "apps/web/app/api/pair/initiate/route.ts:66; apps/web/lib/feature-flags/remote-control-gate.ts:97-130; apps/web/lib/feature-flags/kill-switches.ts:34"
+          },
+          {
+            "finding": "Relay allow-list omitted the dispatch-task verbs",
+            "change": "Added 'DISPATCH_TASK_CONTROL_ACTIONS covers dispatch task create, cancel, reply and status', and changed 'outside both lists' to 'outside these lists'.",
+            "verified_at": "services/signaling-server/src/control-payload.ts:46-51"
+          },
+          {
+            "finding": "Last updated line",
+            "change": "Set to 2026-11-24.",
+            "verified_at": "docs/architecture/remote-control.md:5"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "services/signaling-server/README.md",
+        "applied": [],
+        "not_applied": [
+          {
+            "finding": "Says the initiator defaults to desktop (README line 9-10).",
+            "reason": "The README is correct. It documents the relay's own pairing endpoint, where the default is desktop: services/signaling-server/src/index.ts:533 has `initiator: pairingRoleSchema.default('desktop')`. The cited apps/web/app/api/pair/initiate/route.ts:93 (`initiator = 'mobile'`) is the web proxy route, a different layer that forwards an explicit initiator to the relay. The finding admitted it never re-read the relay's default. No edit made, and 'Last updated' was not touched. The web route's mobile default is not documented in this README, so there is nothing to fix here."
+          }
+        ]
+      },
+      {
+        "document": "docs/runbooks/incident-response.md",
+        "applied": [
+          {
+            "finding": "Alert channels omitted the out-of-band fallback; evaluate-slo-burn row omitted anomalies",
+            "change": "Set Last updated to 2026-11-24; changed the evaluate-slo-burn table row to 'yes, when an error budget is burning or a cost or latency anomaly appears'; changed 'does three things' to 'three things ... then a fourth when none of them lands'; added item 4 (out-of-band webhook plus status mirror, only when email, pager and channel all failed, a paged out-of-band alert counts as delivered); reworded the 'none of the three channels' sentence to 'none of the channels, the out-of-band fallback included'.",
+            "verified_at": "apps/web/lib/server/incident/dispatch.ts:128-170 (needsFallback, sendOutOfBandAlert, publishStatusMirror, delivery 'delivered' when outOfBand === 'paged'); apps/web/app/api/cron/evaluate-slo-burn/route.ts:16-21,116 (evaluateAnomalies)"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/runbooks/capacity-and-load-testing.md",
+        "applied": [
+          {
+            "finding": "Admission described as per conversation (plus video) only; missing the per-user managed turn ceiling and tier-scaled rate limits",
+            "change": "Streaming connections table row now also names the per-user concurrent turn ceiling by plan (`acquireManagedTurnSlot`). The 'no global backpressure' bullet now says admission is per conversation and, for managed turns, per user by plan (denied as `plan-excluded`, `ceiling-reached` or `limiter-unavailable`), with tier-scaled rate limits and a separate video slot. The no-global-backpressure conclusion is kept. 'Last updated' set to 2026-11-24.",
+            "verified_at": "apps/web/lib/rate-limit.ts:1315 (ManagedTurnDenial), :1366-1403 (acquireManagedTurnSlot and its denials), :927-938 (TIER_SCALED_KEYS)"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/security/security.md",
+        "applied": [
+          {
+            "finding": "Document says 'all four keys' but only three live keys remain (DEVICE_TOKEN_ENCRYPTION_KEY seals nothing, stated in the same file)",
+            "change": "Line 767: 'All four keys live only as deployment environment variables' -> 'All three keys ...'; line 870: 'any of the four keys' -> 'any of the three keys'; 'Last updated' set to 2026-11-24. Other 'four' mentions (connector tables, connector sources, 'four live policies') are different counts and were left alone.",
+            "verified_at": "apps/web/lib/validate-env.ts:58,66,67 (only TOTP_ENCRYPTION_KEY, GITHUB_TOKEN_ENCRYPTION_KEY, CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY are required; no DEVICE_TOKEN_ENCRYPTION_KEY)"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "'Skip approvals' wording vs code value 'autonomous'",
+            "reason": "The doc (line 72) already says a workspace that permits Skip approvals resolves to `autonomous` and cites WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY. The finding itself says the behaviour matches and only the product label differs. Code (packages/contracts/types/src/tool-approval-policy.ts:13) confirms 'autonomous'. The label is a UI product name, so no edit."
+          }
+        ]
+      },
+      {
+        "document": "docs/development/agent-operability.md",
+        "applied": [
+          {
+            "finding": "Says pre-push runs check:llm-operability and whitespace checks",
+            "change": "Line 62 now says pre-push runs check:llm-operability in a clean detached worktree, then turbo lint and typecheck for affected packages, then git diff --check, unless skipped with SKIP_PRE_PUSH=1, and that AGI_PREPUSH_ON_TREE=1 runs the same steps on the working tree. Last updated set to 2026-11-24.",
+            "verified_at": ".husky/pre-push:9-19 (on-tree mode and the call to the clean-worktree script); scripts/prepush-clean-worktree.sh:23,38-60 (detached worktree, chain, turbo lint typecheck --affected, git diff --check)"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/agent-context/README.md",
+        "applied": [
+          {
+            "finding": "check:llm-operability instruction did not say that some guards run only in CI",
+            "change": "Appended to the last Rules bullet: 'The chain does not run `check:trust-boundaries`, `check:rust-egress-boundary`, `check:hardcoded-arrays` or the skills-lock check; CI runs them.' Set Last updated to 2026-11-24.",
+            "verified_at": "package.json:397 (chain line contains none of the four); .github/workflows/ci.yml:130, 149, 932; .github/workflows/repo-operability.yml:163"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "apps/mobile/README.md",
+        "applied": [
+          {
+            "finding": "README omitted the feature folders, the feature flags and the purchase switch; the `src` row also listed a theme that is not in `src`",
+            "change": "Set Last updated to 2026-11-24; reworded the `src` row to name `src/features` (one folder per feature) and dropped 'theme'; added a four-line paragraph after the Shape table naming `lib/v1FeatureFlags.ts` (feature flags) and `src/features/billing/storePurchases.json` (store purchase switch, off means no purchase control).",
+            "verified_at": "apps/mobile/lib/v1FeatureFlags.ts; apps/mobile/src/features/billing/storePurchases.json:2 (\"nativePurchases\": false, with the readme text describing the off behaviour); ls of apps/mobile/src shows features, i18n, integrations, lib, navigation, platform, shared, ui and no theme folder"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Listing every newer feature (accounts, companion, voice, siri, release-state, rollout and the rest, about 54 folders)",
+            "reason": "It would need more than a few lines and would go stale. The README now points to `src/features` instead of copying the list or the count."
+          },
+          {
+            "finding": "Table alignment",
+            "reason": "The new `src` row is wider than the other rows in the table, so the table is not column-aligned. I did not reformat it. The repository's prettier hook may widen the other rows on commit."
+          }
+        ]
+      },
+      {
+        "document": "apps/cli/README.md",
+        "applied": [
+          {
+            "finding": "Last updated line said 2026-11-11 though the file was last changed 2026-11-24",
+            "change": "Set line 5 to 'Last updated: 2026-11-24'",
+            "verified_at": "git log -1 for apps/cli/README.md shows 2026-11-24; the release-state text (README lines 33-34) still matches apps/web/public/install.sh and apps/extension-vscode/src/integrations/cliInstaller.ts, which both contain 'No signed AGI CLI release', so no content edit was needed"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "audit/overview.md",
+        "applied": [],
+        "not_applied": [
+          {
+            "finding": "VS Code section (audit/overview.md:398-403) is dated 2026-09-27, lists VS Code defects and says sessions are shared with the CLI; code now has 149 commands and many more features.",
+            "reason": "The document is a point-in-time audit snapshot pinned to a commit (21d4395, 2026-09-27) and says so in its header, so it is a historical record that describes the code at that commit. The section states no command or test count, so the 149 and 195 figures (confirmed in apps/extension-vscode/package.json, 149 contributed commands, and 195 test files found by name pattern, not the 193 reported) contradict nothing in it. The defect list (six-item slash menu, dropped unsaved edits, memory off switch, no per-answer copy) was not re-verified and the finding says as much, so the code does not settle it. Re-auditing it would take more than a few lines. No edit made and the Date line is unchanged."
+          }
+        ]
+      },
+      {
+        "document": "apps/extension-vscode/README.md",
+        "applied": [],
+        "not_applied": [
+          {
+            "finding": "README does not say the CLI is unpublished and refers to Marketplace Q&A and docs links as if live (SURF-vscode)",
+            "reason": "The finding itself says the text is not clearly outdated. The code only shows that VS Code and CLI are marked Coming soon (apps/web/lib/surface-status.ts:7,11) and that the CLI has no signed release (audit/blockers/14-desktop-and-vscode-need-unpublished-cli.md). That is release status, not a wrong path, name, count, command or behaviour in the README. The README is the Marketplace listing, which is customer-facing copy that ships in the VSIX, and its own header says every claim must be true of the packaged extension. The README already tells users to run Code: Install AGI CLI or set agiWorkforce.cliPath, and it already carries a Public preview notice. Adding an unpublished-CLI or availability statement would be a release-status and customer claim for the owner to decide. It would also go stale the moment the first signed CLI release ships. I made no edit and left the Last updated line unchanged."
+          }
+        ]
+      },
+      {
+        "document": "apps/extension/docs/threat-model.md",
+        "applied": [
+          {
+            "finding": "The cookies row linked clerkAuth.ts as src/features/cloud-bridge/clerkAuth.ts, relative to docs/, so the link was broken.",
+            "change": "Changed the link target to ../src/features/cloud-bridge/clerkAuth.ts (line 57), matching the other ../src/ links in the file.",
+            "verified_at": "apps/extension/src/features/cloud-bridge/clerkAuth.ts (file exists; the document is in apps/extension/docs/)"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "apps/extension/README.md (unchanged)",
+        "applied": [],
+        "not_applied": [
+          {
+            "finding": "README title is the bare string 'agiworkforce' instead of the product name (apps/extension/README.md:1)",
+            "reason": "The code does not settle one name. apps/extension/manifest.json:3 says 'AGI Extension'. The registry at packages/contracts/types/src/product-names.ts:1-12 owns names and gives brand 'AGIWORKFORCE' plus plain product name 'Extension' (PRODUCT_NAMES.extension). Per the owner's 2026-11-08 change, that points to a plain name, so the manifest's 'AGI Extension' may itself be stale. Sibling READMEs are inconsistent (apps/cli/README.md uses 'AGI CLI', apps/desktop and apps/mobile use paths). Choosing between 'AGI Extension', 'AGIWORKFORCE Extension' and 'Extension' is a product naming decision, and the doc should not be edited to copy a manifest that may be the stale side. The README has no 'Last updated:' line. No edit made."
+          }
+        ]
+      },
+      {
+        "document": "~/.cache/agi-audit/worktrees/agent-contract/CONTRIBUTING.md",
+        "applied": [
+          {
+            "finding": "Setup section says Rust 1.94.0",
+            "change": "Changed 'Rust 1.94.0' to 'Rust 1.99.1' on line 12 and set 'Last updated' to 2026-11-24",
+            "verified_at": "rust-toolchain.toml:9 (channel = \"1.99.1\"); apps/desktop/README.md:164"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/development/README.md",
+        "applied": [
+          {
+            "finding": "Index omits the heavy-job rule, the scripts/dev wrappers, and that dev:desktop runs Tauri",
+            "change": "Added one how-to bullet naming scripts/dev/heavy-job.sh and light-job.sh, the 24 GB gate in .claude/hooks/heavy-job-gate.py, and that root pnpm dev:desktop runs the Tauri build, not the Electron public Desktop; set Last updated to 2026-11-24.",
+            "verified_at": ".claude/hooks/heavy-job-gate.py:12 (SMALL_MACHINE_GB = 24), :54-63 (deny message names the wrappers); package.json:414 (dev:desktop -> turbo run dev --filter=@agiworkforce/desktop); apps/desktop/package.json:8 (dev = tauri dev); scripts/dev/heavy-job.sh and light-job.sh exist"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Document gives no setup steps",
+            "reason": "Writing setup steps would need more than a few lines of new text, and the code does not settle the exact steps. It would also add a section. Left for the owner of the document."
+          }
+        ]
+      },
+      {
+        "document": "README.md",
+        "applied": [
+          {
+            "finding": "Environment variables table omitted the CLI (the Upload scanner row was already present, so only CLI was missing)",
+            "change": "Added a CLI row to the table: `apps/cli/.env.example`, 'Reads process environment; does not load `.env`'. The Prettier hook realigned the table columns.",
+            "verified_at": "scripts/env-doctor.mjs:180-185 (cli scope, example apps/cli/.env.example, tracked in git); apps/cli/.env.example:3-4 says the CLI reads the process environment and does not load .env itself"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/development/agent-workflow.md",
+        "applied": [
+          {
+            "finding": "Verification ladder omitted the clean-worktree pre-push, the heavy-job wrappers and the guard chain run-alone/re-run rule; Last updated was 2026-09-19.",
+            "change": "Added three short paragraphs after the Verification Ladder list (heavy-job.sh/light-job.sh wrappers; guard chain lists failures at the end and a guard that fails beside others is green only if it passes re-run alone; pre-push checks a clean worktree of HEAD via scripts/prepush-clean-worktree.sh), and set Last updated to 2026-11-24.",
+            "verified_at": ".husky/pre-push (else branch runs scripts/prepush-clean-worktree.sh); scripts/prepush-clean-worktree.sh:20-27 (git worktree add --detach at HEAD); scripts/run-guard-chain.mjs:150-190 (retry of failed guards alone, recovered/failed summary); scripts/dev/heavy-job.sh and scripts/dev/light-job.sh exist"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/architecture/release-architecture.md",
+        "applied": [
+          {
+            "finding": "Signaling server artifact listed as 'A Fly.io deployment' from its own workflow",
+            "change": "Signaling row now reads trigger 'Green CI on main; Fly only by manual run' and artifact 'A Railway deployment (Fly.io on manual dispatch)'",
+            "verified_at": ".github/workflows/deploy-signaling-server.yml:224-243 (Railway on workflow_run) and :292-309 (Fly only on workflow_dispatch with deploy_target fly/both)"
+          },
+          {
+            "finding": "Staging described as live ordering with an 'identical artifact' served staging",
+            "change": "Table row now says 'A preview-environment build of the same commit, deployed first'. Staging paragraph now says a commit reaches production only after the same commit served staging, notes the preview vs production build, and adds that the ordering is not what production takes today while both workflows are disabled. Last updated set to 2026-11-24.",
+            "verified_at": ".github/workflows/deploy-production.yml:335,709 (vercel pull --environment=production) and :391-401 (builds own prod artifact); .github/workflows/deploy-staging.yml:131 (--environment=preview); docs/development/ci-and-deploys.md:100-107"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/development/ci-and-deploys.md",
+        "applied": [
+          {
+            "finding": "Lines 61-62 presented migration 0394 as pending work for the release operator.",
+            "change": "Replaced 'The release operator must review and apply the pending migration chain before releasing that code.' with 'which is already applied in production (the applied watermark in scripts/config/production-migrations-applied.json is 425)'. Set Last updated to 2026-11-24.",
+            "verified_at": "scripts/config/production-migrations-applied.json:3 (appliedThrough 425); apps/web/db/neon/0394_account_security_recovery_batch.sql exists"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/development/troubleshooting.md",
+        "applied": [
+          {
+            "finding": "Doc said CLERK_AUTHORIZED_PARTIES 'is required'; code lists it as an important (warning-level) variable, not a hard error.",
+            "change": "Sign-in entry now says it is an important variable that validate-env.ts warns about when unset, and that unset only the deployment origin is accepted. Last updated set to 2026-11-24.",
+            "verified_at": "apps/web/lib/validate-env.ts:68 (importantVars list), :106-111 (pushes to warnings, not errors); apps/web/lib/__tests__/rate-limit.test.ts:625 (unset falls back to the deployment origin as authorizedParties)"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Clerk development key (pk_test_) handshake redirect claim",
+            "reason": "Not settled by the code I read; it is Clerk's own behaviour, so I left it unchanged."
+          },
+          {
+            "finding": "'Every completion fails' when the key-value provider is down",
+            "reason": "I did not trace the completion path, so the code does not settle it and I left the sentence unchanged."
+          },
+          {
+            "finding": "Missing sections on sign-in, plan limits, provider errors, uploads, sync and local models",
+            "reason": "Adding sections is outside the allowed edit (more than a few lines of new text)."
+          }
+        ]
+      },
+      {
+        "document": "docs/runbooks/release-rollback.md",
+        "applied": [
+          {
+            "finding": "Intro said the only rollback until 2026-09-18 was an in-job step, implying it is gone; the step still exists",
+            "change": "Intro now reads 'was a step inside the job that deployed, and that step still exists. It fires on `failure()` of the same run...' (past tense 'fired' changed to present 'fires'); Last updated set to 2026-11-24",
+            "verified_at": ".github/workflows/deploy-production.yml:515-525 (failure() step running vercel rollback); dispatch inputs at :15-25 and rollback-web job at :819 confirm the dispatch path described in the doc"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Claim that Deploy Production Surfaces is disabled in GitHub Actions as of 2026-11-11 and production is deployed by hand",
+            "reason": "Whether a workflow is enabled is GitHub repository state, not something the code or the worktree settles. The workflow file has no disabled marker. It is also an owner operational decision, so the statement was left unchanged."
+          }
+        ]
+      },
+      {
+        "document": "docs/runbooks/personal-data-breach.md (not edited)",
+        "applied": [],
+        "not_applied": [
+          {
+            "finding": "Section 5 claims no admin route or script calls sendBulkTransactionalEmail, and that no in-product or public notice route exists (header date 2026-10-03).",
+            "reason": "Re-checked in the worktree. The sendBulkTransactionalEmail claim still holds. It is defined at apps/web/lib/support/handoff/resend-client.ts:248. The only other references are tests (apps/web/lib/support/handoff/__tests__/resend-bulk.test.ts, apps/web/lib/services/__tests__/marketing-email-consent.test.ts, apps/web/app/api/settings/team/invitations/__tests__/route.lifecycle.test.ts). Nothing under apps, packages, scripts or services calls it. The in-product notice and public notice claims are partly stale. apps/web/app/api/admin/product-updates/route.ts lets a platform admin write a notification and push to users, but only for a release note picked from a fixed list (findAnnounceableRelease in apps/web/lib/services/product-update-notification-service.ts:43). It cannot carry breach text. apps/web/app/status/page.tsx and apps/web/lib/server/service-notices.ts publish incident and maintenance notices, but not a dated per-incident breach notice at a stable URL. So the runbook is neither clearly right nor clearly wrong on those two points. Rewording it would change a disclosed-limitation statement that the runbook says must stay aligned with apps/web/app/privacy/page.tsx and apps/web/app/privacy/india/page.tsx, which is legal and policy wording. That is a decision for the owner and counsel, not a plain fact fix. I made no edit and left the Last updated line unchanged. Suggested follow-up: have the owner or counsel decide whether the release-announcement route and status notices count as a notice path for breaches, then update §5 and both privacy pages together."
+          }
+        ]
+      },
+      {
+        "document": "docs/standards/naming-conventions.md",
+        "applied": [
+          {
+            "finding": "Line 22: public brand stated as AGI",
+            "change": "Replaced 'Public brand: `AGI`.' with 'Public brand: `AGIWORKFORCE` (`PRODUCT_BRAND` in `packages/contracts/types/src/product-names.ts`).'; set Last updated to 2026-11-24",
+            "verified_at": "packages/contracts/types/src/product-names.ts:1 (PRODUCT_BRAND = 'AGIWORKFORCE')"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Lines 34-35: surface names (AGI Desktop, AGI Web, AGI Mobile, AGI CLI, AGI in Chrome, AGI for VS Code) and mode names (AGI Work, AGI Code, AGI Cloud, AGI Agent)",
+            "reason": "This is the locked naming policy, a product/owner branding decision. The code does not settle it: product-names.ts uses plain names (Chat, Mobile, Desktop, CLI, Extension, Code, Work) and suite-contracts.ts:79 labels managed mode 'Cloud', but the apps disagree among themselves (Mobile shows AGI Mobile, VS Code manifest says AGI Code, Chrome manifest says AGI Extension). Rewriting the policy to match would need an owner decision on the final labels."
+          }
+        ]
+      },
+      {
+        "document": "docs/product/requirements.md in ~/.cache/agi-audit/worktrees/agent-contract (uncommitted). One finding applied, one not.",
+        "applied": [
+          {
+            "finding": "Website v1 section said the Website must not launch a full Cloud chat product.",
+            "change": "Replaced the sentence 'Website must not launch a full Cloud chat product before the Cloud controls are proven.' (about line 1105) with 'Website Cloud chat is open to signed-in users on Managed Free (public alpha); paid plan acquisition remains waitlist/access-code gated.' Set 'Last updated' to 2026-11-24. I left the 'Pricing/plan placeholder that does not sell unready Cloud' bullet alone, because paid acquisition is still gated.",
+            "verified_at": "docs/product/definition.md:46-47 (Managed Free enabled after sign-in, 2026-06-27; paid acquisition gated); docs/product/commercial.md:26 (Web: Managed Free available after sign-in, no Web BYOK)"
+          }
+        ],
+        "not_applied": [
+          {
+            "finding": "Desktop section (lines ~1108-1147) says Desktop exposes Local, BYOK and Cloud modes and is the local-private compute host with BYOK setup.",
+            "reason": "The cited sources do not settle it. D-2026-09-15-04 says Electron is the public desktop, inference stays Managed Cloud, and the Tauri app is retained internal code. I found no line saying Local and BYOK live only in Tauri. experience-contract.md 12.2 and the definition.md Surface Roles row say the Electron host owns the local developer host (Desktop Code, approved folders, device tools). The Desktop list in requirements.md is a 'must expose' requirements list, and the 2026-10-24 supersession says the Tauri app ships as a second public desktop app. Fixing it means deciding which modes the public Desktop must expose, and the rewrite would span the role list, the must-expose list and the Code/CLI paragraph. That is a product decision needing more than a few lines, so I made no edit."
+          }
+        ]
+      },
+      {
+        "document": "audit/decisions/open-questions.md",
+        "applied": [
+          {
+            "finding": "Matrix totals outdated (184/95/63/1 as of 2026-09-20)",
+            "change": "Changed to 190 present, 106 absent, 60 unverified, 1 partial as of 2026-11-24 (line 116-117).",
+            "verified_at": "docs/product/surface-feature-matrix.json (features[].cells[].state, counted: present 190, absent 106, unverified 60, partial 1)"
+          }
+        ],
+        "not_applied": []
+      },
+      {
+        "document": "docs/product/competitive-guidance.md",
+        "applied": [],
+        "not_applied": [
+          {
+            "finding": "Tauri is described as not a second public Desktop 'under the current founder decision' (inventory row at line 71, and the prose at lines 57-60).",
+            "reason": "The only evidence is another document, docs/decisions/2026-09-15-founder-decisions.md lines 78-99. No code settles it. That record says the owner chose on 2026-10-24 to ship Tauri as a second public app 'after the Electron batch' and that its public name is still the owner's to choose, so it states an owner decision and a plan, not a plain fact. The code also points the other way: in the same inventory row, release-desktop.yml is disabled and the only release is a draft. Rewriting the row to say Tauri is a second public Desktop would claim something the code does not show as shipped. The row and the decision record disagree, but the owner has to settle that, so I made no edit and left Last updated unchanged."
+          }
+        ]
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Correct"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "doc:docs/architecture/provider-routing.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "ae08341eeeb1e07ec",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569852152,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/architecture/provider-routing.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/architecture/provider-routing.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branche…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569863647,
+      "tokens": 49036,
+      "toolCalls": 6,
+      "durationMs": 11495,
+      "resultPreview": "{\"document\":\"docs/architecture/provider-routing.md\",\"applied\":[{\"finding\":\"Chat picker described as showing the model, its developer and the routes that can serve it now\",\"change\":\"Reworded line 64-65 to 'the chat picker shows each model with its guidance, capability icons, price band and plan lock.'; set Last updated to 2026-11-24\",\"verified_at\":\"packages/ai/routing/src/model-picker.ts:82-90 (Mod…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "doc:docs/architecture/byok-provider-strategy.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a4b66e94136c3e127",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569852152,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/architecture/byok-provider-strategy.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/architecture/byok-provider-strategy.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch b…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569867871,
+      "tokens": 57696,
+      "toolCalls": 3,
+      "durationMs": 14586,
+      "resultPreview": "{\"document\":\"docs/architecture/byok-provider-strategy.md\",\"applied\":[],\"not_applied\":[{\"finding\":\"CLI and VS Code must support BYOK providers including Mistral, Hugging Face, Replicate, Bedrock; listed as P0/P1\",\"reason\":\"Confirmed the code facts: apps/cli/src/models/mod.rs:102-192 pre-registers 11 OpenAI-compatible endpoints; no TS provider package for Mistral/HF/Replicate/Bedrock in packages/ai/…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "doc:docs/product/suite.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "aa71edc2429100cde",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569852152,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/product/suite.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/product/suite.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never run bui…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569864009,
+      "tokens": 50919,
+      "toolCalls": 3,
+      "durationMs": 10722,
+      "resultPreview": "{\"document\":\"docs/product/suite.md\",\"applied\":[{\"finding\":\"Trust Modes table names the third mode Managed, but users see Cloud\",\"change\":\"Table row label 'Managed' changed to 'Cloud' (docs/product/suite.md:55-57 area), 'Local/BYOK/Managed wording' changed to 'Local/BYOK/Cloud wording' (line 59-60), and 'Last updated' set to 2026-11-24\",\"verified_at\":\"packages/contracts/types/src/suite-contracts.ts…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "doc:docs/architecture/trust-boundaries.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a67e07b7cd4b2249a",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569852152,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/architecture/trust-boundaries.md (unchanged)",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/architecture/trust-boundaries.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branche…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569864795,
+      "tokens": 51352,
+      "toolCalls": 3,
+      "durationMs": 11507,
+      "resultPreview": "{\"document\":\"docs/architecture/trust-boundaries.md (unchanged)\",\"applied\":[],\"not_applied\":[{\"finding\":\"Policy table (lines 36-45) presents Local, own key and Cloud as uniform capabilities per app; code marks VS Code Local/BYOK unwired, mobile/desktop/CLI Local partial, Electron refuses local inference, CLI and VS Code Cloud need a higher tier than other apps\",\"reason\":\"The finding misreads the do…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "doc:docs/architecture/credits.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a571f7929c8563b9e",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569852152,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/architecture/credits.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/architecture/credits.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569864673,
+      "tokens": 48607,
+      "toolCalls": 5,
+      "durationMs": 11385,
+      "resultPreview": "{\"document\":\"docs/architecture/credits.md\",\"applied\":[{\"finding\":\"5-hour/weekly windows not described as rolling; top-ups described as web only\",\"change\":\"Added a sentence under Plan allowances saying the 5-hour and weekly figures are rolling sums over the trailing hours, not fixed periods; changed 'Sold on the web only, at 50 credits' to 'Bought through Stripe, for Stripe-, Apple- and Google-bill…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "doc:docs/architecture/desktop.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a96f9997ecde4ef75",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569852152,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/architecture/desktop.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/architecture/desktop.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569868021,
+      "tokens": 48294,
+      "toolCalls": 6,
+      "durationMs": 14732,
+      "resultPreview": "{\"document\":\"docs/architecture/desktop.md\",\"applied\":[{\"finding\":\"Document said account credentials are stored only when Electron safeStorage reports OS encryption is available, otherwise persistence is refused.\",\"change\":\"Replaced that sentence with: 'The account sign-in is the hosted web session, kept in the persistent `persist:agi-cloud` Electron session partition.' Also set Last updated to 202…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "doc:docs/architecture/overview.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a006484144b574ce9",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569852152,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/architecture/overview.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/architecture/overview.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569865048,
+      "tokens": 47314,
+      "toolCalls": 4,
+      "durationMs": 11759,
+      "resultPreview": "{\"document\":\"docs/architecture/overview.md\",\"applied\":[{\"finding\":\"Migration 0422 said to be unapplied (appliedThrough 421) on 2026-11-15 (reported three times by different reviewers)\",\"change\":\"Removed the unapplied claim from the sentence and added 'Migration 0422 is applied (`appliedThrough` 425, recorded 2026-11-21).' The flag-unset and no-scanner statements stay dated 2026-11-15; 'Last update…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "doc:docs/standards/http-api-surface.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a605efb33305b7a3f",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569852152,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/standards/http-api-surface.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/standards/http-api-surface.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569868174,
+      "tokens": 50107,
+      "toolCalls": 6,
+      "durationMs": 14884,
+      "resultPreview": "{\"document\":\"docs/standards/http-api-surface.md\",\"applied\":[{\"finding\":\"Run control list was incomplete: omitted resume/stream and steer/{steerId}, and said runs/{runId} only reads\",\"change\":\"Rewrote the run paragraph: runs/{runId} now 'reads or cancels one' and carries pause, resume, resume/stream, steer, steer/{steerId} (withdraw a steer) and archive; Last updated set to 2026-11-24\",\"verified_at…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "doc:docs/standards/api-rate-limits.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a359e0a3bbeb096cc",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569863648,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "~/.cache/agi-audit/worktrees/agent-contract…",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/standards/api-rate-limits.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, n…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569876708,
+      "tokens": 54064,
+      "toolCalls": 6,
+      "durationMs": 13060,
+      "resultPreview": "{\"document\":\"~/.cache/agi-audit/worktrees/agent-contract/docs/standards/api-rate-limits.md\",\"applied\":[],\"not_applied\":[{\"finding\":\"Table limits match code; Last updated date possibly stale\",\"reason\":\"The finding reports no contradiction. Its date concern could not be dated, and the code settles nothing about it. The document was left unchanged and the date was not bumped.\"},{\"find…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "doc:docs/product/surface-feature-matrix.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a1b05184142b59731",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569864011,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/product/surface-feature-matrix.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/product/surface-feature-matrix.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branch…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569944112,
+      "tokens": 82975,
+      "toolCalls": 14,
+      "durationMs": 80101,
+      "resultPreview": "{\"document\":\"docs/product/surface-feature-matrix.md\",\"applied\":[{\"finding\":\"Web Chat marked Unverified (no import of WebChatPage)\",\"change\":\"Chat web table cell and detail line now Present, reached by WebChatRoot.tsx (import)\",\"verified_at\":\"apps/web/features/chat/components/WebChatRoot.tsx:11,25; apps/web/app/chat/[sessionId]/page.tsx:2\"},{\"finding\":\"Mobile plugins marked Absent (canUsePlugins fa…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 11,
+      "label": "doc:docs/security/upload-scanning.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a282d8527ad495428",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569864674,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/security/upload-scanning.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/security/upload-scanning.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, ne…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569876551,
+      "tokens": 56171,
+      "toolCalls": 4,
+      "durationMs": 11877,
+      "resultPreview": "{\"document\":\"docs/security/upload-scanning.md\",\"applied\":[{\"finding\":\"Two paths store files; no web code calls POST /v2/scans\",\"change\":\"Changed 'two paths' to 'three paths', added a bullet for apps/web/lib/server/chat-file-intake/steps.ts (calls inspectUploadHead and submitSourceScan), replaced 'No web code calls it yet' with a pointer to apps/web/lib/security/source-scan-client.ts, and set Last …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 12,
+      "label": "doc:docs/architecture/render-layer.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "acaf951c738a3b290",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569864796,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/architecture/render-layer.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/architecture/render-layer.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, n…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569887239,
+      "tokens": 56711,
+      "toolCalls": 7,
+      "durationMs": 22442,
+      "resultPreview": "{\"document\":\"docs/architecture/render-layer.md\",\"applied\":[{\"finding\":\"The document cites artifact-store.ts line numbers that were not re-checked.\",\"change\":\"Changed the three citations of artifact-store.ts:96 (pipeline diagram line 84, code comment line 683, section at line 902) to :107, and the push citation :102-105 to :113-116 (line 902).\",\"verified_at\":\"packages/platform/artifacts/src/artifac…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 13,
+      "label": "doc:docs/runbooks/free-quota-models.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "aebae1e5392c68a5a",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569865049,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/runbooks/free-quota-models.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/runbooks/free-quota-models.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569877586,
+      "tokens": 48578,
+      "toolCalls": 6,
+      "durationMs": 12537,
+      "resultPreview": "{\"document\":\"docs/runbooks/free-quota-models.md\",\"applied\":[{\"finding\":\"Mobile video UI described as paid-only; per-day cap sentence ignored monthly video-seconds cap\",\"change\":\"Replaced 'its video UI remains paid-only despite media-capable transport' with 'its video is off in v1 (`videoGen: false`)'; changed 'not counted or capped per day.' to 'not counted or capped per day; video seconds are cap…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 14,
+      "label": "doc:docs/architecture/remote-control.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a5ac5bd7b0b21ad0e",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569867872,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/architecture/remote-control.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/architecture/remote-control.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches,…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569889825,
+      "tokens": 52147,
+      "toolCalls": 8,
+      "durationMs": 21953,
+      "resultPreview": "{\"document\":\"docs/architecture/remote-control.md\",\"applied\":[{\"finding\":\"Only the Electron desktop and VS Code extension were listed as hosts\",\"change\":\"Host list now reads 'the Electron desktop shell, the VS Code extension, or the CLI's `agi remote-control`'.\",\"verified_at\":\"apps/cli/src/lib.rs:6659-6678 (Command::RemoteControl runs remote_control::run)\"},{\"finding\":\"Pairing route was said to app…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 15,
+      "label": "doc:services/signaling-server/README.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a31ef2921a48fd5c8",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569868023,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "services/signaling-server/README.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file services/signaling-server/README.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches,…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569875858,
+      "tokens": 47526,
+      "toolCalls": 3,
+      "durationMs": 7835,
+      "resultPreview": "{\"document\":\"services/signaling-server/README.md\",\"applied\":[],\"not_applied\":[{\"finding\":\"Says the initiator defaults to desktop (README line 9-10).\",\"reason\":\"The README is correct. It documents the relay's own pairing endpoint, where the default is desktop: services/signaling-server/src/index.ts:533 has `initiator: pairingRoleSchema.default('desktop')`. The cited apps/web/app/api/pair/initiate/r…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 16,
+      "label": "doc:docs/runbooks/incident-response.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a599abb74d7828d67",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569868190,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/runbooks/incident-response.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/runbooks/incident-response.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569880445,
+      "tokens": 50625,
+      "toolCalls": 4,
+      "durationMs": 12255,
+      "resultPreview": "{\"document\":\"docs/runbooks/incident-response.md\",\"applied\":[{\"finding\":\"Alert channels omitted the out-of-band fallback; evaluate-slo-burn row omitted anomalies\",\"change\":\"Set Last updated to 2026-11-24; changed the evaluate-slo-burn table row to 'yes, when an error budget is burning or a cost or latency anomaly appears'; changed 'does three things' to 'three things ... then a fourth when none of …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 17,
+      "label": "doc:docs/runbooks/capacity-and-load-testing.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a8b8217d97a988ee3",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569875859,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/runbooks/capacity-and-load-testing.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/runbooks/capacity-and-load-testing.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch br…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569888597,
+      "tokens": 49749,
+      "toolCalls": 5,
+      "durationMs": 12738,
+      "resultPreview": "{\"document\":\"docs/runbooks/capacity-and-load-testing.md\",\"applied\":[{\"finding\":\"Admission described as per conversation (plus video) only; missing the per-user managed turn ceiling and tier-scaled rate limits\",\"change\":\"Streaming connections table row now also names the per-user concurrent turn ceiling by plan (`acquireManagedTurnSlot`). The 'no global backpressure' bullet now says admission is pe…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 18,
+      "label": "doc:docs/security/security.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "adf08acb9f39496d6",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569876552,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/security/security.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/security/security.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never run…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569893434,
+      "tokens": 54536,
+      "toolCalls": 6,
+      "durationMs": 16882,
+      "resultPreview": "{\"document\":\"docs/security/security.md\",\"applied\":[{\"finding\":\"Document says 'all four keys' but only three live keys remain (DEVICE_TOKEN_ENCRYPTION_KEY seals nothing, stated in the same file)\",\"change\":\"Line 767: 'All four keys live only as deployment environment variables' -> 'All three keys ...'; line 870: 'any of the four keys' -> 'any of the three keys'; 'Last updated' set to 2026-11-24. Oth…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 19,
+      "label": "doc:docs/development/agent-operability.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "acf401be35b3731d8",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569876708,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/development/agent-operability.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/development/agent-operability.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branche…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569886991,
+      "tokens": 48297,
+      "toolCalls": 4,
+      "durationMs": 10282,
+      "resultPreview": "{\"document\":\"docs/development/agent-operability.md\",\"applied\":[{\"finding\":\"Says pre-push runs check:llm-operability and whitespace checks\",\"change\":\"Line 62 now says pre-push runs check:llm-operability in a clean detached worktree, then turbo lint and typecheck for affected packages, then git diff --check, unless skipped with SKIP_PRE_PUSH=1, and that AGI_PREPUSH_ON_TREE=1 runs the same steps on t…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 20,
+      "label": "doc:docs/agent-context/README.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a1e4c55428614bec5",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569877588,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/agent-context/README.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/agent-context/README.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569888908,
+      "tokens": 48663,
+      "toolCalls": 4,
+      "durationMs": 11320,
+      "resultPreview": "{\"document\":\"docs/agent-context/README.md\",\"applied\":[{\"finding\":\"check:llm-operability instruction did not say that some guards run only in CI\",\"change\":\"Appended to the last Rules bullet: 'The chain does not run `check:trust-boundaries`, `check:rust-egress-boundary`, `check:hardcoded-arrays` or the skills-lock check; CI runs them.' Set Last updated to 2026-11-24.\",\"verified_at\":\"package.json:397…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 21,
+      "label": "doc:apps/mobile/README.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "ac044b662cebbe680",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569880448,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "apps/mobile/README.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file apps/mobile/README.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never run bui…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569894581,
+      "tokens": 49824,
+      "toolCalls": 5,
+      "durationMs": 14133,
+      "resultPreview": "{\"document\":\"apps/mobile/README.md\",\"applied\":[{\"finding\":\"README omitted the feature folders, the feature flags and the purchase switch; the `src` row also listed a theme that is not in `src`\",\"change\":\"Set Last updated to 2026-11-24; reworded the `src` row to name `src/features` (one folder per feature) and dropped 'theme'; added a four-line paragraph after the Shape table naming `lib/v1FeatureF…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 22,
+      "label": "doc:apps/cli/README.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a170d356d58a7f3da",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569886992,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "apps/cli/README.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file apps/cli/README.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never run builds…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569897518,
+      "tokens": 54637,
+      "toolCalls": 5,
+      "durationMs": 10526,
+      "resultPreview": "{\"document\":\"apps/cli/README.md\",\"applied\":[{\"finding\":\"Last updated line said 2026-11-11 though the file was last changed 2026-11-24\",\"change\":\"Set line 5 to 'Last updated: 2026-11-24'\",\"verified_at\":\"git log -1 for apps/cli/README.md shows 2026-11-24; the release-state text (README lines 33-34) still matches apps/web/public/install.sh and apps/extension-vscode/src/integrations/cliInstaller.ts, w…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 23,
+      "label": "doc:audit/overview.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a08b5ced08beb26af",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569887240,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "audit/overview.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file audit/overview.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never run builds,…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569895125,
+      "tokens": 46678,
+      "toolCalls": 2,
+      "durationMs": 6690,
+      "resultPreview": "{\"document\":\"audit/overview.md\",\"applied\":[],\"not_applied\":[{\"finding\":\"VS Code section (audit/overview.md:398-403) is dated 2026-09-27, lists VS Code defects and says sessions are shared with the CLI; code now has 149 commands and many more features.\",\"reason\":\"The document is a point-in-time audit snapshot pinned to a commit (21d4395, 2026-09-27) and says so in its header, so it is a historical …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 24,
+      "label": "doc:apps/extension-vscode/README.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a2a917e61e49e86a3",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569888598,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "apps/extension-vscode/README.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file apps/extension-vscode/README.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, nev…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569895589,
+      "tokens": 52405,
+      "toolCalls": 2,
+      "durationMs": 6991,
+      "resultPreview": "{\"document\":\"apps/extension-vscode/README.md\",\"applied\":[],\"not_applied\":[{\"finding\":\"README does not say the CLI is unpublished and refers to Marketplace Q&A and docs links as if live (SURF-vscode)\",\"reason\":\"The finding itself says the text is not clearly outdated. The code only shows that VS Code and CLI are marked Coming soon (apps/web/lib/surface-status.ts:7,11) and that the CLI has no signed…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 25,
+      "label": "doc:apps/extension/docs/threat-model.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a89c5894960fb958f",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569888909,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "apps/extension/docs/threat-model.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file apps/extension/docs/threat-model.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches,…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569900419,
+      "tokens": 51348,
+      "toolCalls": 5,
+      "durationMs": 10578,
+      "resultPreview": "{\"document\":\"apps/extension/docs/threat-model.md\",\"applied\":[{\"finding\":\"The cookies row linked clerkAuth.ts as src/features/cloud-bridge/clerkAuth.ts, relative to docs/, so the link was broken.\",\"change\":\"Changed the link target to ../src/features/cloud-bridge/clerkAuth.ts (line 57), matching the other ../src/ links in the file.\",\"verified_at\":\"apps/extension/src/features/cloud-bridge/clerkAuth.t…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 26,
+      "label": "doc:apps/extension/README.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a1996ede95c50961a",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569889827,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "apps/extension/README.md (unchanged)",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file apps/extension/README.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never run …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569901807,
+      "tokens": 47012,
+      "toolCalls": 5,
+      "durationMs": 11963,
+      "resultPreview": "{\"document\":\"apps/extension/README.md (unchanged)\",\"applied\":[],\"not_applied\":[{\"finding\":\"README title is the bare string 'agiworkforce' instead of the product name (apps/extension/README.md:1)\",\"reason\":\"The code does not settle one name. apps/extension/manifest.json:3 says 'AGI Extension'. The registry at packages/contracts/types/src/product-names.ts:1-12 owns names and gives brand 'AGIWORKFORC…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 27,
+      "label": "doc:CONTRIBUTING.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "ae43a80fa30fee71d",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569893436,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "~/.cache/agi-audit/worktrees/agent-contract…",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file CONTRIBUTING.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never run builds, t…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569900077,
+      "tokens": 46520,
+      "toolCalls": 5,
+      "durationMs": 6641,
+      "resultPreview": "{\"document\":\"~/.cache/agi-audit/worktrees/agent-contract/CONTRIBUTING.md\",\"applied\":[{\"finding\":\"Setup section says Rust 1.94.0\",\"change\":\"Changed 'Rust 1.94.0' to 'Rust 1.99.1' on line 12 and set 'Last updated' to 2026-11-24\",\"verified_at\":\"rust-toolchain.toml:9 (channel = \\\"1.99.1\\\"); apps/desktop/README.md:164\"}],\"not_applied\":[]}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 28,
+      "label": "doc:docs/development/README.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "af136574941ee52d4",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569894582,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/development/README.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/development/README.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never ru…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569906229,
+      "tokens": 49119,
+      "toolCalls": 6,
+      "durationMs": 11647,
+      "resultPreview": "{\"document\":\"docs/development/README.md\",\"applied\":[{\"finding\":\"Index omits the heavy-job rule, the scripts/dev wrappers, and that dev:desktop runs Tauri\",\"change\":\"Added one how-to bullet naming scripts/dev/heavy-job.sh and light-job.sh, the 24 GB gate in .claude/hooks/heavy-job-gate.py, and that root pnpm dev:desktop runs the Tauri build, not the Electron public Desktop; set Last updated to 2026…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 29,
+      "label": "doc:README.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a04f5595a69adca84",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569895126,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "README.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file README.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never run builds, tests, …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569903877,
+      "tokens": 48650,
+      "toolCalls": 5,
+      "durationMs": 8751,
+      "resultPreview": "{\"document\":\"README.md\",\"applied\":[{\"finding\":\"Environment variables table omitted the CLI (the Upload scanner row was already present, so only CLI was missing)\",\"change\":\"Added a CLI row to the table: `apps/cli/.env.example`, 'Reads process environment; does not load `.env`'. The Prettier hook realigned the table columns.\",\"verified_at\":\"scripts/env-doctor.mjs:180-185 (cli scope, example apps/cli…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 30,
+      "label": "doc:docs/development/agent-workflow.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a322ae26a6d736d55",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569895590,
+      "queuedAt": 1795569852140,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/development/agent-workflow.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/development/agent-workflow.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569907334,
+      "tokens": 52382,
+      "toolCalls": 6,
+      "durationMs": 10910,
+      "resultPreview": "{\"document\":\"docs/development/agent-workflow.md\",\"applied\":[{\"finding\":\"Verification ladder omitted the clean-worktree pre-push, the heavy-job wrappers and the guard chain run-alone/re-run rule; Last updated was 2026-09-19.\",\"change\":\"Added three short paragraphs after the Verification Ladder list (heavy-job.sh/light-job.sh wrappers; guard chain lists failures at the end and a guard that fails bes…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 31,
+      "label": "doc:docs/architecture/release-architecture.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a83176d2207d42cf8",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569897519,
+      "queuedAt": 1795569852141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/architecture/release-architecture.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/architecture/release-architecture.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch bra…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569910585,
+      "tokens": 52147,
+      "toolCalls": 6,
+      "durationMs": 13066,
+      "resultPreview": "{\"document\":\"docs/architecture/release-architecture.md\",\"applied\":[{\"finding\":\"Signaling server artifact listed as 'A Fly.io deployment' from its own workflow\",\"change\":\"Signaling row now reads trigger 'Green CI on main; Fly only by manual run' and artifact 'A Railway deployment (Fly.io on manual dispatch)'\",\"verified_at\":\".github/workflows/deploy-signaling-server.yml:224-243 (Railway on workflow_…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 32,
+      "label": "doc:docs/development/ci-and-deploys.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "af425cc8d75a2a796",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569900078,
+      "queuedAt": 1795569852141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/development/ci-and-deploys.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/development/ci-and-deploys.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569908153,
+      "tokens": 47519,
+      "toolCalls": 4,
+      "durationMs": 8075,
+      "resultPreview": "{\"document\":\"docs/development/ci-and-deploys.md\",\"applied\":[{\"finding\":\"Lines 61-62 presented migration 0394 as pending work for the release operator.\",\"change\":\"Replaced 'The release operator must review and apply the pending migration chain before releasing that code.' with 'which is already applied in production (the applied watermark in scripts/config/production-migrations-applied.json is 425)…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 33,
+      "label": "doc:docs/development/troubleshooting.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a863265adc1e25009",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569900420,
+      "queuedAt": 1795569852141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/development/troubleshooting.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/development/troubleshooting.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches,…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569912689,
+      "tokens": 49193,
+      "toolCalls": 7,
+      "durationMs": 12269,
+      "resultPreview": "{\"document\":\"docs/development/troubleshooting.md\",\"applied\":[{\"finding\":\"Doc said CLERK_AUTHORIZED_PARTIES 'is required'; code lists it as an important (warning-level) variable, not a hard error.\",\"change\":\"Sign-in entry now says it is an important variable that validate-env.ts warns about when unset, and that unset only the deployment origin is accepted. Last updated set to 2026-11-24.\",\"verified…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 34,
+      "label": "doc:docs/runbooks/release-rollback.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "ac86c12c0d0111169",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569901808,
+      "queuedAt": 1795569852141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/runbooks/release-rollback.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/runbooks/release-rollback.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, n…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569914235,
+      "tokens": 50237,
+      "toolCalls": 7,
+      "durationMs": 12427,
+      "resultPreview": "{\"document\":\"docs/runbooks/release-rollback.md\",\"applied\":[{\"finding\":\"Intro said the only rollback until 2026-09-18 was an in-job step, implying it is gone; the step still exists\",\"change\":\"Intro now reads 'was a step inside the job that deployed, and that step still exists. It fires on `failure()` of the same run...' (past tense 'fired' changed to present 'fires'); Last updated set to 2026-11-24…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 35,
+      "label": "doc:docs/runbooks/personal-data-breach.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a6d119e9e04dcc0c3",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569903878,
+      "queuedAt": 1795569852141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/runbooks/personal-data-breach.md (not edited)",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/runbooks/personal-data-breach.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branche…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569924871,
+      "tokens": 52132,
+      "toolCalls": 8,
+      "durationMs": 20993,
+      "resultPreview": "{\"document\":\"docs/runbooks/personal-data-breach.md (not edited)\",\"applied\":[],\"not_applied\":[{\"finding\":\"Section 5 claims no admin route or script calls sendBulkTransactionalEmail, and that no in-product or public notice route exists (header date 2026-10-03).\",\"reason\":\"Re-checked in the worktree. The sendBulkTransactionalEmail claim still holds. It is defined at apps/web/lib/support/handoff/resen…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 36,
+      "label": "doc:docs/standards/naming-conventions.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a67bb9c461073388b",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569906230,
+      "queuedAt": 1795569852141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/standards/naming-conventions.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/standards/naming-conventions.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569919289,
+      "tokens": 49375,
+      "toolCalls": 5,
+      "durationMs": 13059,
+      "resultPreview": "{\"document\":\"docs/standards/naming-conventions.md\",\"applied\":[{\"finding\":\"Line 22: public brand stated as AGI\",\"change\":\"Replaced 'Public brand: `AGI`.' with 'Public brand: `AGIWORKFORCE` (`PRODUCT_BRAND` in `packages/contracts/types/src/product-names.ts`).'; set Last updated to 2026-11-24\",\"verified_at\":\"packages/contracts/types/src/product-names.ts:1 (PRODUCT_BRAND = 'AGIWORKFORCE')\"}],\"not_appl…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 37,
+      "label": "doc:docs/product/requirements.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "af5830215df6aa4f1",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569907336,
+      "queuedAt": 1795569852141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/product/requirements.md in ~/.cache/ag…",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/product/requirements.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, never …",
+      "promptFramed": true,
+      "lastProgressAt": 1795569925614,
+      "tokens": 53397,
+      "toolCalls": 7,
+      "durationMs": 18278,
+      "resultPreview": "{\"document\":\"docs/product/requirements.md in ~/.cache/agi-audit/worktrees/agent-contract (uncommitted). One finding applied, one not.\",\"applied\":[{\"finding\":\"Website v1 section said the Website must not launch a full Cloud chat product.\",\"change\":\"Replaced the sentence 'Website must not launch a full Cloud chat product before the Cloud controls are proven.' (about line 1105) with '…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 38,
+      "label": "doc:audit/decisions/open-questions.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "a9079bbf47eebbe36",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569908154,
+      "queuedAt": 1795569852141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "audit/decisions/open-questions.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file audit/decisions/open-questions.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches, n…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569916915,
+      "tokens": 47073,
+      "toolCalls": 5,
+      "durationMs": 8761,
+      "resultPreview": "{\"document\":\"audit/decisions/open-questions.md\",\"applied\":[{\"finding\":\"Matrix totals outdated (184/95/63/1 as of 2026-09-20)\",\"change\":\"Changed to 190 present, 106 absent, 60 unverified, 1 partial as of 2026-11-24 (line 116-117).\",\"verified_at\":\"docs/product/surface-feature-matrix.json (features[].cells[].state, counted: present 190, absent 106, unverified 60, partial 1)\"}],\"not_applied\":[]}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 39,
+      "label": "doc:docs/product/competitive-guidance.md",
+      "phaseIndex": 1,
+      "phaseTitle": "Correct",
+      "agentId": "add23ad5e2f0358a8",
+      "model": "(model name)",
+      "state": "done",
+      "startedAt": 1795569910587,
+      "queuedAt": 1795569852141,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "docs/product/competitive-guidance.md",
+      "promptPreview": "Correct one document of the AGI Workforce repository where it no longer matches the code. Work ONLY in the git worktree ~/.cache/agi-audit/worktrees/agent-contract (branch claude/agent-contract) and edit ONLY the file docs/product/competitive-guidance.md in it. Never edit another file, never touch ~/Desktop/agiworkforce, never commit, stash, reset or switch branches…",
+      "promptFramed": true,
+      "lastProgressAt": 1795569918347,
+      "tokens": 46827,
+      "toolCalls": 2,
+      "durationMs": 7760,
+      "resultPreview": "{\"document\":\"docs/product/competitive-guidance.md\",\"applied\":[],\"not_applied\":[{\"finding\":\"Tauri is described as not a second public Desktop 'under the current founder decision' (inventory row at line 71, and the prose at lines 57-60).\",\"reason\":\"The only evidence is another document, docs/decisions/2026-09-15-founder-decisions.md lines 78-99. No code settles it. That record says the owner chose o…"
+    }
+  ],
+  "totalTokens": 1999842,
+  "totalToolCalls": 204
+}

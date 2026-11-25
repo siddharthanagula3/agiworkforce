@@ -1,0 +1,277 @@
+{
+ "S82.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Account usage"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Plan:"
+   }
+  ],
+  "needs": "a signed-in AGI account (BYOK or local-only sessions show Unavailable instead)",
+  "note": "Shown in the CLI only; I did not check the web or desktop surfaces.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure you are signed in: run `agi login` if `agi usage` says no AGI credential.",
+   "Run `agi usage`.",
+   "Find the \"Plan:\" line under \"Account usage\".",
+   "Compare the plan name with the plan on your account (the plan names come from the tier labels, such as Free, Premium, Max, Ultra)."
+  ],
+  "where": "Type `agi usage` in Terminal, or `/usage` inside an agi chat session. The first line is \"Account usage\", then \"Plan:\"."
+ },
+ "S82.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Monthly"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Subscription:"
+   }
+  ],
+  "needs": "a signed-in AGI account with a subscription",
+  "note": "The code shows a reset countdown for the monthly window and a subscription status, but no explicit renewal or end date. Expected may not be fully met.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi usage`.",
+   "Read the \"Monthly:\" line for its reset countdown (\"resets in ...\").",
+   "Read the \"Subscription:\" line for the status, such as active, trial, paused or ended.",
+   "Compare with your billing period on the account."
+  ],
+  "where": "Type `agi usage` in Terminal. Look for the \"Monthly\" line and the \"Subscription:\" line under \"Account usage\"."
+ },
+ "S82.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "5-hour window"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Weekly"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The meter is text only; the code draws no bar or graphic.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi usage`.",
+   "Read each window line, which shows \"credits used\" out of the allowance and \"left\", or a \"% used\" figure when the server sends percentages.",
+   "Compare the used amount with the plan allowance you expect."
+  ],
+  "where": "Type `agi usage` in Terminal. Look at the window lines under \"Account usage\": \"5-hour window\", \"Weekly\", \"Monthly\"."
+ },
+ "S82.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "By model:"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Flagship weekly"
+   }
+  ],
+  "needs": "a signed-in AGI account that has used more than one model",
+  "note": "The \"By model:\" rows come from the server history; the flagship cap line only appears once the flagship window has usage.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi usage`.",
+   "Find the \"Flagship weekly\" line, which appears when the flagship weekly window has usage.",
+   "Find the \"By model:\" heading and read the rows (up to 8), each with credits and request count.",
+   "In an agi chat session, `/usage` also shows \"By model:\" for the current session only."
+  ],
+  "where": "Type `agi usage` in Terminal. Look for the \"By model:\" section and the \"Flagship weekly\" line."
+ },
+ "S82.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "By product area:"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "AGI Code"
+   }
+  ],
+  "needs": "a signed-in AGI account that has run coding or work tasks",
+  "note": "The row names come from a fallback label table; the server may send its own labels.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi usage`.",
+   "Find the heading \"By product area:\".",
+   "Read the rows \"AGI Code\" and \"AGI Work\" (with \"Chat\", \"Deep Research\", \"Browser\" and \"Not attributed\" too), each with credits and request count.",
+   "Compare the \"AGI Code\" and \"AGI Work\" amounts with the work you did."
+  ],
+  "where": "Type `agi usage` in Terminal. Look for the \"By product area:\" section."
+ },
+ "S82.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Purchased credits:"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Account usage"
+   }
+  ],
+  "needs": "a signed-in AGI account (a purchased balance needs credits bought)",
+  "note": "If the server reports only percentages, the line reads \"Credits: not reported by this server\" instead.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi usage`.",
+   "Read each window line for \"credits used\" and \"left\", such as \"Weekly\" or \"Monthly\".",
+   "Read the \"Purchased credits:\" line for the purchased balance.",
+   "Compare the \"left\" numbers with what the account shows."
+  ],
+  "where": "Type `agi usage` in Terminal. Look at the window lines and the \"Purchased credits:\" line under \"Account usage\"."
+ },
+ "S82.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Purchased credits:"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Add credits:"
+   }
+  ],
+  "needs": "a signed-in AGI account; a purchased balance needs credits bought",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi usage`.",
+   "Read the plan window lines (\"5-hour window\", \"Weekly\", \"Monthly\", \"Flagship weekly\") which come from the plan allowance.",
+   "Read the separate \"Purchased credits:\" line, which shows the balance and \"overage on\" or \"overage off\".",
+   "Check that the purchased balance is listed apart from the plan allowance."
+  ],
+  "where": "Type `agi usage` in Terminal. Compare the window lines with the \"Purchased credits:\" line."
+ },
+ "S82.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "resets in"
+   }
+  ],
+  "needs": "a signed-in AGI account with a window that has a reset time",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi usage`.",
+   "Read the window lines for \", resets in ...\" (for example \"resets in 3h 0m\").",
+   "If the reset time has passed, the line shows \"resetting now\".",
+   "Compare the countdown with a clock after a minute."
+  ],
+  "where": "Type `agi usage` in Terminal. Look at the reset text on each window line."
+ },
+ "S82.20": {
+  "labels": [],
+  "needs": "",
+  "note": "No per-task usage view found. I searched apps/cli/src for \"task\" with usage and cost words (for example per-task, by task, task cost) and found nothing in the usage or cost code. The usage view is per window, per model and per product area only.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S82.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/output.rs",
+    "text": "billed:"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "not settled yet"
+   }
+  ],
+  "needs": "a signed-in AGI account on the managed route (a BYOK or local session shows a \"cost:\" line instead)",
+  "note": "The \"billed:\" line may say \"not settled yet\" while settlement is pending; the code polls for up to about 3.5 seconds.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with `agi login` and start a chat with `agi`.",
+   "Send one short message and wait for the answer to finish.",
+   "Look for a line starting with \"billed:\" below the answer (it may take a few seconds to settle).",
+   "Compare the amount with `agi usage` afterward."
+  ],
+  "where": "Start an agi chat session by typing `agi`, send a message, and look after the answer for the \"billed:\" line."
+ },
+ "S82.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/models/streaming.rs",
+    "text": "You have used"
+   },
+   {
+    "file": "apps/cli/src/models/streaming.rs",
+    "text": "Run `agi usage` to see what is left."
+   }
+  ],
+  "needs": "a signed-in AGI account near a usage limit (hard to reach in a test)",
+  "note": "The notice appears only when the server sends a quota header; I could not find a command that forces it.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and use `agi` chat until a usage window reaches a warning level.",
+   "Look for the notice \"You have used N% of your ...\" with the window name.",
+   "The notice appears once per window and level.",
+   "Run `agi usage` and compare the percentage."
+  ],
+  "where": "Shown as a notice in an agi chat session when the server reports a window at a high usage level: \"You have used N% of your 5-hour window.\""
+ },
+ "S82.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "It resets in"
+   },
+   {
+    "file": "apps/cli/src/usage_summary.rs",
+    "text": "Add credits or fix billing at"
+   }
+  ],
+  "needs": "a signed-in AGI account at a usage limit (hard to reach in a test)",
+  "note": "Expected mentions naming the limit, but the text names only the reset time and the recovery link. Code moved: errors.rs:373 no longer holds the quote; the usage limit text is at errors.rs:687-705.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account that has reached a limit (for example a flagship weekly limit).",
+   "Send a message in `agi` chat that the limit blocks.",
+   "Read the error text: it names the limit, the \"It resets in\" time and the recovery link (\"Add credits or fix billing at\" or \"See every usage window at\").",
+   "Compare with `agi usage`."
+  ],
+  "where": "Shown as the error text in an agi chat when a limit blocks a message, after the \"It resets in ...\" sentence, then the recovery link sentence."
+ },
+ "S82.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Your plan also includes"
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Switch to"
+   }
+  ],
+  "needs": "a signed-in AGI account at the flagship weekly limit (hard to reach in a test)",
+  "note": "The alternative is offered only for the flagship weekly limit; the other limit codes give no alternative. The \"Switch to\" line is for an unavailable model, not a limit.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account at the flagship weekly limit with a model from that limit.",
+   "Send a message in `agi` chat.",
+   "Read the error text for \"Your plan also includes\" with a standard model name.",
+   "Type the suggested `/model <name>` and send a message to check it runs."
+  ],
+  "where": "Shown in the error text of an agi chat when the flagship weekly limit blocks a message: \"Your plan also includes ..., switch with `/model ...`\"."
+ },
+ "S82.27": {
+  "labels": [],
+  "needs": "",
+  "note": "No wait-until-reset option found. I searched apps/cli/src for \"wait until\", \"until the reset\" and \"Wait\": the limit text only says \"It resets in ...\" and \"Run `agi usage` to see when it resets.\" in apps/cli/src/errors.rs.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

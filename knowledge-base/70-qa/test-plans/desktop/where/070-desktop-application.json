@@ -1,0 +1,516 @@
+{
+ "S70.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "Single-instance and crash-recovery screen code was not located by visible words; the earlier recovery check was not re-verified.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open AGI Desktop from the Applications folder.",
+   "Open AGI Desktop a second time and check that the one open window comes forward instead of a second copy appearing.",
+   "Close the window with the red button, then click the app icon in the Dock and check the same window returns."
+  ],
+  "where": "Effect seen by opening and re-opening the app window"
+ },
+ "S70.02": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "File"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "New Chat"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Keyboard Shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "The Help menu uses the system role, so its title comes from macOS, not a literal string.",
+  "reachable": "yes",
+  "steps": [
+   "Click File in the menu bar and check the items listed: New Chat, New Temporary Chat, New Project, Open Folder.",
+   "Click Edit and check Undo, Redo, Cut, Copy, Paste, Find.",
+   "Click View and History, then Window and Help, and check each lists its items.",
+   "Click File > New Chat and check a new chat opens. Compare with Expected."
+  ],
+  "where": "Menu bar > File > New Chat (menu titles File, Edit, View, History, Window, Help)"
+ },
+ "S70.03": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/tray.ts",
+    "text": "Shortcuts"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "Menu bar"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Desktop app"
+   }
+  ],
+  "needs": "none",
+  "note": "Open Desktop and Quit labels are built from a template, so their literal text was not found; the Menu bar hint is Show Desktop in the menu bar.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Desktop icon in the menu bar.",
+   "Check the items: Open Desktop, New Chat, Quick Ask, Screenshot to Chat, Dictation, Shortcuts, Check for Updates, Quit.",
+   "Click Shortcuts and check the shortcut choices list.",
+   "Open Settings > Desktop app > General, find the Menu bar switch, turn it off, and check the icon disappears from the menu bar."
+  ],
+  "where": "Menu bar icon (AGI Desktop) > Open Desktop; > New Chat; > Quick Ask; > Screenshot to Chat; > Dictation; > Shortcuts"
+ },
+ "S70.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "Behaviour is in the app code (activate and window-all-closed handlers); no visible label on the control itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat window and click the red close button at the top left.",
+   "Look at the Dock: the AGI Desktop icon should still be there with its running dot.",
+   "Click the AGI Desktop icon in the Dock.",
+   "Check the chat window comes back. Compare with Expected."
+  ],
+  "where": "Red close button on the window, then the AGI Desktop icon in the Dock"
+ },
+ "S70.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "Quick Ask shortcut"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "No shortcut"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "Already used by another app."
+   }
+  ],
+  "needs": "a Desktop app build",
+  "note": "Conflict notes come from STATUS_NOTE in the same file.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose the Desktop app group, then General.",
+   "Find the row Quick Ask shortcut and open its dropdown.",
+   "Pick another choice, or No shortcut.",
+   "Click into another app and press the chosen key combination; check Quick Ask opens. For a conflict, check the note under the row: Already used by another Desktop shortcut or Already used by another app."
+  ],
+  "where": "Settings > Desktop app > General > Quick Ask shortcut (dropdown)"
+ },
+ "S70.06": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Quick Ask"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The send control was not confirmed by visible words; the Quick Ask page is apps/web/app/quick-ask/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "From any other app, press the Quick Ask shortcut, or click File > Quick Ask in AGI Desktop.",
+   "Check a small window opens above the other windows.",
+   "Type a short prompt in the box and send it.",
+   "Check the answer appears in the small window."
+  ],
+  "where": "File > Quick Ask (or the Quick Ask shortcut from any app)"
+ },
+ "S70.07": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/desktop/electron and apps/web/features/desktop-host for companion; only a code comment in apps/desktop/electron/quickAsk.ts mentions companion windows. The nearest control is Quick Ask (floating window) and Window > Always on Top.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S70.08": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Always on Top"
+   }
+  ],
+  "needs": "none",
+  "note": "The item is greyed out when the front window cannot take the setting.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat window and click Window in the menu bar.",
+   "Click Always on Top so it shows a tick.",
+   "Click into another app such as Notes or Finder.",
+   "Check the AGI window stays above the other windows. Click Always on Top again to turn it off."
+  ],
+  "where": "Window > Always on Top"
+ },
+ "S70.09": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "New Window"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Move Conversation to New Window"
+   }
+  ],
+  "needs": "a conversation to move",
+  "note": "Move Conversation is greyed out unless a conversation is in the front window.",
+  "reachable": "yes",
+  "steps": [
+   "Click Window > New Window and check a second AGI window opens.",
+   "Open a conversation in one window.",
+   "Click Window > Move Conversation to New Window.",
+   "Check the conversation opens in its own window and the old window no longer shows it. Compare with Expected."
+  ],
+  "where": "Window > New Window; Window > Move Conversation to New Window"
+ },
+ "S70.11": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Open Folder"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a folder on the Mac",
+  "note": "Only the folder path was confirmed as the OS dialog (the shell owns the directory dialog); the file picker path was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click File > Open Folder in the menu bar.",
+   "Check the operating system's own folder dialog opens.",
+   "Choose a folder and click Open.",
+   "Check a notice says which folder was approved."
+  ],
+  "where": "File > Open Folder (folder dialog); composer + > Add photos & files (file picker)"
+ },
+ "S70.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Local access"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Folders"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Remove access"
+   }
+  ],
+  "needs": "an approved folder",
+  "note": "Local access is rendered by Settings > Capabilities (apps/web/features/settings/sections/CapabilitiesSection.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Approve a folder with File > Open Folder.",
+   "Open Settings, click Capabilities, and scroll to Local access.",
+   "Quit AGI Desktop with Cmd+Q, reopen it, and return to Settings > Capabilities.",
+   "Check the folder is still listed under Folders. Click Remove access in the confirmation to revoke it, then check it disappears."
+  ],
+  "where": "Settings > Capabilities > Local access > Folders"
+ },
+ "S70.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Attach from local folder"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx",
+    "text": "Search names and text"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx",
+    "text": "Matching names"
+   }
+  ],
+  "needs": "an approved folder and a file inside it",
+  "note": "The assistant-side search (device-steps) was not tested from chat; only the person's dialog path was traced.",
+  "reachable": "yes",
+  "steps": [
+   "In a new chat click the + button in the composer and click Attach from local folder.",
+   "In the dialog Attach from a local folder, open an approved folder.",
+   "Type a file name or some text in the box Search names and text and click Search.",
+   "Check the results under Matching names and Matching text."
+  ],
+  "where": "Composer + > Attach from local folder"
+ },
+ "S70.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add working folder"
+   }
+  ],
+  "needs": "an approved folder and a Desktop build",
+  "note": "The approval prompt wording was not located by visible words.",
+  "reachable": "yes",
+  "steps": [
+   "In a new chat click + and choose Add working folder, then pick an approved folder.",
+   "Type: Create a file named test.txt in this folder with the word hello.",
+   "Check a permission prompt appears before anything is written.",
+   "Approve it and check the file exists in the folder in Finder."
+  ],
+  "where": "Composer + > Add working folder, then ask the assistant in chat"
+ },
+ "S70.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Run a local command"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Commands"
+   }
+  ],
+  "needs": "an approved folder and a Desktop build",
+  "note": "No sandboxing text was found in LocalAccessSection, so sandboxing could not be checked from the labels.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat with an approved folder, click + and choose Run a local command.",
+   "Type a harmless command such as ls and send it.",
+   "Check an approval request appears before the command runs.",
+   "Approve it and check the output streams into the chat. Settings > Capabilities > Local access shows the Commands section."
+  ],
+  "where": "Composer + > Run a local command"
+ },
+ "S70.19": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Screenshot to Chat"
+   }
+  ],
+  "needs": "Screen Recording permission on macOS",
+  "note": "The window-capture variant is Window to Chat, set in the Desktop app settings.",
+  "reachable": "yes",
+  "steps": [
+   "Click File > Screenshot to Chat in the menu bar.",
+   "Choose the screen to capture if asked.",
+   "Check the screenshot is attached in the chat composer.",
+   "Send it and check the image appears in the conversation."
+  ],
+  "where": "File > Screenshot to Chat"
+ },
+ "S70.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Any app"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseControlBar.tsx",
+    "text": "Take over"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Stop Computer Use"
+   }
+  ],
+  "needs": "Accessibility and Screen Recording permission on macOS, and a Desktop build",
+  "note": "The Any app label is in ComputerUseSettings.tsx, which is one of the Desktop app settings pages.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click the Desktop app group, then Computer use, and turn on Any app.",
+   "Ask the assistant in chat to click something on screen, and approve when asked.",
+   "Check the control bar labelled Computer use appears with Take over or Hand back and Stop.",
+   "Click Take over, then Stop, and check the assistant stops moving the pointer."
+  ],
+  "where": "Settings > Desktop app > Computer use (turn on Any app); then the control bar shows Take over, Hand back, Stop"
+ },
+ "S70.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Remote Control"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Pair a phone"
+   }
+  ],
+  "needs": "a phone and a Desktop build",
+  "note": "The section returns nothing unless the desktop host is present and supported; a hidden-in-v1 setting was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Capabilities.",
+   "Scroll to Remote Control.",
+   "Click Pair a phone and check a pairing code and QR code appear.",
+   "Scan the code with the phone and check Connected to appears."
+  ],
+  "where": "Settings > Capabilities > Remote Control > Pair a phone"
+ },
+ "S70.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopSettingsSection.tsx",
+    "text": "Run on startup"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Desktop app"
+   }
+  ],
+  "needs": "a Desktop build and a restart",
+  "note": "The macOS app menu also has Launch at Login (apps/desktop/electron/appMenu.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Desktop app, then General.",
+   "Turn on the switch Run on startup.",
+   "Quit AGI Desktop and log out and back in, or restart the Mac.",
+   "Check AGI Desktop opens by itself. Turn the switch off to stop it."
+  ],
+  "where": "Settings > Desktop app > General > Run on startup"
+ },
+ "S70.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BackgroundActivitySection.tsx",
+    "text": "Running on this Mac"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BackgroundActivitySection.tsx",
+    "text": "Stop"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BackgroundActivitySection.tsx",
+    "text": "Nothing is running in the background."
+   }
+  ],
+  "needs": "a running agent or background task",
+  "note": "The Keep computer awake switch is also in General and is a separate control.",
+  "reachable": "yes",
+  "steps": [
+   "Start an agent task in a chat so something runs in the background.",
+   "Open Settings, click Desktop app, then General.",
+   "Find the section Running on this Mac and check it lists the running item.",
+   "Click Stop next to it and check Nothing is running in the background appears."
+  ],
+  "where": "Settings > Desktop app > General > Running on this Mac"
+ },
+ "S70.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopUpdateRow.tsx",
+    "text": "Check for updates"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopUpdateRow.tsx",
+    "text": "Download installer"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopUpdateRow.tsx",
+    "text": "Relaunch to update"
+   }
+  ],
+  "needs": "a Desktop build; a newer published version to see the update path",
+  "note": "The UI asks for one click to download and then relaunch; it does not show a silent install, unlike Expected's by itself wording. Help menu also has Check for Updates (apps/desktop/electron/appMenu.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Desktop app, then General.",
+   "Find the row App version and click Check for updates.",
+   "If a newer version exists, check the button changes to Download installer, then Relaunch to update.",
+   "If none exists, check This is the latest version appears."
+  ],
+  "where": "Settings > Desktop app > General > App version > Check for updates"
+ },
+ "S70.28": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Troubleshooting"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Copy Diagnostics"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Open Logs"
+   }
+  ],
+  "needs": "none",
+  "note": "Clear Cache and Restart is also under Troubleshooting; do not click it unless intended.",
+  "reachable": "yes",
+  "steps": [
+   "Click Help in the menu bar and hover Troubleshooting.",
+   "Click Copy Diagnostics.",
+   "Paste into a text field (Cmd+V) and check diagnostic text appears.",
+   "Go back to Help > Troubleshooting and click Open Logs, and check the log folder opens."
+  ],
+  "where": "Help > Troubleshooting > Copy Diagnostics (or Open Logs)"
+ },
+ "S70.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/StorageSettings.tsx",
+    "text": "Clean up"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/StorageSettings.tsx",
+    "text": "Clear the web cache?"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/StorageSettings.tsx",
+    "text": "Data folder"
+   }
+  ],
+  "needs": "a Desktop build",
+  "note": "The Storage page is shown only in the Electron host.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Desktop app, then Storage.",
+   "Check the heading Storage and the row Data folder show what is kept on the computer.",
+   "Under Clean up, click Clear for the web cache or Delete for old logs, then confirm.",
+   "Check the size goes down and the confirmation text Chats stay on this computer appears where chats are kept."
+  ],
+  "where": "Settings > Desktop app > Storage"
+ },
+ "S70.30": {
+  "labels": [],
+  "needs": "a Desktop build and a link to open",
+  "note": "Accepted link paths are in apps/web/features/desktop-host/lib/deep-links.ts; the exact paths were not tested.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In Notes or Safari, open a link that starts with agiworkforce-cloud://.",
+   "Check AGI Desktop opens or comes forward.",
+   "Check it lands on the same screen the link names, such as a chat.",
+   "Click a notification the app raised and check it opens that conversation."
+  ],
+  "where": "Open an agiworkforce-cloud:// link from another app, such as Notes or Safari"
+ },
+ "S70.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopPermissionsSection.tsx",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopPermissionsSection.tsx",
+    "text": "Open System Settings"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopPermissionsSection.tsx",
+    "text": "Your answers"
+   }
+  ],
+  "needs": "a Desktop build and at least one saved answer",
+  "note": "Remove button label was not found by visible words; the control is rendered by the card at DesktopPermissionsSection.tsx:175-180.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Desktop app, then General, and scroll to Permissions.",
+   "Read Your answers and the system hint about computer use, screenshots and dictation.",
+   "Click Open System Settings to check the macOS privacy pane opens.",
+   "Click Remove on an answer and check it is gone, so Desktop asks again next time. Click Refresh to reload."
+  ],
+  "where": "Settings > Desktop app > General > Permissions"
+ }
+}

@@ -1,0 +1,555 @@
+{
+ "feature": {
+  "id": "F099-01",
+  "aliases": [
+   "Shared coding-session service",
+   "Developer session host",
+   "DeveloperSessionHost",
+   "app-server (agi app-server)",
+   "developer-session protocol",
+   "thread/turn session service",
+   "S99.01"
+  ],
+  "summary": "One coding-session service, the AGI CLI's developer-session host, owns coding threads, turns, approvals and history. The CLI, VS Code and Desktop talk to it over a shared JSON protocol. Cloud Code sessions are listed beside local ones but cannot take turns there. Mobile reaches it only through the relay [inferred].",
+  "purpose": {
+   "what_it_does": "Holds the state of coding sessions (called threads) in one place: the list of threads, each thread's messages, status, working folder, branch, worktree, trust mode and the single client allowed to write to it. Clients start turns, stream output, steer, interrupt, approve actions and resume threads through one wire protocol. (apps/cli/src/app_server/developer_host.rs:2341, crates/agiworkforce-protocol/src/developer_session.rs:1)",
+   "why_it_exists": "So that every coding surface shows the same session instead of each keeping a private copy. The protocol file says it is shared by AGI CLI and AGI for VS Code, and v8 exists so an editor client rides the CLI instead of keeping a second copy of each surface. (crates/agiworkforce-protocol/src/developer_session.rs:1, :32-35)",
+   "who_uses_it": "Developers using the AGI CLI, the AGI VS Code extension and the Desktop app's coding view. Engineers building clients against the protocol. The mobile phone reaches desktop coding sessions through the relay (see F099-99).",
+   "problems_solved": [
+    "Two clients no longer drift apart on the same session: one writer lease decides who may send turns, and others can take over or release it (thread/writer/takeover, thread/writer/release).",
+    "A session started in one app can be resumed, forked, searched, archived, pinned or rewound from another.",
+    "Cloud Code sessions for the same GitHub repository show up in the local thread list, so the person sees all work for a repository in one place."
+   ],
+   "use_cases": [
+    "Start a coding thread in the CLI, then reopen it in the VS Code sidebar and continue it.",
+    "Open Desktop's coding view, which starts the AGI CLI as its runtime and lists the saved sessions for a folder.",
+    "Interrupt a running turn, answer an approval request, then resume after restart.",
+    "See a cloud Code session next to local threads and be told to continue it on the web or with agi code teleport."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "CLI: the command agi app-server (transport stdio, ws, or a bind address such as 127.0.0.1:8788). The ordinary agi chat and TUI use the same host [inferred]. (apps/cli/src/lib.rs:6700-6760, :870)",
+    "Desktop (Electron): Developer session service starts the AGI CLI as the runtime; the binary is chosen from a path the user confirmed in Settings, a bundled copy, or the installed one. (apps/desktop/electron/runtime/developerSessionService.ts:373-380)",
+    "VS Code: the sidebar chat and chat participant ride the CLI host. Exact visible labels not opened: unknown. (apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts, apps/extension-vscode/src/features/chat-participant/chatParticipant.ts)",
+    "Web, Mobile, Chrome: no direct use found. Web only receives cloud sessions; mobile uses the relay. [inferred]"
+   ],
+   "prerequisites": [
+    "The AGI CLI binary must be present and new enough; Desktop refuses a runtime below its minimum version and says to update the AGI CLI or point Settings at a current binary. (apps/desktop/electron/runtime/developerSessionService.ts:1322-1356)",
+    "A WebSocket server needs the environment variable AGI_APP_SERVER_TOKEN, otherwise it refuses to start. (apps/cli/src/lib.rs:6727-6737)",
+    "Listing cloud sessions needs a signed-in account (agi login) and a git origin remote that is a GitHub repository. (apps/cli/src/app_server/cloud_threads.rs:34-41, :88-97)"
+   ],
+   "screens_and_controls": [
+    "The protocol exposes thread list, read, resume, fork, compact, handoff, archive, pin, search, checkpoints, rewind, plan, delete, reconnect and writer takeover/release methods. (crates/agiworkforce-protocol/src/developer_session.rs:57-85)",
+    "Turn methods: turn/start, turn/steer, turn/interrupt, with notifications turn/started, output_delta, model, completed, failed, interrupted, agent_event, childTask. (crates/agiworkforce-protocol/src/developer_session.rs:100-116)",
+    "Approval round trip: approval/requested and approval/respond; question round trip: userInput/requested and userInput/respond. (crates/agiworkforce-protocol/src/developer_session.rs:122-126)",
+    "Visible control labels in each client: unknown, not opened."
+   ],
+   "journey": [
+    "1. A client starts the host (agi app-server) or Desktop spawns the CLI as a child process.",
+    "2. The client sends initialize with its protocol version and gets the server's version and capabilities; an unsupported version is refused with code -32005. (crates/agiworkforce-protocol/src/developer_session.rs:36-44)",
+    "3. The client sends thread/start (or thread/list then thread/resume).",
+    "4. The client sends turn/start with text, image, skill or mention inputs; the host bounds the count and size of items. (apps/cli/src/app_server/developer_host.rs:1650-1700)",
+    "5. The host streams turn/output_delta and turn/agent_event; approvals are requested with approval/requested.",
+    "6. The turn ends with turn/completed, turn/failed or turn/interrupted."
+   ],
+   "feedback_and_outputs": [
+    "Thread summaries carry title, model, working folder, provider, trust mode, status, pinned flag, git branch, worktree root, client, repository and writer. (apps/cli/src/app_server/developer_host.rs:1615-1640)",
+    "Cloud threads carry the id prefix cloud: and provider managed_cloud with trust mode managed. (apps/cli/src/app_server/cloud_threads.rs:13, :47-60)",
+    "A turn sent to a cloud thread is refused with: This is a cloud Code session. Continue it on the web, or bring it here with agi code teleport. (apps/cli/src/app_server/cloud_threads.rs:22-26)"
+   ],
+   "settings": [
+    "AGI_APP_SERVER_TOKEN: owner token for WebSocket. (apps/cli/src/lib.rs:6727)",
+    "AGI_APP_SERVER_READ_ONLY_TOKEN with --allow-query-token: a separate read-only credential for URLs. (apps/cli/src/lib.rs:6737-6750)",
+    "AGI_CLI_SERVER_ADDR: default listen address 127.0.0.1:8788. (apps/cli/src/lib.rs:6715-6718)",
+    "Allowed origins and allow-public-listen options in WebSocketSecurity. (crates/agiworkforce-app-server/src/lib.rs:39-48)",
+    "Desktop Settings: confirmed path to the AGI CLI binary. (apps/desktop/electron/runtime/developerSessionService.ts:368-376)"
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Host implementation DeveloperSessionHost for the CLI exists and is large (apps/cli/src/app_server/developer_host.rs:2341; file is 14315 lines).",
+    "Stdio and authenticated WebSocket transports exist; the WebSocket needs a non-empty token, rejects a read-only token equal to the owner token, and accepts the owner token only in a header. (crates/agiworkforce-app-server/src/lib.rs:51-76, :138-160)",
+    "Protocol version 8 with 7 still answered; legacy clients without a version get 7. (crates/agiworkforce-protocol/src/developer_session.rs:32-45)",
+    "Cloud Code sessions for the repository are listed as threads and readable; list failure returns an empty list. (apps/cli/src/app_server/cloud_threads.rs:64-110)",
+    "Writer lease: one process writer identity is created at host construction; tests assert thread/writer_changed notifications. (apps/cli/src/app_server/developer_host.rs:112, :766, :12794-12833)",
+    "Checkpoints and rewind are served by the host (see F099-99 S99.14)."
+   ],
+   "incomplete": [
+    "Cloud threads are read-only here: no turns. (apps/cli/src/app_server/cloud_threads.rs:22-26)",
+    "Visible labels and exact behaviour of VS Code and Desktop screens against the host were not opened: unknown."
+   ],
+   "disconnected_or_disabled": [
+    "Brief line reference apps/cli/src/app_server/developer_host.rs:1629 points into thread_summary construction; it matches the shared-session summary. Brief reference developer_session.rs:509 lands in AppServerRequest/Response types, not a session-state type. (crates/agiworkforce-protocol/src/developer_session.rs:495-545)"
+   ],
+   "not_available": [
+    "Web, Chrome and Mobile do not talk to this host directly: no direct caller found in the files opened. [inferred]",
+    "Cloud-session turns cannot run through the local host. (apps/cli/src/app_server/cloud_threads.rs:22-26)"
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "One coding-session service owns session state for every client. Status in the brief: platform done.",
+     "source": "S99.01 in knowledge-base/data/area-briefs/099-coding-and-local-runtime-components.md"
+    },
+    {
+     "statement": "The wire protocol is stable and shared by the CLI and VS Code; every v8 method is additive.",
+     "source": "crates/agiworkforce-protocol/src/developer_session.rs:1-35"
+    },
+    {
+     "statement": "Local, own-key and managed cloud are separate trust boundaries; nothing may silently route a Local session to another boundary.",
+     "source": "AGENTS.md section 6"
+    }
+   ],
+   "acceptance_criteria": [
+    "A thread started through the host from one client appears in thread/list from a second client for the same folder.",
+    "Only the writer-lease holder can send turn/start; another client must take over or release first, and thread/writer_changed is emitted.",
+    "A client announcing an unsupported protocol version is refused at initialize with error code -32005.",
+    "A WebSocket server started without AGI_APP_SERVER_TOKEN does not start.",
+    "A cloud thread (id prefix cloud:) appears in the list only when signed in and the repository matches, and turn/start on it is refused with the continue-on-web message.",
+    "A turn with more input items than the limit is rejected with an invalid-request error."
+   ],
+   "inferred": [
+    "Trust mode (local, byok, managed) shown on every thread summary is the visible provider label AGENTS.md requires. [inferred] (apps/cli/src/app_server/developer_host.rs:1625-1630)"
+   ],
+   "proposed": [
+    "[proposed] Publish the protocol as a documented page generated from the method constants so client authors do not read Rust.",
+    "[proposed] Let Web or mobile attach to the same host through the relay with a documented capability list."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "CliDeveloperSessionHost",
+    "path": "apps/cli/src/app_server/developer_host.rs",
+    "role": "Implements the host: threads, turns, approvals, checkpoints, worktrees, writer lease"
+   },
+   {
+    "kind": "service",
+    "name": "cloud_threads",
+    "path": "apps/cli/src/app_server/cloud_threads.rs",
+    "role": "Lists and reads cloud Code sessions as read-only threads"
+   },
+   {
+    "kind": "schema",
+    "name": "developer_session protocol",
+    "path": "crates/agiworkforce-protocol/src/developer_session.rs",
+    "role": "Method names, versions, request/response envelopes"
+   },
+   {
+    "kind": "service",
+    "name": "agiworkforce-app-server",
+    "path": "crates/agiworkforce-app-server/src/lib.rs",
+    "role": "Stdio and WebSocket transport, token, origin and loopback checks"
+   },
+   {
+    "kind": "test",
+    "name": "app-server tests",
+    "path": "crates/agiworkforce-app-server/tests/developer_sessions.rs",
+    "role": "Transport/session tests"
+   },
+   {
+    "kind": "command",
+    "name": "agi app-server",
+    "path": "apps/cli/src/lib.rs",
+    "role": "Starts the host on stdio or WebSocket (lines 6700-6760)"
+   },
+   {
+    "kind": "service",
+    "name": "developerSessionService",
+    "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+    "role": "Desktop spawns the CLI as runtime, handshake, version check, capability list"
+   },
+   {
+    "kind": "service",
+    "name": "dispatcher",
+    "path": "apps/desktop/electron/runtime/dispatcher.ts",
+    "role": "Desktop command routing with permission reasons for developer_* commands"
+   },
+   {
+    "kind": "hook",
+    "name": "ChatStateManager",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "role": "VS Code sidebar state that uses developer-session calls"
+   },
+   {
+    "kind": "component",
+    "name": "developerSessionLink",
+    "path": "apps/extension-vscode/src/features/context-handoff/developerSessionLink.ts",
+    "role": "VS Code link to a developer session"
+   },
+   {
+    "kind": "service",
+    "name": "writer_lease",
+    "path": "apps/cli/src/runtime/writer_lease.rs",
+    "role": "Writer identity and lease types used by the host (imported at developer_host.rs:112)"
+   },
+   {
+    "kind": "service",
+    "name": "threads",
+    "path": "apps/cli/src/app_server/threads.rs",
+    "role": "Thread helpers in the app-server module"
+   },
+   {
+    "kind": "service",
+    "name": "surfaces",
+    "path": "apps/cli/src/app_server/surfaces.rs",
+    "role": "Instructions, skills, plugins and other v8 surfaces"
+   },
+   {
+    "kind": "service",
+    "name": "account_host",
+    "path": "apps/cli/src/app_server/account_host.rs",
+    "role": "Account, cloud workspaces and uploads served over the same wire"
+   },
+   {
+    "kind": "schema",
+    "name": "TS bindings",
+    "path": "packages/contracts/types/src/generated/protocol",
+    "role": "Generated TypeScript types from the Rust protocol (AGENTS.md section 5)"
+   },
+   {
+    "kind": "test",
+    "name": "developer_session_host test",
+    "path": "apps/cli/tests/developer_session_host.rs",
+    "role": "Host integration tests"
+   },
+   {
+    "kind": "test",
+    "name": "developerSessionService.test",
+    "path": "apps/desktop/electron/__tests__/developerSessionService.test.ts",
+    "role": "Desktop runtime service tests"
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Client starts or spawns the CLI app-server (stdio, or WebSocket on loopback with a token).",
+     "runs_on": "device",
+     "evidence": "apps/cli/src/lib.rs:6700-6760; apps/desktop/electron/runtime/developerSessionService.ts:1214-1235"
+    },
+    {
+     "what_happens": "initialize handshake checks protocol and runtime version.",
+     "runs_on": "device",
+     "evidence": "apps/desktop/electron/runtime/developerSessionService.ts:1322-1356"
+    },
+    {
+     "what_happens": "thread/list reads saved local sessions from the CLI session store and merges cloud sessions for the repository.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/cli/src/app_server/cloud_threads.rs:64-85 (cloud list uses CloudClient)"
+    },
+    {
+     "what_happens": "turn/start sends the user input to the agent session, which calls the model provider chosen by the session's privacy mode (local, own key or managed). The provider call path itself was not opened: unknown.",
+     "runs_on": "outside service",
+     "evidence": "apps/cli/src/app_server/developer_host.rs:1625-1630; apps/cli/src/platform/runtime/session.rs:255-259"
+    },
+    {
+     "what_happens": "Output and approval events stream back as notifications; the client answers approval/respond.",
+     "runs_on": "device",
+     "evidence": "crates/agiworkforce-protocol/src/developer_session.rs:100-126"
+    }
+   ],
+   "data": [
+    {
+     "what": "Session transcripts, titles, pin flags, checkpoints",
+     "where_stored": "CLI session store on the device (store base_dir)",
+     "synced": "Not synced by this service; cloud sessions are separate server records",
+     "retained_or_deleted": "thread/archive, unarchive and delete methods exist; deleted thread releases its worktrees. (apps/cli/src/app_server/developer_host.rs:928-955)"
+    },
+    {
+     "what": "Cloud Code session records",
+     "where_stored": "Our servers",
+     "synced": "Fetched on demand",
+     "retained_or_deleted": "Not changed by this service; read only."
+    }
+   ],
+   "models_and_providers": "The thread carries provider and model fields and a trust mode of local, byok or managed. Model choice goes through model/list. Which concrete provider handles a turn depends on the session's privacy mode; the call path was not opened: unknown. (crates/agiworkforce-protocol/src/developer_session.rs:93)"
+  },
+  "access_and_usage": {
+   "account": "Local threads need no account found in the files opened. Cloud thread listing needs agi login. (apps/cli/src/app_server/cloud_threads.rs:88-97)",
+   "permissions": "WebSocket owner token; optional read-only token; loopback-only unless allow-public-listen; Origin allow-list. Desktop gates developer commands behind shell.execute or git.write permissions with written reasons. (crates/agiworkforce-app-server/src/lib.rs:39-76; apps/desktop/electron/runtime/dispatcher.ts:769-860)",
+   "subscription": "none found in the code for the host itself; subscription limits apply to managed-cloud model use, not opened: unknown.",
+   "limits_and_metering": "Per-turn cap on input items and bytes (MAX_USER_INPUT_ITEMS_PER_TURN and bounded text/image). No usage metering found in the host files opened. (apps/cli/src/app_server/developer_host.rs:1650-1700)",
+   "flags": "none found in the code",
+   "model_compatibility": "Model list is served by model/list; model-specific rules not opened: unknown.",
+   "provider_restrictions": "Cloud threads are managed_cloud only and cannot take turns locally. (apps/cli/src/app_server/cloud_threads.rs:47-60)",
+   "local_mode": "Local privacy mode is one of three modes on the session and needs no paid plan found in these files; whether Local model inference works without sign-in was not established: unknown. (apps/cli/src/platform/runtime/session.rs:255-259)"
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Runtime missing",
+    "behaviour": "Desktop reports that the AGI CLI is not on PATH or not found at the confirmed path and asks to point Settings at an executable.",
+    "evidence": "apps/desktop/electron/runtime/developerSessionService.ts:1157-1170"
+   },
+   {
+    "state": "Runtime too old",
+    "behaviour": "Handshake refused with update advice.",
+    "evidence": "apps/desktop/electron/runtime/developerSessionService.ts:1336-1356"
+   },
+   {
+    "state": "Unsupported protocol version",
+    "behaviour": "Refused at initialize with code -32005.",
+    "evidence": "crates/agiworkforce-protocol/src/developer_session.rs:36-44"
+   },
+   {
+    "state": "Cloud list fails or not signed in",
+    "behaviour": "List returns empty; read returns unavailable with Sign in with agi login.",
+    "evidence": "apps/cli/src/app_server/cloud_threads.rs:64-97"
+   },
+   {
+    "state": "Cloud thread not found",
+    "behaviour": "not_found: That cloud Code session was not found.",
+    "evidence": "apps/cli/src/app_server/cloud_threads.rs:99-105"
+   },
+   {
+    "state": "Offline, reconnect",
+    "behaviour": "thread/reconnect method exists; behaviour details not opened.",
+    "evidence": "crates/agiworkforce-protocol/src/developer_session.rs:90"
+   },
+   {
+    "state": "Accessibility per client",
+    "behaviour": "not handled in the code I opened; unknown for client screens.",
+    "evidence": "No accessibility code opened for this feature."
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "crates/agiworkforce-app-server/tests/developer_sessions.rs",
+     "covers": "Developer-session transport tests"
+    },
+    {
+     "path": "crates/agiworkforce-app-server/tests/client.rs",
+     "covers": "Client side of the transport"
+    },
+    {
+     "path": "apps/cli/tests/developer_session_host.rs",
+     "covers": "CLI host integration"
+    },
+    {
+     "path": "apps/cli/tests/app_server_websocket.rs",
+     "covers": "WebSocket transport"
+    },
+    {
+     "path": "apps/cli/tests/app_server_read_only_token.rs",
+     "covers": "Read-only token rules"
+    },
+    {
+     "path": "apps/cli/tests/app_server_stdio.rs",
+     "covers": "Stdio transport"
+    },
+    {
+     "path": "apps/desktop/electron/__tests__/developerSessionService.test.ts",
+     "covers": "Desktop runtime spawn, discovery and handshake"
+    },
+    {
+     "path": "apps/cli/src/app_server/developer_host.rs",
+     "covers": "In-file tests, for example turn/output_delta, writer_changed and thread/deleted notifications (lines 9523-13079)"
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Two clients, one thread",
+     "steps": [
+      "Start agi app-server on stdio from a folder",
+      "Start a thread and send one turn",
+      "Open the same folder in VS Code or Desktop and list threads"
+     ],
+     "expected": "The same thread appears with the same title and status."
+    },
+    {
+     "name": "Writer takeover",
+     "steps": [
+      "Client A holds the thread",
+      "Client B calls thread/writer/takeover",
+      "Client A sends turn/start"
+     ],
+     "expected": "Client B receives write rights, thread/writer_changed fires, and A's turn is refused."
+    },
+    {
+     "name": "WebSocket without token",
+     "steps": [
+      "Unset AGI_APP_SERVER_TOKEN",
+      "Run agi app-server with a WebSocket address"
+     ],
+     "expected": "Start-up fails with the requires AGI_APP_SERVER_TOKEN message; the token is never printed."
+    },
+    {
+     "name": "Cloud thread turn",
+     "steps": [
+      "Sign in, open a folder whose origin is a GitHub repository with an open cloud Code session",
+      "List threads",
+      "Send turn/start to the cloud: thread"
+     ],
+     "expected": "Cloud thread listed; the turn is refused with the continue-on-web message."
+    },
+    {
+     "name": "Old runtime",
+     "steps": [
+      "Point Desktop Settings at an old CLI binary",
+      "Open the coding view"
+     ],
+     "expected": "Desktop shows the update-the-AGI-CLI message."
+    }
+   ],
+   "diagnostics": [
+    "Rust log target [app-server] cloud Code sessions were not listed (tracing debug) (apps/cli/src/app_server/cloud_threads.rs:78)",
+    "Error code -32005 for protocol mismatch",
+    "Desktop spawn failure messages in developerSessionService.ts spawnFailure"
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No direct Web, Chrome or Mobile client of the host.",
+    "affects": "surface:web, surface:chrome, surface:mobile",
+    "evidence": "No caller found in the files opened; mobile reaches desktop through the relay (apps/mobile/stores/connectionStore.ts)",
+    "work_needed": "Decide whether those apps should attach; document it."
+   },
+   {
+    "gap": "Cloud threads cannot take turns in the shared service.",
+    "affects": "CLI, VS Code, Desktop",
+    "evidence": "apps/cli/src/app_server/cloud_threads.rs:22-26",
+    "work_needed": "Either allow turns or keep the explicit handoff and document it."
+   },
+   {
+    "gap": "Brief code references drifted (developer_session.rs:509 is the request envelope, not session state).",
+    "affects": "Documentation",
+    "evidence": "crates/agiworkforce-protocol/src/developer_session.rs:495-545",
+    "work_needed": "Refresh the brief references."
+   },
+   {
+    "gap": "Subscription entitlement and metering for local coding sessions not found.",
+    "affects": "All apps",
+    "evidence": "No entitlement code in host files opened",
+    "work_needed": "Confirm whether managed-cloud metering sits only in the cloud client."
+   }
+  ],
+  "depends_on": [
+   "surface:cli",
+   "surface:desktop",
+   "surface:vscode",
+   "surface:mobile",
+   "mode:local",
+   "mode:own-key",
+   "mode:cloud",
+   "file:apps/cli/src/app_server/developer_host.rs",
+   "file:crates/agiworkforce-protocol/src/developer_session.rs",
+   "file:crates/agiworkforce-app-server/src/lib.rs",
+   "SYS-chat-turn-pipeline",
+   "SYS-agents-tools-and-automation",
+   "SYS-execution-boundaries",
+   "SYS-api-and-contracts",
+   "SYS-security-and-privacy",
+   "SYS-sync-and-continuity"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/cli/src/app_server/developer_host.rs",
+    "evidence": "impl DeveloperSessionHost for CliDeveloperSessionHost at line 2341"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "file:crates/agiworkforce-protocol/src/developer_session.rs",
+    "evidence": "method constants lines 57-135"
+   },
+   {
+    "rel": "depends_on",
+    "to": "file:crates/agiworkforce-app-server/src/lib.rs",
+    "evidence": "transport and token checks"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "agi app-server in apps/cli/src/lib.rs:6700"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:desktop",
+    "evidence": "apps/desktop/electron/runtime/developerSessionService.ts spawns the CLI"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts uses developer-session calls"
+   },
+   {
+    "rel": "uses_provider",
+    "to": "mode:cloud",
+    "evidence": "cloud threads use provider managed_cloud (apps/cli/src/app_server/cloud_threads.rs:47-60)"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-execution-boundaries",
+    "evidence": "trust mode on every summary, AGENTS.md section 6"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/cli/tests/developer_session_host.rs",
+    "evidence": "file exists in apps/cli/tests"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:crates/agiworkforce-app-server/tests/developer_sessions.rs",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "store:cli-session-store",
+    "evidence": "self.store.base_dir() in developer_host.rs:1635"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F099-99",
+    "evidence": "checkpoints, worktrees, git and handoff are served through this host"
+   }
+  ],
+  "unknowns": [
+   "Visible labels of coding controls in VS Code and Desktop",
+   "Whether Local inference needs sign-in for coding sessions",
+   "How subscription limits apply to managed-cloud coding turns",
+   "Whether Chrome or Web ever attach to the host",
+   "Exact model/provider selection path in a turn"
+  ]
+ },
+ "corrections": [
+  {
+   "section": "2/8",
+   "claim": "Listing cloud sessions needs a signed-in account (agi login) and a GitHub origin remote",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "CloudClient::connect first calls admit(privacy), which refuses any session whose privacy mode is not Managed (NotManaged). Only then does it need a stored JWT. A Local or BYOK session therefore gets no cloud threads even when signed in. list_in returns empty on any connect error.",
+   "evidence": "apps/cli/src/cloud/client.rs:361-373; apps/cli/src/app_server/cloud_threads.rs:84-90",
+   "correction": "Cloud threads are listed only when the account privacy mode is Managed, the user is signed in, and the origin remote is a GitHub repo. In Local or BYOK mode the list is empty by design (trust boundary)."
+  },
+  {
+   "section": "8",
+   "claim": "Cloud list fails or not signed in: read returns unavailable with 'Sign in with agi login'",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "read_in maps CloudError::NotManaged to unavailable(error.to_string()), the not-managed message. Every other connect error gets the 'Sign in with `agi login`' text.",
+   "evidence": "apps/cli/src/app_server/cloud_threads.rs:108-114",
+   "correction": "Read returns the not-managed message in Local or BYOK mode, and the 'Sign in with agi login' message only for other connect failures."
+  },
+  {
+   "section": "3/8",
+   "claim": "Writer lease types in apps/cli/src/runtime/writer_lease.rs (not found)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The file exists at apps/cli/src/platform/runtime/writer_lease.rs. developer_host.rs imports it as crate::runtime::writer_lease, so a re-export maps the path.",
+   "evidence": "apps/cli/src/platform/runtime/mod.rs:13; apps/cli/src/app_server/developer_host.rs:112",
+   "correction": "Path is apps/cli/src/platform/runtime/writer_lease.rs."
+  },
+  {
+   "section": "3/6",
+   "claim": "app-server default listen address 127.0.0.1:8788 via AGI_CLI_SERVER_ADDR; thread/list merges cloud sessions (device and our servers)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The default address is 127.0.0.1:8788, and AGI_CLI_SERVER_ADDR is only a fallback used when the listen argument does not parse as a SocketAddr. A cloud merge call goes to our servers only in Managed mode (admit check).",
+   "evidence": "apps/cli/src/lib.rs:6710-6722; apps/cli/src/cloud/client.rs:368",
+   "correction": "The env var is a fallback for an unparsable listen value. The cloud half of the merge is Managed-mode only."
+  }
+ ],
+ "missing_facts": [
+  "Cloud threads are gated by privacy mode: CloudClient::admit refuses Local and BYOK sessions before any network request, so no cloud session listing or read happens outside Managed mode (apps/cli/src/cloud/client.rs:366-373). The page's section 7 Account row and acceptance criterion 5 omit this.",
+  "The refusal of cloud threads covers thread resume and turn steer as well as turn start (apps/cli/src/app_server/developer_host.rs:2948, 4893).",
+  "The per-turn limit is 128 input items, plus a text character cap and a byte cap of 4 times the character cap (apps/cli/src/app_server/developer_host.rs:128-131). Section 7 names the constants but gives no values."
+ ]
+}

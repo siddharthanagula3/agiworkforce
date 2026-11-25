@@ -1,0 +1,333 @@
+{
+ "S5.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "AGI CLI"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "awaiting input"
+   }
+  ],
+  "needs": "none",
+  "note": "The header shows the app name, model, provider, git branch and folder. It does not show the conversation title, and it has no action buttons; actions are typed commands.",
+  "reachable": "yes",
+  "steps": [
+   "Open Terminal, type agi and press Enter.",
+   "Wait for the start screen to appear.",
+   "Look at the top two rows: the app name, version, model and provider, then the second row with the counts and the context meter.",
+   "Type a short message, press Enter and scroll the chat.",
+   "Check the top rows are still on screen. Compare with Expected (a persistent header that shows where you are)."
+  ],
+  "where": "Run agi in a terminal, then look at the top two rows of the screen"
+ },
+ "S5.07": {
+  "labels": [],
+  "needs": "none",
+  "note": "The terminal app has no navigation sidebar and no search box in the shell. Closest found: /history search <text> filters the Sessions list to entries containing the text (apps/cli/src/tui/tui_app.rs). Searched apps/cli/src for sidebar, search and recent wording.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S5.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Started new conversation."
+   }
+  ],
+  "needs": "none",
+  "note": "This is a typed slash command only; there is no button for it.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and send one message so the chat has text.",
+   "Type /new and press Enter.",
+   "Look for the line Started new conversation. and a cleared chat. Compare with Expected (a fresh conversation)."
+  ],
+  "where": "/new (type it at the prompt and press Enter)"
+ },
+ "S5.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Recent activity"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "Sessions"
+   }
+  ],
+  "needs": "an earlier saved conversation in the same folder",
+  "note": "The Recent activity rows on the start screen are plain text and do not open when selected; opening is done from the /resume Sessions list.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in a folder, quit agi, then run agi again in the same folder.",
+   "Look at the start screen for Recent activity, with rows such as 2h ago and a title.",
+   "Type /resume and press Enter to open the Sessions list.",
+   "Press Enter on a row and check that the chosen conversation opens."
+  ],
+  "where": "/resume (type it at the prompt and press Enter)"
+ },
+ "S5.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/sessions.rs",
+    "text": "Today"
+   },
+   {
+    "file": "apps/cli/src/sessions.rs",
+    "text": "This Week"
+   }
+  ],
+  "needs": "saved conversations from several days; a date heading only appears for chats older than a week",
+  "note": "Date grouping appears only in the shell listing, not in the in-app Sessions list (/resume), which is flat. The code says This Week and uses a date instead of Older.",
+  "reachable": "yes",
+  "steps": [
+   "Quit agi, then in Terminal run: agi session list",
+   "Look for group headings Today, Yesterday, This Week, or a calendar date.",
+   "Compare with Expected (Today, Yesterday, This week, Older)."
+  ],
+  "where": "agi session list (run in Terminal, outside agi)"
+ },
+ "S5.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "\u2191\u2193 navigate   Enter resume   r rename   Esc close"
+   }
+  ],
+  "needs": "at least one saved conversation in this folder",
+  "note": "The row marks the cursor position, not the open conversation; no active-row marker was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Type /resume and press Enter.",
+   "Look at each row: a short id, date and time, message count and title.",
+   "Move with Up or Down. The arrow mark marks the cursor row.",
+   "Press Enter on a row and check that the chosen conversation opens."
+  ],
+  "where": "/resume (type it at the prompt and press Enter)"
+ },
+ "S5.14": {
+  "labels": [],
+  "needs": "none",
+  "note": "The terminal app shows no project rows. Only shell commands were found: agi projects list (prints No projects in your AGI account. when empty, apps/cli/src/lib.rs) and agi -C <folder> to start a session in a folder. No project actions were found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S5.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/tasks"
+   }
+  ],
+  "needs": "a running or finished background task",
+  "note": "Tasks are text in the /tasks list, not rows in a sidebar, and they are not selected with the keyboard.",
+  "reachable": "yes",
+  "steps": [
+   "Start background work, such as a sub-agent or background terminal task, in a conversation (how the task starts was not traced).",
+   "Type /tasks and press Enter.",
+   "Look for the task list with each task and its state. Compare with Expected (tasks shown apart from chats, with state).",
+   "Type /tasks show <id> using an id from the list and check that the task output opens."
+  ],
+  "where": "/tasks (type it at the prompt and press Enter)"
+ },
+ "S5.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "still working"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "working at once"
+   }
+  ],
+  "needs": "none",
+  "note": "The running marker is text and a spinner only. No separate screen-reader marker was found in the code, and there is no navigation list to mark.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and send a prompt that takes a few seconds, such as a question that needs a tool.",
+   "Look at the spinner line above the input, such as 3s, which shows still working after about 10 seconds with no text.",
+   "Look at the header second row for the working count.",
+   "When two or more tools run at once, look for the line with working at once (subagents for sub-agents). Compare with Expected (running work is marked)."
+  ],
+  "where": "Send a prompt in agi, then look at the spinner line above the input and the header second row"
+ },
+ "S5.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "awaiting input"
+   }
+  ],
+  "needs": "a permission mode that asks before tools run",
+  "note": "The marker is text in the status line and header, not a mark on a list row, because the terminal app has no list of items to mark.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and press Shift+Tab until the mode label in the status bar shows a mode that asks before running tools.",
+   "Send a prompt that needs a tool, such as reading or writing a file.",
+   "Look at the spinner line for Waiting for your approval and at the header second row for the awaiting input count.",
+   "Answer the approval prompt that opens. Compare with Expected (an item blocked on the user is marked)."
+  ],
+  "where": "Shift+Tab to a permission mode that asks before tools, then send a prompt that uses a tool"
+ },
+ "S5.20": {
+  "labels": [],
+  "needs": "none",
+  "note": "No overflow menu was found. The /resume Sessions list has only Enter (resume) and r (rename). No /pin, /archive, /move, /delete or /share command was found in apps/cli/src/tui/tui_app.rs, apps/cli/src/command_registry.rs or apps/cli/src/claude_parity.rs. /rename and /fork exist as typed commands.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S5.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/session_picker.rs",
+    "text": "r rename"
+   }
+  ],
+  "needs": "a saved conversation in this folder",
+  "note": "Rename does not happen inside the row. The r key fills the prompt with /rename <id>, and Enter runs it. Escape to cancel was not verified for that prompt.",
+  "reachable": "yes",
+  "steps": [
+   "Type /resume and press Enter.",
+   "Use Up or Down to pick a row.",
+   "Press r. The prompt line fills with /rename and the conversation id.",
+   "Type the new name and press Enter.",
+   "Reopen /resume and check the row shows the new title. Compare with Expected (renamed in place, the title persists)."
+  ],
+  "where": "/resume, then press r on a row (Sessions list)"
+ },
+ "S5.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Type to filter   \u2191\u2193 navigate   Enter select   Esc cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "The palette lists slash commands only; app destinations such as chats or folders were not found in it. The default key shown is /; ctrl+p applies only when set in config.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and make sure the prompt line is empty.",
+   "Press / to open the Commands list.",
+   "Type a word such as model to filter, use Up and Down, then press Enter on a command.",
+   "Check that the list filters and the chosen command runs. Compare with Expected (searches and runs app commands)."
+  ],
+  "where": "/ (press / on an empty prompt line to open the Commands list)"
+ },
+ "S5.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/keybindings.rs",
+    "text": "Keybindings"
+   },
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Keyboard shortcuts:"
+   }
+  ],
+  "needs": "none",
+  "note": "Both views print into the chat as text; no dedicated overlay was found for them.",
+  "reachable": "yes",
+  "steps": [
+   "Type /keybindings and press Enter.",
+   "Look for the Keybindings list with entries such as Open command palette and Cycle permission mode.",
+   "Type /help and press Enter, then look for the Keyboard shortcuts: section."
+  ],
+  "where": "/keybindings (or /keys), and /help"
+ },
+ "S5.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "No profile menu was found. /status prints Account: signed in, <tier> plan, or not signed in (agi login) (apps/cli/src/tui/tui_app.rs). Sign-out is the typed /logout. No settings or plan menu was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S5.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Keyboard shortcuts:"
+   }
+  ],
+  "needs": "none",
+  "note": "Only commands and shortcuts are in /help. No help centre link or support contact was found; feedback is /feedback or /bug.",
+  "reachable": "yes",
+  "steps": [
+   "Type /help and press Enter.",
+   "Look at the command list and the Keyboard shortcuts: section.",
+   "Type /feedback with no words to see its usage text. Compare with Expected (help centre, support contact, feedback and shortcuts in one place)."
+  ],
+  "where": "/help (also /h or /?)"
+ },
+ "S5.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Plans and upgrades:"
+   }
+  ],
+  "needs": "a browser on this computer; eligibility was not checked in the code",
+  "note": "No visible Upgrade entry is drawn on the terminal screen. /upgrade, /pricing and /extra-usage open the plans web page in the browser.",
+  "reachable": "yes",
+  "steps": [
+   "Type /upgrade and press Enter.",
+   "Look for Opened plans and upgrades in your browser: with the link, or Plans and upgrades: with the link if the browser did not open.",
+   "Compare with Expected (takes an eligible user into the plan upgrade flow)."
+  ],
+  "where": "/upgrade (type it at the prompt and press Enter)"
+ },
+ "S5.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/client.rs",
+    "text": "AGI Cloud: unreachable. Check your connection, then run /status to try again."
+   }
+  ],
+  "needs": "a Managed Cloud session and a way to turn the network off",
+  "note": "No persistent indicator and no reconnect button were found; reconnecting means running /status again. In Local mode the line says AGI Cloud is not used by this session.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a Managed Cloud session, not Local.",
+   "Type /status and press Enter, then look for AGI Cloud: reachable with a time in ms.",
+   "Turn off the network, type /status again and look for the unreachable line.",
+   "Turn the network back on and run /status again to reconnect."
+  ],
+  "where": "/status (in a Managed Cloud session)"
+ },
+ "S5.34": {
+  "labels": [
+   {
+    "file": "apps/cli/src/update_check.rs",
+    "text": "Install it with: agi update --install"
+   }
+  ],
+  "needs": "an older build than the published one, an internet connection, and a privacy mode other than Local",
+  "note": "This is a one-time notice, not a persistent indicator. The check is skipped when AGIWORKFORCE_NO_UPDATE_CHECK is set or updates.check_on_startup is off. The start screen also shows a what's-new line for a just-installed build when a release summary exists.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi update --check in Terminal and wait for the verdict.",
+   "Look for An update is available. Install it with: agi update --install, or the up-to-date line.",
+   "Start agi and watch the top of the chat for an agi version is available notice with the same install command.",
+   "Compare with Expected (the app says a new release is available and how to get it)."
+  ],
+  "where": "agi update --check (run in Terminal, outside agi); the startup notice appears on its own when a newer release is found"
+ }
+}

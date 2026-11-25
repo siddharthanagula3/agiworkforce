@@ -1,0 +1,380 @@
+{
+ "S86.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Security and login"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Sign-in methods"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/PasskeysSection.tsx",
+    "text": "Passkeys and security keys"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account, cloud mode",
+  "note": "Adding or removing sign-in methods other than passkeys is done on the web, not in the app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an AGI Cloud account and open the Profile tab.",
+   "Tap \"Security and login\" in the AGI Cloud section.",
+   "Read the \"Sign-in methods\" group: each linked sign-in appears as a row showing \"Last used\" or \"Linked\".",
+   "Tap \"Passkeys and security keys\" and look for \"Add a passkey or security key\".",
+   "Tap \"Add or remove a sign-in method\" to see that it opens the web security page.",
+   "Compare with Expected: password, passkeys and social/SSO identities are all visible, and methods can be added or removed."
+  ],
+  "where": "Profile > Security and login > Manage (AGI Cloud section; also Settings > Security and login)"
+ },
+ "S86.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Change password"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/ChangePasswordModal.tsx",
+    "text": "Current password"
+   },
+   {
+    "file": "apps/mobile/src/features/auth/components/MobileSignIn.tsx",
+    "text": "Forgot password or try another way"
+   }
+  ],
+  "needs": "an AGI Cloud account that has a password and its current password; an outside sign-in service for reset",
+  "note": "The forgot-password screen in the app only tells the user to visit the website and choose Forgot password; the reset itself is not done in the app.",
+  "reachable": "yes",
+  "steps": [
+   "Open Profile, tap \"Security and login\" in the AGI Cloud section.",
+   "Tap \"Change password\" (it reads \"Set a password\" if the account has none).",
+   "Fill \"Current password\", \"New password\" and \"Confirm new password\", then tap \"Change password\" in the sheet.",
+   "Read the \"Password changed\" alert and check that other sessions are signed out.",
+   "For a forgotten password, go to the sign-in screen and tap \"Forgot password or try another way\".",
+   "Compare with Expected: change works with the current password; reset is started from the sign-in screen."
+  ],
+  "where": "Profile > Security and login > Change password"
+ },
+ "S86.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/account-security/TwoFactorSection.tsx",
+    "text": "Two-factor sign-in"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/TwoFactorSection.tsx",
+    "text": "Set up authenticator app"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/TwoFactorSection.tsx",
+    "text": "Turn off two-factor"
+   }
+  ],
+  "needs": "an AGI Cloud account and an authenticator app on a phone",
+  "note": "The section appears only when the server reports two-factor as available or on; the code that asks for the second factor at sign-in was not found in this screen's code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Profile, tap \"Security and login\", then scroll to \"Two-factor sign-in\".",
+   "Tap \"Set up authenticator app\" and scan the QR code, or use \"Copy setup key\".",
+   "Type the code from the authenticator app into \"Authenticator code\" and tap \"Turn on\".",
+   "Check that the \"Authenticator app\" row now shows on and \"Turn off two-factor\" appears.",
+   "Tap \"Turn off two-factor\", then \"Turn off\" in the alert, and check the row goes back to off.",
+   "Compare with Expected: turning on makes a code required at sign-in, and it can be turned off."
+  ],
+  "where": "Profile > Security and login > Two-factor sign-in"
+ },
+ "S86.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/account-security/TwoFactorSection.tsx",
+    "text": "Backup codes"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/TwoFactorSection.tsx",
+    "text": "Generate new backup codes"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/TwoFactorSection.tsx",
+    "text": "Save or share"
+   }
+  ],
+  "needs": "an AGI Cloud account with two-factor on",
+  "note": "No control opens the existing codes; they are shown only right after generating new ones, so viewing an old set is not possible in the app.",
+  "reachable": "yes",
+  "steps": [
+   "With two-factor on, open \"Security and login\" and scroll to \"Two-factor sign-in\".",
+   "Read the \"Backup codes\" row, which shows \"Ready\" or \"Not set\".",
+   "Tap \"Generate new backup codes\" and complete the step-up check if asked.",
+   "Tap \"Copy codes\" or \"Save or share\" on the codes screen.",
+   "Tap \"I saved these codes\" to finish.",
+   "Compare with Expected: codes can be viewed, saved and regenerated."
+  ],
+  "where": "Profile > Security and login > Two-factor sign-in > Backup codes"
+ },
+ "S86.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Sessions"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Devices"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Sign out this device?"
+   }
+  ],
+  "needs": "an AGI Cloud account with at least one other signed-in session",
+  "note": "The current device row has no tap action, and a row \"This device could not be matched to a listed session\" appears when the current session is not found; place is not shown in the row text.",
+  "reachable": "yes",
+  "steps": [
+   "Open Profile, tap \"Security and login\", then scroll to the \"Sessions\" section.",
+   "Read the device rows under \"Devices\": each shows the device name and a last-active value.",
+   "Tap a row that is not this device.",
+   "Read the alert \"Sign out this device?\" and tap \"Sign out\".",
+   "Compare with Expected: the session is listed with device, place and last active, and can be ended."
+  ],
+  "where": "Profile > Security and login > Sessions"
+ },
+ "S86.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/code/index.tsx",
+    "text": "Remote control"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/DesktopInfoCard.tsx",
+    "text": "Paired"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/DesktopInfoCard.tsx",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a desktop app already paired by QR code",
+  "note": "Only one desktop card is shown; a browser-to-desktop pairing list was not found in this screen, and the \"Remote control\" row depends on a feature flag.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"AGI Code\".",
+   "Tap \"Remote control\" (shown only when the companion feature is on).",
+   "On the companion screen, read the desktop card with the \"Paired\" badge and its name.",
+   "Tap \"Disconnect\" and then \"Disconnect\" in the alert.",
+   "Compare with Expected: the desktop is listed as paired and the pairing can be removed."
+  ],
+  "where": "Settings > AGI Code > Remote control"
+ },
+ "S86.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/profile/index.tsx",
+    "text": "Log Out"
+   },
+   {
+    "file": "apps/mobile/app/(app)/profile/index.tsx",
+    "text": "Log out of AGI Cloud on this device?"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account, cloud mode",
+  "note": "This signs out only this device; the Log Out row is shown only in cloud mode with a cloud account.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Profile tab in cloud mode while signed in.",
+   "Scroll to the \"AGI Cloud\" section and tap \"Log Out\".",
+   "Read the alert \"Log out of AGI Cloud on this device?\".",
+   "Tap \"Cancel\" once to check it leaves you signed in, then tap \"Log Out\" again.",
+   "Compare with Expected: the app signs out on this device and returns to sign-in."
+  ],
+  "where": "Profile > Log Out (AGI Cloud section)"
+ },
+ "S86.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Log out of all devices"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Log out of all devices?"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Log out everywhere"
+   }
+  ],
+  "needs": "an AGI Cloud account and a second signed-in device or browser to check",
+  "note": "The app only calls the server action; whether every device credential is revoked is decided on the server and was not verified from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Profile, tap \"Security and login\", then scroll to the \"Sessions\" section.",
+   "Tap \"Log out of all devices\" (shown in cloud mode only).",
+   "Read the alert \"Log out of all devices?\" and tap \"Log out everywhere\".",
+   "Check that the app returns to sign-in.",
+   "Compare with Expected: one action signs out every browser, app and device."
+  ],
+  "where": "Profile > Security and login > Sessions > Log out of all devices"
+ },
+ "S86.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connected"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "a connected third-party connector",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Connectors\" (cloud mode).",
+   "Tap a connector that shows as connected.",
+   "Find the \"Connected\" row and the \"Granted access\" section.",
+   "Scroll to the bottom and tap \"Disconnect\", then \"Disconnect\" in the alert.",
+   "Compare with Expected: the connector leaves the list, or a notice says it is disconnected."
+  ],
+  "where": "Settings > Connectors > tap a connected connector > Disconnect"
+ },
+ "S86.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Capabilities"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Camera and files"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/permissions/registry.ts",
+    "text": "Microphone"
+   }
+  ],
+  "needs": "none; a phone with the microphone permission in either state",
+  "note": "The app can only request the permission from the system; a permission already denied may need the iOS Settings app, which was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Capabilities\".",
+   "Tap \"Camera and files\".",
+   "Tap \"Microphone\" in the Permissions list.",
+   "Read the status and the level choices shown on the detail screen.",
+   "Tap the request button if shown, then compare with Expected: the user sees and can change microphone access."
+  ],
+  "where": "Settings > Capabilities > Camera and files > Permissions > Microphone"
+ },
+ "S86.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Camera and files"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/permissions/registry.ts",
+    "text": "Camera"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/permissions/index.tsx",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "none; a phone with the camera permission in either state",
+  "note": "The app can only request the permission from the system; a permission already denied may need the iOS Settings app, which was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Capabilities\".",
+   "Tap \"Camera and files\".",
+   "Tap \"Camera\" in the Permissions list.",
+   "Read the status and the level choices on the detail screen.",
+   "Tap the request button if shown, then compare with Expected: the user sees and can change camera access."
+  ],
+  "where": "Settings > Capabilities > Camera and files > Permissions > Camera"
+ },
+ "S86.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Allow"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Block"
+   }
+  ],
+  "needs": "a connected connector that lists tools",
+  "note": "The saved choices are listed per connector only; no single screen lists every saved approval, and removing by setting back to Ask was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Connectors\".",
+   "Tap a connected connector.",
+   "Scroll to \"Tool permissions\".",
+   "Set a tool to \"Allow\" or \"Block\" and reopen the connector.",
+   "Check the choice is kept, and set it back to \"Ask\" to remove the saved choice.",
+   "Compare with Expected: saved always-allow and always-deny choices can be reviewed and removed."
+  ],
+  "where": "Settings > Connectors > tap a connector > Tool permissions"
+ },
+ "S86.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Action approvals"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Ask before every action"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Skip approvals"
+   }
+  ],
+  "needs": "a connected connector to test the approval",
+  "note": "The \"Skip approvals\" choice is disabled when the workspace does not allow it; Expected names \"auto-approve safe\", but the middle choice is \"Run read-only actions without asking\".",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and tap \"Capabilities\".",
+   "Tap \"Action approvals\".",
+   "Read the three choices: \"Ask before every action\", \"Run read-only actions without asking\" and \"Skip approvals\".",
+   "Tap one choice and check that it is marked as selected.",
+   "Ask chat to run a connector action and compare what AGI asks before doing it with Expected."
+  ],
+  "where": "Settings > Capabilities > Action approvals"
+ },
+ "S86.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Lockdown mode"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/account-security/index.tsx",
+    "text": "Advanced Account Security"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Security and login"
+   }
+  ],
+  "needs": "an AGI Cloud account, cloud mode",
+  "note": "No control named hardened mode was found; \"Lockdown mode\" is the closest control, it shows only after its state loads, and \"Advanced Account Security\" opens a web page.",
+  "reachable": "yes",
+  "steps": [
+   "Open Profile, tap \"Security and login\".",
+   "Scroll to the \"Lockdown mode\" switch, below \"Recent security activity\".",
+   "Read its description: \"Blocks connectors, web access, code execution and Deep Research.\"",
+   "Turn it on, then try a chat that uses web search or running code.",
+   "Compare with Expected: stronger limits apply; turn it off again to restore normal use."
+  ],
+  "where": "Profile > Security and login > Lockdown mode"
+ }
+}

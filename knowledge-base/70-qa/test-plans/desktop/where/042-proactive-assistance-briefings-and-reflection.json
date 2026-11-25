@@ -1,0 +1,246 @@
+{
+ "S42.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "New task"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Create Schedule"
+   }
+  ],
+  "needs": "a Basic or higher paid plan (scheduled tasks are hidden on Free)",
+  "note": "The UI has no briefing-specific control; a daily briefing is a Daily scheduled task with a prompt. Delivery to the user was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Scheduled\" in the left sidebar.",
+   "Click \"New task\" (or \"Create Your First Schedule\" if the list is empty).",
+   "Type a prompt, set \"Frequency\" to \"Daily\", set \"Local Time\" and \"Time Zone\", then click \"Create Schedule\".",
+   "Look for the new task card in the list showing \"Every day at\" and the time you set. Compare with Expected: a recurring daily task that is generated and delivered."
+  ],
+  "where": "Scheduled > New task (choose Frequency: Daily)"
+ },
+ "S42.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Local Time"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Time Zone"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "a Basic or higher paid plan",
+  "note": "The card's time text is built in ScheduleCard.tsx; the ScheduleForm line the Code audit cited was not re-checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Scheduled\" in the left sidebar.",
+   "Click \"New task\", then set \"Frequency\" to \"Daily\".",
+   "Change \"Local Time\" and open \"Time Zone\" and pick a different zone.",
+   "Click \"Create Schedule\" and check the card shows \"Every day at\" with the time you chose. Compare with Expected."
+  ],
+  "where": "Scheduled > New task > Local Time and Time Zone"
+ },
+ "S42.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Pause"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Resume"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "a task that already exists (create one first)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Scheduled\" in the left sidebar.",
+   "On a task card, click the \"Pause\" button, or flip its switch labelled \"Pause\" with the task name.",
+   "Look for the card to show \"Paused\" and the button to change to \"Resume\".",
+   "Click \"Resume\" and check the card returns to its active state. Compare with Expected."
+  ],
+  "where": "Scheduled > task card > Pause (or Resume)"
+ },
+ "S42.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Quiet hours"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Time and focus"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Save changes"
+   }
+  ],
+  "needs": "a notification channel turned on (for example mobile push) to see the effect",
+  "note": "The holding of notifications is inner behaviour; only the settings are visible. The quoted code in push-notification-service and job-handlers was not found, so the hold logic was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Settings\" from the account menu, then click \"Time and focus\".",
+   "Turn on the \"Quiet hours\" switch, pick days, set the start and end times.",
+   "Click \"Save changes\".",
+   "Check the saved times stay after reload. Whether proactive notifications are held during those hours needs a phone or push check and was not verified in the code."
+  ],
+  "where": "Settings > Time and focus > Quiet hours"
+ },
+ "S42.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/NotificationsSection.tsx",
+    "text": "Scheduled task finished"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Notifications"
+   }
+  ],
+  "needs": "an email or mobile push channel reachable from the account; a scheduled task to run",
+  "note": "Agent-run updates are a separate block titled \"Agent run updates\" in the same section; the delivery itself was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Settings\" from the account menu, then click \"Notifications\".",
+   "Find the row \"Scheduled task finished\" (\"When a scheduled task completes or fails.\") and turn on its Email or mobile push channel.",
+   "Run a scheduled task (for example \"Run now\" from its card) and wait for it to finish.",
+   "Check that the chosen channel receives a notice saying the task finished. Compare with Expected."
+  ],
+  "where": "Settings > Notifications > Scheduled task finished"
+ },
+ "S42.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/ReflectSection.tsx",
+    "text": "Reflect"
+   },
+   {
+    "file": "apps/web/features/settings/sections/ReflectSection.tsx",
+    "text": "Past 30 days"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Reflect"
+   }
+  ],
+  "needs": "some conversation history; the page may ask for memory to be on",
+  "note": "The error text the Code line quoted was not found, so the error and memory-required messages were only checked in use-reflect-recap.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Settings\" from the account menu, then click \"Reflect\".",
+   "Look at the heading \"Reflect\" and the activity chart below it.",
+   "Change the range in the \"Reflect range\" dropdown, for example \"Past 30 days\" to \"Past 3 months\".",
+   "Check the recap updates for that range. Compare with Expected."
+  ],
+  "where": "Settings > Reflect"
+ },
+ "S42.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/ReflectSection.tsx",
+    "text": "Past year"
+   },
+   {
+    "file": "apps/web/features/settings/sections/ReflectSection.tsx",
+    "text": "Reflect"
+   }
+  ],
+  "needs": "conversation history spanning the past year, ideally",
+  "note": "There is no separate annual-recap screen; it is the \"Past year\" option on the Reflect page.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Settings\" from the account menu, then click \"Reflect\".",
+   "Open the \"Reflect range\" dropdown and choose \"Past year\".",
+   "Look at the recap and activity chart, which should cover the last 365 days.",
+   "Compare with Expected: a recap of the past year."
+  ],
+  "where": "Settings > Reflect > range \"Past year\""
+ },
+ "S42.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Break reminder"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Time and focus"
+   }
+  ],
+  "needs": "a few minutes of active use",
+  "note": "The reminder itself is shown by apps/web/features/time-focus/TimeFocusReminder.tsx; its visible text was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Settings\" from the account menu, then click \"Time and focus\".",
+   "Open the \"Break reminder\" dropdown and choose an interval such as \"30 minutes\".",
+   "Click \"Save changes\", then keep using the app until the interval has passed.",
+   "Look for a break reminder to appear in the app. Compare with Expected. The exact reminder wording was not confirmed."
+  ],
+  "where": "Settings > Time and focus > Break reminder"
+ },
+ "S42.23": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Time and focus"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Break reminder"
+   },
+   {
+    "file": "apps/web/features/settings/sections/TimeFocusSection.tsx",
+    "text": "Quiet hours"
+   }
+  ],
+  "needs": "none",
+  "note": "The page title shown in the code is \"Time and focus\" (TimeFocusSection.tsx), not \"Time & focus\".",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Settings\" from the account menu, then click \"Time and focus\".",
+   "Look for the \"Break reminder\" dropdown and the \"Quiet hours\" section with its switch.",
+   "Change a value, then click \"Save changes\".",
+   "Close and reopen Settings and check the values stayed. Compare with Expected."
+  ],
+  "where": "Settings > Time and focus"
+ },
+ "S42.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/RecentScheduleResults.tsx",
+    "text": "Recent results"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "a task that has run at least once",
+  "note": "The Recent results section appears only when at least one schedule exists; Run History is referenced in ScheduleCard.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Scheduled\" in the left sidebar.",
+   "Scroll below the task list to the \"Recent results\" heading.",
+   "Open a result row to see the saved output of an earlier run.",
+   "Compare with Expected: past briefings and outputs are kept and can be browsed. Run History is also reachable from a task card."
+  ],
+  "where": "Scheduled > Recent results"
+ }
+}

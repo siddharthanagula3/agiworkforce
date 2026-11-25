@@ -1,0 +1,612 @@
+{
+ "feature": {
+  "id": "F054-10",
+  "aliases": [
+   "Customize",
+   "Make my copy",
+   "Edit plugin",
+   "Create a plugin",
+   "Skill authoring",
+   "Plugin draft card",
+   "Save plugin",
+   "user skill authoring",
+   "S54.27 Customize installed plugin",
+   "S54.28 Fork plugin",
+   "S54.35 Plugin-creation assistant"
+  ],
+  "summary": "On web and desktop (hosted web), 'Customize' makes your own editable copy of an installed, turned-on plugin's skills, then turns the original off. 'Edit plugin' changes the copy. In chat, asking to build a plugin or skill can show a draft card with a Save button. Copy and edit are the only fork path found.",
+  "purpose": {
+   "what_it_does": "Copies the skills and companion files of an installed plugin into a new personal plugin named '<name> (custom)', installs and enables it, turns the original off, and opens the editor. Also lets a person create a plugin by form or by asking in chat.",
+   "why_it_exists": "People want to change a plugin's skills without losing the original (brief: S54.27, S54.28, S54.35). Skill authoring is on by default and can be switched off by a server setting (apps/web/lib/services/user-skill-authoring.ts:5-12).",
+   "who_uses_it": "Signed-in web and desktop-hosted users who write or tune skills.",
+   "problems_solved": [
+    "A published plugin is almost right but needs one skill changed.",
+    "Writing a plugin from nothing.",
+    "Keeping the original available to turn back on."
+   ],
+   "use_cases": [
+    "Customize a built-in pack and edit its 'summarize' skill.",
+    "Ask the assistant 'build a plugin that drafts release notes' and press 'Save plugin' on the card.",
+    "Press 'Edit plugin' on an authored plugin and save changes."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: Settings > Customize > Plugins > installed plugin > button 'Customize' with hint 'Make your own copy of this plugin and edit its skills.' (packages/ui/ui/src/directory/PluginDetailView.tsx:911-940; constants.ts:454-455).",
+    "Web: authored plugins show 'Edit plugin'; creation form titled 'Create a plugin' (constants.ts:429,449).",
+    "Web chat: a card with 'Save plugin' and 'Save as a skill' buttons after a build request (apps/web/features/chat/components/PluginDraftCard.tsx:29-30).",
+    "Desktop (public Electron app): the hosted web app; the draft card is offered on the 'web' and 'desktop' chat surfaces (apps/web/lib/server/tools/plugin-draft-tool.ts:43).",
+    "Mobile: no copy or edit; the card titled 'Customize' only switches skills on or off (apps/mobile/src/features/plugins/PluginDetailScreen.tsx:549).",
+    "CLI, VS Code, Chrome: not available. For the CLI this is a recorded decision (doc: docs/decisions/2026-09-27-founder-decisions.md D-2026-09-28-29 lists plugin customize and S54.27 for CLI)."
+   ],
+   "prerequisites": [
+    "Signed in; the plugin installed and turned on (the Customize button shows only then) (apps/web/features/directory/services/plugins-directory.ts:998,1035).",
+    "Skill authoring not switched off (AGI_USER_SKILL_AUTHORING not '0').",
+    "Workspace gates for both 'plugins' and 'skills' pass (apps/web/features/plugins/server/directory/install-gate.ts:14,26-37).",
+    "The plugin has at least one skill (customize.ts:161)."
+   ],
+   "screens_and_controls": [
+    "'Customize' button; confirm dialog 'Customize <name>?' with body 'You get your own copy with the same skills and files, which you can edit. The original is turned off so your chats use your copy; you can turn it back on from its page.' and confirm 'Make my copy' (constants.ts:456-459; DirectoryPanel.tsx:669-686).",
+    "'Edit plugin' button and form with Name, Description and Skills, button 'Save changes' (constants.ts:429-452).",
+    "Draft card buttons 'Save plugin' and 'Save as a skill'; saved text 'Saved as a plugin. Its skills are on in your chats.' (PluginDraftCard.tsx:29-35)."
+   ],
+   "journey": [
+    "Open an installed, turned-on plugin that has skills.",
+    "Press 'Customize' and confirm 'Make my copy'.",
+    "The server copies skills and files into '<name> (custom)', installs it turned on, and turns the original off.",
+    "The editor opens on the copy; change the skills and press 'Save changes'.",
+    "To go back, open the original page and turn it on again.",
+    "Chat path: ask for a plugin or skill; the assistant calls the draft tool; press 'Save plugin' on the card."
+   ],
+   "feedback_and_outputs": [
+    "The page switches to the copy; the original shows as off (useDirectoryAdapter.ts:1688-1707; DirectoryPanel.tsx:669-686).",
+    "Errors: 'Install and turn on this plugin before you customize it.' (409), 'This plugin has no skills that can be copied.' (422), 'Skill authoring is not available.' (404) (apps/web/app/api/plugins/customize/route.ts:47-62; customize.ts:39; user-skill-authoring.ts:8).",
+    "If a copy already exists the same copy is returned with created false (customize/route.ts:62-66)."
+   ],
+   "settings": [
+    "AGI_USER_SKILL_AUTHORING: server switch, on unless set to 0 (apps/web/lib/services/user-skill-authoring.ts:5-12)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "POST /api/plugins/customize: CSRF, rate limit, gate for plugins and skills, then customizePlugin; returns 201 {entryId, created: true} or 200 with created false (apps/web/app/api/plugins/customize/route.ts:23-80).",
+    "customizePlugin resolves the original (user marketplace entry, built-in registry pack, or directory plugin), validates every skill draft, copies companion files up to a limit, stores an 'authored' source with key '<key>-custom', installs it turned on, and turns the original off (apps/web/features/plugins/server/directory/customize.ts:84-119,154-198; apps/web/lib/services/plugin-owned-source-service.ts:289-312).",
+    "The Customize button is offered only for an installed and enabled plugin that is not itself authored (apps/web/features/directory/services/plugins-directory.ts:998,1035).",
+    "Edit: GET and PUT /api/plugins/authored/[entryId] load and save an authored plugin; POST /api/plugins/authored creates one, both gated by refusePluginInstall with authorsSkills (apps/web/app/api/plugins/authored/route.ts:92; apps/web/app/api/plugins/authored/[entryId]/route.ts:85,114-115).",
+    "Plugin-creation assistant exists: a chat tool 'plugin draft' is offered on web and desktop surfaces when the message matches build/create/write plus plugin/skill, streaming is on, and authoring and both workspace gates pass (apps/web/lib/server/tools/plugin-draft-tool.ts:21-22,43; apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1237-1257,5590-5594).",
+    "Draft card saves to POST /api/plugins/authored or the skills API (apps/web/features/chat/components/PluginDraftCard.tsx:47-60); a stored draft can be re-read by GET /api/chat/conversations/[id]/plugin-drafts/[toolCallId] (apps/web/app/api/chat/conversations/[id]/plugin-drafts/[toolCallId]/route.ts:33-93).",
+    "Audit event plugin_marketplace_changed with status 'customized' (customize/route.ts:68-74)."
+   ],
+   "incomplete": [
+    "The server does not check 'installed and on' itself: 409 means the plugin could not be resolved for the user; a not-installed directory plugin yields 422 'no skills that can be copied' because installed skills are empty (apps/web/features/plugins/server/directory/customize.ts:84-119,160-161). The 'turn on first' rule is enforced by the button only.",
+    "The draft says a separate fork action is missing; confirmed: copy is the only fork path.",
+    "Mobile 'Customize' is skill switches only (PluginDetailScreen.tsx:549-560)."
+   ],
+   "disconnected_or_disabled": [
+    "Skill authoring can be switched off by AGI_USER_SKILL_AUTHORING=0; then customize, create and the chat draft tool are refused or not offered (user-skill-authoring.ts:10-18; request-processor.ts:5591)."
+   ],
+   "not_available": [
+    "Mobile: no copy, edit or create.",
+    "CLI: not offered, by decision (doc: docs/decisions/2026-09-27-founder-decisions.md lines 462-468).",
+    "VS Code and Chrome: none found.",
+    "Chat draft card on mobile, CLI, VS Code: not offered (surface set is web and desktop only, plugin-draft-tool.ts:43)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "A user can customize an installed plugin (edit its skills or content) (S54.27).",
+     "source": "brief: S54.27 Should"
+    },
+    {
+     "statement": "A user can fork a plugin into their own editable copy (S54.28).",
+     "source": "brief: S54.28 Should"
+    },
+    {
+     "statement": "The product helps a user build a plugin with an assistant (S54.35).",
+     "source": "brief: S54.35 Should"
+    },
+    {
+     "statement": "The CLI does not offer plugin customize.",
+     "source": "doc: docs/decisions/2026-09-27-founder-decisions.md D-2026-09-28-29"
+    },
+    {
+     "statement": "Skill authoring is refused when the authoring setting is off.",
+     "source": "brief: draft Should, confirmed at apps/web/lib/services/user-skill-authoring.ts:14-18"
+    },
+    {
+     "statement": "An agent never destroys user data; the copy leaves the original in place and only turns it off.",
+     "source": "doc: AGENTS.md section 9; code apps/web/features/plugins/server/directory/customize.ts:198"
+    }
+   ],
+   "acceptance_criteria": [
+    "Customize on an installed, enabled plugin with skills creates one new installed plugin named '<name> (custom)' and turns the original off.",
+    "Pressing Customize again returns the same copy (created false) and creates no second one.",
+    "With AGI_USER_SKILL_AUTHORING=0 the customize route returns 404 'Skill authoring is not available.'",
+    "A plugin with no skills returns 422 with the message 'This plugin has no skills that can be copied.'",
+    "Edit plugin saves changes that appear in chats using the copy.",
+    "Asking 'build me a plugin for release notes' on web shows a card with 'Save plugin'; saving installs it on.",
+    "The Customize button is absent on a turned-off or authored plugin."
+   ],
+   "inferred": [
+    "[inferred] The server should reject a customize request for a plugin that is installed but off, matching the message 'Install and turn on this plugin first'.",
+    "[inferred] The fork (S54.28) and customize (S54.27) rows describe one action; the brief lists both with the same code."
+   ],
+   "proposed": [
+    "[proposed] Merge S54.27 and S54.28 into one item in the brief.",
+    "[proposed] Move the 'installed and on' check into customizePlugin so the API matches its error message.",
+    "[proposed] Rename the mobile skill card so it is not also called 'Customize'."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "endpoint",
+    "name": "POST /api/plugins/customize",
+    "path": "apps/web/app/api/plugins/customize/route.ts",
+    "role": "Entry point for the copy (line 23)."
+   },
+   {
+    "kind": "service",
+    "name": "customizePlugin",
+    "path": "apps/web/features/plugins/server/directory/customize.ts",
+    "role": "Resolve original (84), copy skills and files, store, turn original off (154-198)."
+   },
+   {
+    "kind": "service",
+    "name": "plugin-owned-source-service",
+    "path": "apps/web/lib/services/plugin-owned-source-service.ts",
+    "role": "storeOwnedPluginSource (312) and install-on (289)."
+   },
+   {
+    "kind": "service",
+    "name": "user-skill-authoring",
+    "path": "apps/web/lib/services/user-skill-authoring.ts",
+    "role": "AGI_USER_SKILL_AUTHORING switch."
+   },
+   {
+    "kind": "service",
+    "name": "install-gate",
+    "path": "apps/web/features/plugins/server/directory/install-gate.ts",
+    "role": "authorsSkills path: gates plugins and skills (14, 26)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST /api/plugins/authored and GET, PUT /api/plugins/authored/[entryId]",
+    "path": "apps/web/app/api/plugins/authored/route.ts",
+    "role": "Create and edit authored plugins; entryId route in authored/[entryId]/route.ts."
+   },
+   {
+    "kind": "component",
+    "name": "PluginDetailView",
+    "path": "packages/ui/ui/src/directory/PluginDetailView.tsx",
+    "role": "Edit and Customize buttons (911-940)."
+   },
+   {
+    "kind": "component",
+    "name": "DirectoryPanel",
+    "path": "packages/ui/ui/src/directory/DirectoryPanel.tsx",
+    "role": "customize confirm and editor opening (669-686)."
+   },
+   {
+    "kind": "hook",
+    "name": "useDirectoryAdapter",
+    "path": "apps/web/features/directory/hooks/useDirectoryAdapter.ts",
+    "role": "customizePlugin (1688), createPlugin (1635), updatePlugin."
+   },
+   {
+    "kind": "service",
+    "name": "plugins-directory service",
+    "path": "apps/web/features/directory/services/plugins-directory.ts",
+    "role": "customizable flag (998, 1035)."
+   },
+   {
+    "kind": "service",
+    "name": "plugin-draft-tool",
+    "path": "apps/web/lib/server/tools/plugin-draft-tool.ts",
+    "role": "Chat tool definition, intent regex, surface set."
+   },
+   {
+    "kind": "service",
+    "name": "request-processor draft capability",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+    "role": "applyPluginDraftToolCapability (1237) and the gate at 5590."
+   },
+   {
+    "kind": "component",
+    "name": "PluginDraftCard",
+    "path": "apps/web/features/chat/components/PluginDraftCard.tsx",
+    "role": "Draft card with Save plugin and Save as a skill."
+   },
+   {
+    "kind": "endpoint",
+    "name": "GET /api/chat/conversations/[id]/plugin-drafts/[toolCallId]",
+    "path": "apps/web/app/api/chat/conversations/[id]/plugin-drafts/[toolCallId]/route.ts",
+    "role": "Re-reads a stored draft from agent events."
+   },
+   {
+    "kind": "table",
+    "name": "plugin_marketplace_entries and plugin_marketplace_entry_files",
+    "path": "apps/web/db/neon/0175_plugin_marketplace_uploads.sql",
+    "role": "Stores the copied plugin and its files (query at plugin-submission-service.ts:169)."
+   },
+   {
+    "kind": "table",
+    "name": "plugin_marketplace_installations",
+    "path": "apps/web/db/neon/0159_plugin_marketplace_sources.sql",
+    "role": "Install-on row for the copy."
+   },
+   {
+    "kind": "screen",
+    "name": "Mobile PluginDetailScreen Customize card",
+    "path": "apps/mobile/src/features/plugins/PluginDetailScreen.tsx",
+    "role": "Skill switches only."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person presses Customize and confirms.",
+     "runs_on": "device",
+     "evidence": "packages/ui/ui/src/directory/DirectoryPanel.tsx:669-686"
+    },
+    {
+     "what_happens": "Browser posts {pluginId} or {entryId} to /api/plugins/customize with CSRF.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/web/features/directory/hooks/useDirectoryAdapter.ts:1688-1707"
+    },
+    {
+     "what_happens": "Server rate-limits, requires authoring on, applies the plugins and skills workspace gates.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/api/plugins/customize/route.ts:24-43; install-gate.ts:21-37"
+    },
+    {
+     "what_happens": "Server reads the original's skills and companion files, validates each skill draft, stores the copy as an authored source, installs it on, and turns the original off.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/features/plugins/server/directory/customize.ts:154-198"
+    },
+    {
+     "what_happens": "Server records an audit event and returns the new entry id; the browser refreshes and opens the editor.",
+     "runs_on": "our servers",
+     "evidence": "customize/route.ts:67-78; DirectoryPanel.tsx:676-684"
+    },
+    {
+     "what_happens": "Chat path: the chat service offers the draft tool; the chat model fills it with name, description and skills; the card appears; Save posts to /api/plugins/authored.",
+     "runs_on": "our servers",
+     "evidence": "request-processor.ts:1237-1257; PluginDraftCard.tsx:47-60"
+    }
+   ],
+   "data": [
+    {
+     "what": "Copied plugin entry, skill files and companion files",
+     "where_stored": "tables plugin_marketplace_entries, plugin_marketplace_entry_files under an 'authored' source",
+     "synced": "Server side; visible to the user on Cloud surfaces",
+     "retained_or_deleted": "Kept until the user removes it; deletion path not traced"
+    },
+    {
+     "what": "Installation row for the copy; original installation set off",
+     "where_stored": "table plugin_marketplace_installations (original may be in plugin_installations)",
+     "synced": "Server side",
+     "retained_or_deleted": "Original is kept, only disabled (customize.ts:198)"
+    },
+    {
+     "what": "Plugin draft tool result",
+     "where_stored": "cloud agent events for the conversation",
+     "synced": "Server side",
+     "retained_or_deleted": "Follows the conversation"
+    },
+    {
+     "what": "Audit event plugin_marketplace_changed (customized)",
+     "where_stored": "security audit log",
+     "synced": "Server side",
+     "retained_or_deleted": "Retention not examined"
+    }
+   ],
+   "models_and_providers": "Copy and edit use no model. The chat draft assistant relies on the chat model that serves the turn, which must support tools (toolsCapable) and streaming; which model that is comes from the normal chat routing and is not decided here (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1226-1233)."
+  },
+  "access_and_usage": {
+   "account": "Signed in (getUserScopedDb in customize/route.ts:26).",
+   "permissions": "CSRF, rate limit, authoring enabled, workspace feature gates 'plugins' and 'skills' (install-gate.ts:14,26-37). Org plugin policy is not evaluated for a copy because pluginKeys is empty (customize/route.ts:39-42).",
+   "subscription": "none found in the code.",
+   "limits_and_metering": "plugin-installation-write 20 per minute (apps/web/lib/rate-limit.ts:519; customize/route.ts:28). Companion files per skill are capped by SKILL_COMPANION_MAX_FILES (constant not read). The draft tool allows 1 to PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL skills (plugin-draft-tool.ts:28-39). Chat turn metering for the draft message is outside this feature.",
+   "flags": "AGI_USER_SKILL_AUTHORING (default on).",
+   "model_compatibility": "Draft assistant needs a tool-capable model and a streaming request (request-processor.ts:1226-1233). Copy and edit: not applicable.",
+   "provider_restrictions": "none found in the code.",
+   "local_mode": "Copy, edit and the draft card are Managed Cloud only (web and desktop-hosted). Whether the Tauri Local settings can copy a plugin was not examined. The CLI has no customize by decision."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Original not resolvable",
+    "behaviour": "409 PLUGIN_NOT_CUSTOMIZABLE 'Install and turn on this plugin before you customize it.'",
+    "evidence": "customize/route.ts:47-56"
+   },
+   {
+    "state": "No skills or invalid skill",
+    "behaviour": "422 with the message; a skill that fails validation names itself.",
+    "evidence": "customize.ts:161,168-175; customize/route.ts:57-61"
+   },
+   {
+    "state": "Copy already exists",
+    "behaviour": "Returns the existing entry, created false, no audit event.",
+    "evidence": "customize.ts:165-166; customize/route.ts:62-66"
+   },
+   {
+    "state": "Authoring off",
+    "behaviour": "404 'Skill authoring is not available.'",
+    "evidence": "user-skill-authoring.ts:14-18"
+   },
+   {
+    "state": "Workspace gate refuses",
+    "behaviour": "Gate response returned before any copy.",
+    "evidence": "customize/route.ts:39-43"
+   },
+   {
+    "state": "Duplicate skill names",
+    "behaviour": "Later duplicates are skipped.",
+    "evidence": "customize.ts:177-181"
+   },
+   {
+    "state": "Stored draft missing",
+    "behaviour": "404 'Draft not found'.",
+    "evidence": "plugin-drafts route.ts:25,92"
+   },
+   {
+    "state": "Offline or timeout",
+    "behaviour": "not handled in the code beyond the error banner.",
+    "evidence": "none found"
+   },
+   {
+    "state": "Cancel",
+    "behaviour": "Cancelling the confirm creates nothing.",
+    "evidence": "DirectoryPanel.tsx:669-686"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/app/api/plugins/customize/__tests__/route.test.ts",
+     "covers": "CSRF refusal, 401, invalid body, gate refusal, 409 not installed, 422 with message, existing copy not audited, creation and audit, server error (titles at lines 139-223)."
+    },
+    {
+     "path": "apps/web/app/api/plugins/authored/__tests__/route.test.ts",
+     "covers": "Authored create route; contents not opened."
+    },
+    {
+     "path": "apps/web/lib/server/tools/plugin-draft-tool.test.ts",
+     "covers": "Draft tool; contents not opened."
+    },
+    {
+     "path": "apps/web/features/chat/components/messages/MessageBubble.pluginDraft.test.tsx",
+     "covers": "Draft card in a message; contents not opened."
+    },
+    {
+     "path": "apps/web/app/api/chat/conversations/[id]/plugin-drafts/[toolCallId]/route.test.ts",
+     "covers": "Stored draft route; contents not opened."
+    },
+    {
+     "path": "apps/web/lib/services/plugin-owned-source-service.test.ts",
+     "covers": "Owned source storage; contents not opened."
+    },
+    {
+     "path": "packages/ui/ui/src/directory/__tests__/PluginDetailView.test.tsx",
+     "covers": "Detail view; contents not opened."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Copy a plugin",
+     "steps": [
+      "Install and enable a plugin with skills on web.",
+      "Press Customize, confirm 'Make my copy'."
+     ],
+     "expected": "A plugin named '<name> (custom)' is installed on; the original shows off; the editor opens."
+    },
+    {
+     "name": "Second press",
+     "steps": [
+      "Open the original again and press Customize."
+     ],
+     "expected": "The same copy opens; no second copy exists."
+    },
+    {
+     "name": "Authoring switched off",
+     "steps": [
+      "Set AGI_USER_SKILL_AUTHORING=0 on a test server.",
+      "Call POST /api/plugins/customize."
+     ],
+     "expected": "404 'Skill authoring is not available.'"
+    },
+    {
+     "name": "No skills",
+     "steps": [
+      "Customize a plugin that has only commands or agents."
+     ],
+     "expected": "422 'This plugin has no skills that can be copied.'"
+    },
+    {
+     "name": "Chat draft",
+     "steps": [
+      "On web, ask 'build a plugin that turns notes into release notes'.",
+      "Press 'Save plugin' on the card."
+     ],
+     "expected": "A plugin is saved and on; the card reads 'Saved as a plugin. Its skills are on in your chats.'"
+    },
+    {
+     "name": "Original turned back on",
+     "steps": [
+      "After copying, open the original and turn 'Enabled' on."
+     ],
+     "expected": "Both plugins are on; no data lost."
+    }
+   ],
+   "diagnostics": [
+    "Error code PLUGIN_NOT_CUSTOMIZABLE (409 and 422).",
+    "Audit event plugin_marketplace_changed with status 'customized'.",
+    "Tables plugin_marketplace_entries, plugin_marketplace_entry_files, plugin_marketplace_installations.",
+    "Chat event name for the draft tool is PLUGIN_DRAFT_TOOL_NAME in cloud_agent_events (plugin-drafts route.ts:68)."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "The brief and the draft say no plugin-creation assistant was found; one exists in chat on web and desktop surfaces.",
+    "affects": "Brief accuracy for S54.35",
+    "evidence": "apps/web/lib/server/tools/plugin-draft-tool.ts:21-56; PluginDraftCard.tsx:29-30",
+    "work_needed": "Correct the brief; add a human verification of the card."
+   },
+   {
+    "gap": "The brief cites only user-skill-authoring.ts for S54.27, S54.28 and S54.35, an 18-line switch file.",
+    "affects": "Brief code pointers",
+    "evidence": "apps/web/lib/services/user-skill-authoring.ts:1-18",
+    "work_needed": "Point the items at customize.ts and the draft tool."
+   },
+   {
+    "gap": "The 409 does not mean 'not installed and on' as the message says.",
+    "affects": "API callers",
+    "evidence": "customize.ts:84-119; customize/route.ts:47-56",
+    "work_needed": "Enforce installed-and-on in the service or reword the message."
+   },
+   {
+    "gap": "Customize skips org plugin policy for the copy (pluginKeys empty).",
+    "affects": "Orgs that restrict plugins",
+    "evidence": "customize/route.ts:39-42",
+    "work_needed": "Decide whether a copy should be policy-checked."
+   },
+   {
+    "gap": "Mobile has no copy or edit, and its 'Customize' card name collides with web's action.",
+    "affects": "Mobile users",
+    "evidence": "PluginDetailScreen.tsx:549",
+    "work_needed": "Product decision on mobile editing; rename the card."
+   },
+   {
+    "gap": "CLI and VS Code have no customize; the CLI omission is a recorded decision, VS Code has no recorded decision found.",
+    "affects": "CLI and VS Code users",
+    "evidence": "docs/decisions/2026-09-27-founder-decisions.md:462-468",
+    "work_needed": "Record a decision for VS Code or build it."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "mode:cloud",
+   "api:POST /api/plugins/customize",
+   "api:POST /api/plugins/authored",
+   "api:PUT /api/plugins/authored/[entryId]",
+   "api:GET /api/chat/conversations/[id]/plugin-drafts/[toolCallId]",
+   "table:plugin_marketplace_entries",
+   "table:plugin_marketplace_entry_files",
+   "table:plugin_marketplace_installations",
+   "F054-08",
+   "F054-09",
+   "SYS-chat-turn-pipeline",
+   "SYS-agents-tools-and-automation",
+   "SYS-connectors-plugins-and-skills",
+   "SYS-files-artifacts-and-storage",
+   "SYS-model-catalog-and-routing"
+  ],
+  "relationships": [
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/plugins/customize",
+    "evidence": "apps/web/app/api/plugins/customize/route.ts:82"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/plugins/authored",
+    "evidence": "apps/web/app/api/plugins/authored/route.ts:211"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/chat/conversations/[id]/plugin-drafts/[toolCallId]",
+    "evidence": "plugin-drafts route.ts:95"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:plugin_marketplace_entries",
+    "evidence": "customize.ts:61-72 queries; plugin-owned-source-service.ts:312"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:plugin_marketplace_installations",
+    "evidence": "plugin-owned-source-service.ts:296-302"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/web/lib/services/user-skill-authoring.ts",
+    "evidence": "AGI_USER_SKILL_AUTHORING at line 5"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F054-09",
+    "evidence": "customize turns the original off using the same enable path (customize.ts:107,198)"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-chat-turn-pipeline",
+    "evidence": "draft tool is applied in request-processor.ts:1237"
+   },
+   {
+    "rel": "uses_provider",
+    "to": "SYS-inference-providers",
+    "evidence": "the chat draft is produced by the turn's model; no provider is fixed in plugin-draft-tool.ts"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "PluginDetailView.tsx:911-940"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:desktop",
+    "evidence": "PLUGIN_DRAFT_CARD_SURFACES includes desktop (plugin-draft-tool.ts:43)"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/plugins/customize/__tests__/route.test.ts",
+    "evidence": "it() titles at lines 139-223"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "SYS-authorization-and-workspaces",
+    "evidence": "AUTHORED_SKILL_FEATURES gate (install-gate.ts:14)"
+   }
+  ],
+  "unknowns": [
+   "Whether the Tauri Local settings can copy or edit plugins.",
+   "How a user removes an authored copy and whether its files are deleted (path not traced).",
+   "Value of SKILL_COMPANION_MAX_FILES and PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL.",
+   "What the draft-tool and card tests assert beyond file names.",
+   "Whether decideWorkspacePolicy for 'skills' or 'plugins' varies by plan.",
+   "Which chat models are offered the draft tool in practice (depends on toolsCapable resolution)."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "1/3/4/8",
+   "claim": "Creates a new plugin named '<name> (custom)'",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The stored plugin keeps original.name; only the source name gets ' (custom)' and only the key gets '-custom'.",
+   "evidence": "apps/web/features/plugins/server/directory/customize.ts:186 (sourceName with suffix), :190 (name: original.name), :162 (key suffix)",
+   "correction": "The copy is a plugin with the original's name and key '<key>-custom', stored under an authored source named '<name> (custom)'."
+  },
+  {
+   "section": "3",
+   "claim": "Customize button is offered only for an installed and enabled plugin that is not itself authored (plugins-directory.ts:998,1035)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Line 998 sets customizable: installed && enabled with no authored check; only line 1035 (the user-entry path) adds && !authored.",
+   "evidence": "apps/web/features/directory/services/plugins-directory.ts:998,1035",
+   "correction": "Customizable means installed and on; the not-authored exclusion applies only to user marketplace entries (line 1035)."
+  },
+  {
+   "section": "3/7",
+   "claim": "Chat draft tool offered on web and desktop when the message matches build/create/write plus plugin/skill, streaming on, authoring and both gates pass",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Surface set is web+desktop. The intent regex has more verbs (make, draft, design, turn, update, change, edit). It also needs toolsCapable, ambientToolsAllowed and a non-temporary chat, which the page omits from the rule.",
+   "evidence": "apps/web/lib/server/tools/plugin-draft-tool.ts:21-22,43-46; request-processor.ts:1226-1233,1237-1257,5590-5594",
+   "correction": "Offered on web and desktop surfaces for non-temporary, streaming, tool-capable turns whose message matches build/create/make/write/draft/design/turn/update/change/edit near plugin or skill, with authoring and plugins+skills gates passing."
+  }
+ ],
+ "missing_facts": [
+  "The draft tool is withheld for temporary chats (!params.isTemporary) and requires toolsCapable plus ambientToolsAllowed: apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1226-1233.",
+  "The rate limit is failClosed (requests are refused if the limiter fails): apps/web/lib/rate-limit.ts:519-522.",
+  "Customize works on built-in registry packs even when not installed (resolved via getPluginRegistryEntry and listManagedPluginSkillsWithFiles), and turning off uses setWebPluginEnabled for them, so the 'installed first' rule is not just button-enforced for that path: apps/web/features/plugins/server/directory/customize.ts:100-109."
+ ]
+}

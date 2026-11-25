@@ -1,0 +1,285 @@
+{
+ "S17.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2726"
+   }
+  ],
+  "needs": "none",
+  "note": "The assistant prefix is a glyph only and does not name the model.",
+  "reachable": "yes",
+  "steps": [
+   "Start the CLI with agi and type any short message, then press Enter.",
+   "Look at the answer: its first line starts with the \"\u2726\" marker, while your message starts with \">\".",
+   "Compare with Expected: the marker separates assistant turns from yours, but the answer itself does not name the model; the model name appears only in the grey line under the answer (S17.36)."
+  ],
+  "where": "agi (start the CLI), then type a message and press Enter; the answer starts after the \"\u2726\" marker"
+ },
+ "S17.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Thinking"
+   }
+  ],
+  "needs": "a working model account",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type a question that needs a long answer, such as a short paragraph request.",
+   "Press Enter and watch the answer area while the reply arrives.",
+   "Compare with Expected: text should appear in pieces as it streams, with headings, lists and code formatted (the assistant turn uses the markdown renderer)."
+  ],
+  "where": "agi, then type a message and press Enter; the answer text fills in below the \"Thinking\" line"
+ },
+ "S17.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Thinking"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "still working"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2026 working, Esc or Ctrl-C to cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether the indicator is announced to assistive tech was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type a message, then press Enter.",
+   "Watch the line just above the input: a spinner with \"Thinking\u2026\" and an elapsed time shows at once.",
+   "Wait about 10 seconds before any text arrives: the line adds \"still working\".",
+   "Compare with Expected: the indicator is visible from the start; the code does not show evidence that it is announced to a screen reader, which I did not check."
+  ],
+  "where": "agi, then type a message and press Enter; the spinner line reads \"Thinking\u2026 <seconds>\""
+ },
+ "S17.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "No reasoning-summary or collapsible reasoning disclosure found: searched apps/cli/src/tui for reasoning, thinking, collapse and expand. The closest control is Ctrl-O, which toggles full tool output (see S17.05).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S17.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "showing full tool output, Ctrl-O to collapse"
+   }
+  ],
+  "needs": "none",
+  "note": "Status is shown as a glyph, not as a word.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and type a request that makes the assistant read a file, for example \"read the README in this folder\", then press Enter.",
+   "Look for rows under the answer: each has a glyph, a tool icon, the tool name in bold and a short summary.",
+   "Look at the status glyph: a spinner while running, \"\u2714\" when complete, \"\u2717\" when failed, \"\u2298\" when cancelled.",
+   "Press Ctrl-O to show the full output, then Ctrl-O again to collapse it; compare with Expected: name, status and result should be visible."
+  ],
+  "where": "agi, then type a request that needs a tool, such as reading a file; tool rows appear under the answer"
+ },
+ "S17.08": {
+  "labels": [],
+  "needs": "none",
+  "note": "No generated-file cards on an answer found. Searched apps/cli/src/tui for generated, download and file cards: only a one-line chip above the input for /image images (tui_app.rs:3304) and a \"Files changed this turn\" system line (tui_app.rs:8659).",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S17.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/image open to view"
+   }
+  ],
+  "needs": "a signed-in account in Managed Cloud mode (/image is offered only there)",
+  "note": "Inline rendering was not found; download is not offered, only the viewer.",
+  "reachable": "yes",
+  "steps": [
+   "In agi, type /image followed by a short picture description, then press Enter.",
+   "Wait for the reply; a row appears above the input with the file name and \"/image open to view\".",
+   "Type /image open and press Enter to open the newest generated image in a viewer.",
+   "Compare with Expected: the image should be viewable; the code shows no inline image rendering in the terminal, only the viewer route."
+  ],
+  "where": "agi, then type /image with a description and press Enter; then type /image open"
+ },
+ "S17.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "No assistant response to copy."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Use one of: (nothing) | code | diff"
+   }
+  ],
+  "needs": "a clipboard the terminal can reach",
+  "reachable": "yes",
+  "steps": [
+   "After an answer, type /copy and press Enter.",
+   "Read the confirmation in the transcript; it should say the last response was copied with its line count.",
+   "Paste into another app (for example a text editor) and check that the whole answer text is there.",
+   "Type /copy code or /copy diff to copy the last code block or diff instead."
+  ],
+  "where": "agi, then type /copy and press Enter"
+ },
+ "S17.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "The answer reached this model's maximum length and stopped there."
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Ask for a shorter answer, or split the request."
+   }
+  ],
+  "needs": "a model that can produce a long answer",
+  "note": "The notice printed beside a cut answer suggests asking for a shorter answer; it does not mention /continue.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for a very long answer, for example a long essay, so the answer reaches the model's length limit.",
+   "When the notice appears under the answer, type /continue and press Enter.",
+   "Compare with Expected: the new reply should pick up where the last one stopped without repeating it."
+  ],
+  "where": "agi, then type /continue and press Enter after an answer that was cut off"
+ },
+ "S17.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Nothing to branch, no messages yet."
+   }
+  ],
+  "needs": "a session that was not started with --no-session-persistence",
+  "note": "Branching forks the whole conversation so far; no code path lets the user pick an earlier answer as the branch point.",
+  "reachable": "yes",
+  "steps": [
+   "Have a conversation with at least one answer in it.",
+   "Type /branch, optionally with a name, and press Enter.",
+   "Read the confirmation in the transcript and check that the earlier messages are still in the new branch.",
+   "Go back to the original conversation and check that it is unchanged."
+  ],
+  "where": "agi, then type /branch (or /fork) and press Enter"
+ },
+ "S17.35": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Exported the conversation to"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Nothing to export, no messages in session yet."
+   }
+  ],
+  "needs": "none",
+  "note": "Only markdown, json and answer formats exist; no PDF option was found, and a file is written only when a path is given.",
+  "reachable": "yes",
+  "steps": [
+   "After an answer, type /export answer notes.md and press Enter (use /export md <file> or /export json <file> for other formats).",
+   "Read the confirmation; it should say the conversation was exported to a path.",
+   "Open the file in a text editor and check that it holds the last answer (or the whole conversation for markdown or json).",
+   "Type /export with a file name that already exists and check that nothing is overwritten."
+  ],
+  "where": "agi, then type /export answer <file name> and press Enter"
+ },
+ "S17.36": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "{} in \u00b7 {} out"
+   }
+  ],
+  "needs": "none",
+  "reachable": "yes",
+  "steps": [
+   "Send any message and wait for the answer.",
+   "Read the grey line under the answer: it shows the model name, input and output tokens, credits when paid, and the duration.",
+   "Compare with Expected: the line names the model that answered and its usage; time and tokens are shown, cost only when it is not covered by a subscription."
+  ],
+  "where": "agi, then send a message; read the grey line under the answer"
+ },
+ "S17.37": {
+  "labels": [],
+  "needs": "none",
+  "note": "Code keeps partial output on a cut or failed answer (chat.rs deliver_incomplete and the error path in tui_app.rs), but I did not confirm the incomplete marker is visible in the TUI: the cut-answer notice goes through output::print_warn.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S17.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "The safety system stopped this response."
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Rephrase the request and send it again."
+   }
+  ],
+  "needs": "none (a refusal cannot be produced on demand)",
+  "note": "The refusal is shown as an error row, not as a separate refusal state; I did not run it.",
+  "reachable": "yes",
+  "steps": [
+   "Type a message the model's safety layer would refuse and press Enter (this cannot be triggered on demand).",
+   "Look for a red row starting with \"\u2717\" under your message, with the refusal sentence.",
+   "Read the next step line below it, which tells you to rephrase and send again.",
+   "Compare with Expected: the refusal should look different from a normal answer or a generic error."
+  ],
+  "where": "agi, then type a message and press Enter; if the provider's safety layer refuses, a red \u2717 row appears"
+ },
+ "S17.39": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2298 Stopped"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2026 working, Esc or Ctrl-C to cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "No retry offer for a stopped answer was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Type a request that gives a long answer and press Enter.",
+   "While the answer streams, press Esc or Ctrl-C.",
+   "Look for the \"\u2298 Stopped\" line in the transcript, and check that the text that already arrived is still shown with a [stopped] marker in history.",
+   "Compare with Expected: the code shows no \"try again\" offer after stopping; the text you typed in the input box returns only if you had queued messages."
+  ],
+  "where": "agi, then type a long request and press Enter; press Esc or Ctrl-C while the answer streams"
+ },
+ "S17.40": {
+  "labels": [
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "The model returned no response for this turn."
+   },
+   {
+    "file": "apps/cli/src/errors.rs",
+    "text": "Send it again, or rephrase your message."
+   }
+  ],
+  "needs": "none (an empty reply cannot be produced on demand)",
+  "note": "The retry is automatic once; the user retries by sending the message again.",
+  "reachable": "yes",
+  "steps": [
+   "Type a message and press Enter (an empty reply cannot be produced on demand).",
+   "If the reply is empty, the app sends the turn once more by itself and shows the warning \"Sending it once more.\".",
+   "If the second reply is also empty, look for the red \u2717 row \"The model returned no response for this turn.\" with the line \"Send it again, or rephrase your message.\".",
+   "Compare with Expected: an explicit message should appear instead of an empty answer bubble; the retry is automatic, and there is no retry button."
+  ],
+  "where": "agi, then type a message and press Enter; if the model returns nothing, a red \u2717 row appears"
+ }
+}

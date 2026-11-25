@@ -1,0 +1,84 @@
+{
+ "S64.01": {
+  "labels": [],
+  "needs": "none",
+  "note": "No code reads the page open in the browser. The only page-related entry is the iOS share sheet, which passes the page URL and any selected text, not the page content. Searched apps/mobile for 'current page', 'currentPage', 'active tab', 'open page', 'browser tab' and 'pageContext' with no page-reading code found, and the cited chatExecutionStore.ts:3295 is cloud turn handling, not page capture.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S64.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift",
+    "text": "Share with AGI"
+   },
+   {
+    "file": "apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift",
+    "text": "Save for AGI Review"
+   },
+   {
+    "file": "apps/mobile/src/features/share-preview/index.tsx",
+    "text": "Send to Chat"
+   }
+  ],
+  "needs": "a signed-in account or local mode; an iPhone with Safari; the iOS app build with the share extension",
+  "note": "The share extension is iOS only, and the preview screen's send and 'Send to Chat' flow was read from code but the tester should check whether a question can be typed before sending, which the code read did not confirm.",
+  "reachable": "yes",
+  "steps": [
+   "In Safari, select some text on a web page.",
+   "Tap the Share button and choose the AGI share extension, titled Share with AGI.",
+   "Tap Save for AGI Review.",
+   "Open AGI Mobile. The share preview screen shows the selected text.",
+   "Tap Send to Chat.",
+   "Look in the chat that opens: the assistant's reply should use the selected text as context."
+  ],
+  "where": "Safari > Share button > Share with AGI > Save for AGI Review > open AGI Mobile > Send to Chat"
+ },
+ "S64.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/share-preview/index.tsx",
+    "text": "Summarize this page"
+   },
+   {
+    "file": "apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift",
+    "text": "Share with AGI"
+   }
+  ],
+  "needs": "a signed-in account or local mode; an iPhone with Safari; the iOS app build with the share extension",
+  "note": "The button only appears when the shared text contains an http or https link, and it is disabled when files are attached. The code sends the link text and prompt; whether the assistant opens the page itself is not shown in the code.",
+  "reachable": "yes",
+  "steps": [
+   "In Safari, open a web page, tap the Share button and choose Share with AGI.",
+   "Tap Save for AGI Review, then open AGI Mobile.",
+   "On the share preview screen, find the two buttons under the shared text.",
+   "Tap Summarize this page.",
+   "Look in the new chat: a reply starting from the prompt 'Summarize this page.' should appear, with the page link in the message."
+  ],
+  "where": "Safari > Share button > Share with AGI > Save for AGI Review > open AGI Mobile > Summarize this page"
+ },
+ "S64.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/share-preview/index.tsx",
+    "text": "Ask about this page"
+   },
+   {
+    "file": "apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift",
+    "text": "Share with AGI"
+   }
+  ],
+  "needs": "a signed-in account or local mode (the button is disabled otherwise); an iPhone with Safari; the iOS app build with the share extension",
+  "note": "The page content that reaches the answer is the shared text (usually only the URL plus any selected text), not a full read of the page; the code does not show the assistant opening the page.",
+  "reachable": "yes",
+  "steps": [
+   "In Safari, open a web page, tap the Share button and choose Share with AGI.",
+   "Tap Save for AGI Review, then open AGI Mobile.",
+   "On the share preview screen, tap Ask about this page.",
+   "The chat opens with the shared text placed in the message box. Type your own question after it.",
+   "Send the question and look at the reply: it should answer using the page's content that was shared."
+  ],
+  "where": "Safari > Share button > Share with AGI > Save for AGI Review > open AGI Mobile > Ask about this page"
+ }
+}

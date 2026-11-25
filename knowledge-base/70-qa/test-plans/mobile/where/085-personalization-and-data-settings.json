@@ -1,0 +1,320 @@
+{
+ "S85.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Account"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-account/index.tsx",
+    "text": "Email"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and Cloud mode; a photo to choose",
+  "note": "Name and email editing exist only on the Cloud Email screen; in Local mode the name is Full Name under Personalization. The Profile screen (tapping the top card) has no edit controls.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and switch the mode toggle at the top of Settings to Cloud.",
+   "Open Settings > Account > Email. Tap the name under the avatar (accessible name \"Edit display name\"), type a new name and tap Save.",
+   "Back on the top Settings card, tap the photo badge (\"Change profile photo\") and choose a picture.",
+   "Check the name and photo on the top Settings card and on the Email screen match your change. Tap the Email row and check it starts an email-change flow, not a direct save."
+  ],
+  "where": "Settings > Account > Email (Cloud mode, signed in). Photo: the badge \"Change profile photo\" on the top Settings card. Local name: Settings > Assistant > Personalization > Full Name"
+ },
+ "S85.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Custom Instructions"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Save"
+   }
+  ],
+  "needs": "none (Local mode works; Cloud needs a signed-in account)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Personalization.",
+   "Tap the field \"Custom Instructions\" and type a rule, for example \"Answer in one short paragraph\".",
+   "Tap Save at the top right.",
+   "Start a new chat, ask a question, and check the reply follows the rule. Clear the field, tap Save, and check the next reply no longer follows it."
+  ],
+  "where": "Settings > Assistant > Personalization > Custom Instructions"
+ },
+ "S85.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Style Preset"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Response Length"
+   }
+  ],
+  "needs": "none",
+  "note": "Formatting is not a separate control here; the choices are Style Preset, Response Length, Technical Level and Response Language.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Personalization.",
+   "Change \"Style Preset\" and \"Response Length\", and \"Technical Level\" if you want.",
+   "Tap Save at the top right.",
+   "Start a new chat, ask the same question twice with different settings, and compare the tone, length and formatting with Expected."
+  ],
+  "where": "Settings > Assistant > Personalization > Style Preset, Response Length, Technical Level, Response Language"
+ },
+ "S85.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "No memories yet"
+   }
+  ],
+  "needs": "none",
+  "note": "\"Add memory\" is an accessible name with no visible text in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Memory.",
+   "Turn the \"Memory\" switch on. Tap the control whose accessible name is \"Add memory\" and type a fact, then save it.",
+   "Start a new chat and ask something that uses that fact; check the reply uses it.",
+   "Edit or delete the memory from the list, turn \"Memory\" off, ask again, and compare with Expected."
+  ],
+  "where": "Settings > Assistant > Memory"
+ },
+ "S85.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/memory/components/MemoryControlsCard.tsx",
+    "text": "Search and reference chats"
+   }
+  ],
+  "needs": "at least one earlier chat with known content",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Memory.",
+   "Turn on \"Search and reference chats\".",
+   "In a new chat, ask about a topic from an older chat and check the reply refers to it.",
+   "Turn \"Search and reference chats\" off, ask again, and compare. Check a Temporary Chat is not referenced."
+  ],
+  "where": "Settings > Assistant > Memory > Search and reference chats"
+ },
+ "S85.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "Temporary Chat"
+   }
+  ],
+  "needs": "none",
+  "note": "No separate on/off switch for chat history was found. Temporary Chat is the nearest control; Sync Local Chats to Cloud under Data Controls is a one-time copy.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Device > General.",
+   "Turn \"Temporary Chat\" on, then start a new chat and send a message.",
+   "Open the chat list and check the chat is not saved there.",
+   "Turn \"Temporary Chat\" off, send another message and check that chat is saved."
+  ],
+  "where": "Settings > Device > General > Temporary Chat"
+ },
+ "S85.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/TrainingPreferenceGroups.tsx",
+    "text": "Only use models that do not train on your chats"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/TrainingPreferenceGroups.tsx",
+    "text": "Use my chats"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account and Cloud mode",
+  "note": "The code audit cited ProviderTrainingOptOutGroup.tsx, which no longer exists; its role is now in TrainingPreferenceGroups.tsx. The owner decision on this item is open.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to Cloud mode and make sure you are signed in.",
+   "Open Settings > Assistant > Privacy and scroll to the section \"Model training\".",
+   "Check the row \"Only use models that do not train on your chats\" and the \"Use my chats\" and \"Use my voice\" rows under the improvement heading.",
+   "Turn a row on or off and check it saves and stays after reopening the screen. Compare with Expected."
+  ],
+  "where": "Settings > Assistant > Privacy (Cloud mode, signed in), section \"Model training\""
+ },
+ "S85.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "Temporary Chat"
+   }
+  ],
+  "needs": "none",
+  "note": "The same switch also appears under Settings > Privacy > Chat privacy. I did not verify that it applies to every new chat by default.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Device > General and turn \"Temporary Chat\" on.",
+   "Start a new chat and send a message, then check it is not in the chat list.",
+   "Ask in that chat what you remember about the user and check no saved memory is used.",
+   "Turn \"Temporary Chat\" off and compare the next new chat."
+  ],
+  "where": "Settings > Device > General > Temporary Chat"
+ },
+ "S85.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Archived Chats"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/archived-chats.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least two archived chats",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Switch to Cloud mode and sign in.",
+   "Open Settings > Cloud > Archived Chats.",
+   "Tap \"Restore\" on one chat, then open the chat list (refresh if needed) and check it is back.",
+   "Tap \"Delete\" on another archived chat and confirm \"Delete this chat?\". Check it leaves the list."
+  ],
+  "where": "Settings > Cloud > Archived Chats (Cloud mode, signed in)"
+ },
+ "S85.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/data-controls/index.tsx",
+    "text": "Delete all chats"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/data-controls/index.tsx",
+    "text": "Chat history"
+   }
+  ],
+  "needs": "a test account with several chats, some archived",
+  "note": "The local version says it cannot be undone. Compare the copy against Expected for restore wording.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Data Controls.",
+   "Under \"Chat history\", tap \"Delete all chats\". Read the alert \"Delete all chats?\" and check it says archived chats are included and that the cloud copy says restorable on the web for 30 days.",
+   "Confirm through the second prompt (\"Are you absolutely sure?\" then \"Yes, delete all chats\").",
+   "Check the chat list and Archived Chats are empty. Use a test account only."
+  ],
+  "where": "Settings > Data Controls > Chat history > Delete all chats (cloud), or Settings > Data Controls > Local chats > Delete all chats (this device)"
+ },
+ "S85.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Shared Links"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/shared-links.tsx",
+    "text": "Revoke"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one shared chat",
+  "note": "The Shared Links screen lists shared chat links only; no published-pages list was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to Cloud mode and sign in.",
+   "Open Settings > Account > Shared Links and check the list of shared links.",
+   "Tap \"Revoke\" on one link and confirm \"Revoke this link?\" > \"Revoke\".",
+   "Check the link now shows as revoked or gone, and that opening it no longer works."
+  ],
+  "where": "Settings > Account > Shared Links (Cloud mode, signed in)"
+ },
+ "S85.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/data-controls/index.tsx",
+    "text": "Export Local Data"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-account/index.tsx",
+    "text": "Export Cloud Data"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account for the cloud export",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Data Controls and tap \"Export Local Data\". Wait until \"Exporting\u2026\" finishes.",
+   "Save or share the file it offers and open it.",
+   "For cloud, go to Settings > Data Controls > AGI Cloud account > Export Cloud data, tap \"Export Cloud Data\" and save the file.",
+   "Open the file and check it holds chats, memory, files and settings, as in Expected."
+  ],
+  "where": "Settings > Data Controls > Local data > Export Local Data (this device), or Settings > Data Controls > AGI Cloud account > Export Cloud data (cloud)"
+ },
+ "S85.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory-import.tsx",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a text or JSON file with memories from another assistant",
+  "note": "The upload control has no visible text; its accessible name is \"Import memories\" in apps/mobile/app/(app)/settings/memory.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Assistant > Memory with Memory on.",
+   "Tap the upload control (accessible name \"Import memories\").",
+   "Choose a text or JSON file, or paste text, then tap \"Preview\" and select the memories.",
+   "Tap the import button (\"Import N memories\") and check the memories appear in the Memory list."
+  ],
+  "where": "Settings > Assistant > Memory > upload icon (accessible name \"Import memories\", shown only when Memory is on)"
+ },
+ "S85.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/storage.tsx",
+    "text": "Delete everything"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/storage.tsx",
+    "text": "Clear cache"
+   }
+  ],
+  "needs": "a test device with local data",
+  "note": "The on-screen copy says conversations, memory and models; the confirmation also names settings. This wipe is destructive.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Device > Storage.",
+   "Tap \"Delete everything\" and read the confirmation, which lists conversations, memory, settings and downloaded models.",
+   "Confirm only on a test device. Check that the chats, memory and settings are gone after the wipe.",
+   "Use \"Clear cache\" separately and check it only removes temporary files."
+  ],
+  "where": "Settings > Device > Storage > Delete everything (\"Clear cache\" is separate)"
+ },
+ "S85.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/data-controls/index.tsx",
+    "text": "Delete account"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-account/index.tsx",
+    "text": "Delete Account"
+   }
+  ],
+  "needs": "a signed-in test AGI Cloud account",
+  "note": "Deletion is only scheduled; cancellation is possible until the deadline shown after scheduling. Use a test account only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Settings > Data Controls.",
+   "Tap \"Delete account\" under \"AGI Cloud account\". On the next screen tap \"Delete Account\" under \"Your AGI Cloud data\".",
+   "Read the \"Delete Account\" confirmation (scheduled deletion, sign in to cancel before the deadline, export first) and tap Cancel to stop.",
+   "Check the result. Do not confirm on a real account."
+  ],
+  "where": "Settings > Data Controls > AGI Cloud account > Delete account (signed in), then the Delete Account row"
+ }
+}

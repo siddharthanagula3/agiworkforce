@@ -1,0 +1,56 @@
+{
+ "S83.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & Usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Paid Cloud capabilities are paused until billing is resolved"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Restore paid Cloud access on Web"
+   }
+  ],
+  "needs": "a paid AGI Cloud account whose subscription is not active (a failed payment cannot be produced on demand from the tester's side)",
+  "note": "The app has no checkout or payment screen of its own; the failure is shown only as a status row in Account & Usage, and the fix is on the Web (the row text says so). The row text is built from the subscription status with underscores replaced by spaces.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the Command Palette with Code: Sign In to AGI Cloud, using an account whose paid subscription is not active.",
+   "Open the Command Palette and run Code: Account & Usage.",
+   "Look for a row that starts with the plan name and \"subscription:\" and a warning icon, with the description \"Paid Cloud capabilities are paused until billing is resolved\".",
+   "Look for the row \"Manage billing & subscription\"; when the subscription needs attention its description reads \"Restore paid Cloud access on Web\", which is the fix path.",
+   "Compare with Expected: the failure is shown clearly and the way to fix it is shown."
+  ],
+  "where": "Command Palette > Code: Account & Usage, then the row \"subscription:\" with a warning icon (under the plan name)"
+ },
+ "S83.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & Usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/account-auth/accountPresentation.ts",
+    "text": "Access remains active through"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Access ends"
+   }
+  ],
+  "needs": "a paid AGI Cloud account with a scheduled end-of-period cancellation (the tester cannot create this on demand; the account must already be in that state)",
+  "note": "The date is formatted with the system locale (for example \"Dec 31, 2026\"). If the end date is not known the row shows \"Review the scheduled cancellation on Web\" instead of a date.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud with an account that has a paid plan with a scheduled cancellation at period end.",
+   "Open the Command Palette and run Code: Account & Usage.",
+   "Look in the \"AGI Cloud account\" section for the organization row: its description reads \"<plan name> plan \u00b7 ends <date>\" and its detail reads \"Access remains active through <date>, then the plan ends\".",
+   "Look at the \"Manage billing & subscription\" row: its description reads \"Access ends <date>; review or resume the plan on Web\" when the end date is known.",
+   "Compare with Expected: the cancellation is shown with its end date."
+  ],
+  "where": "Command Palette > Code: Account & Usage, then the \"AGI Cloud account\" section rows (organization row with the plan, and \"Manage billing & subscription\")"
+ }
+}

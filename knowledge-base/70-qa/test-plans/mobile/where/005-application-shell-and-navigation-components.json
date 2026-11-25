@@ -1,0 +1,609 @@
+{
+ "S5.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/shared/components/DrawerButton.tsx",
+    "text": "Open navigation drawer"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/WorkModeSwitch.tsx",
+    "text": "Chat or Work"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Chat tab bar shows no conversation title or brand text in the code read; the brand mark is only in the drawer.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Chat tab (first screen).",
+   "Look at the top bar: menu button at the left, Chat/Work switch in the middle, temporary chat toggle at the right.",
+   "Tap the menu button to open the drawer and check the shell is still shown.",
+   "Compare with Expected: a persistent header with the primary actions for this view."
+  ],
+  "where": "Chat tab top bar on the first screen after sign-in: 'Open navigation drawer' button at the left, 'Chat or Work' switch in the middle, temporary chat toggle at the right"
+ },
+ "S5.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Local"
+   },
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   }
+  ],
+  "needs": "a signed-in account; Cloud needs an account with cloud unlocked",
+  "note": "Switching to Cloud is blocked when cloudUnlocked is false.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Look at the switch under the search icon: it shows 'Local' and 'Cloud'.",
+   "Tap 'Cloud' (or 'Local') and watch the drawer list and the Chat screen change.",
+   "Compare with Expected: the user can switch between product areas or modes from the shell."
+  ],
+  "where": "Open navigation drawer > 'Local' / 'Cloud' switch at the top of the drawer; product areas are in the drawer list below"
+ },
+ "S5.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/workspace.tsx",
+    "text": "Personal"
+   }
+  ],
+  "needs": "a Cloud account; a team workspace in the same account to see a second row",
+  "note": "Expected says the switcher is in the shell, but the drawer has no workspace control; the switch is on the Settings Workspace screen. The file useWorkspaceSwitcher.ts named in Code no longer exists; the switch calls switchWorkspace in apps/mobile/src/features/team/switchWorkspace.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer with 'Open navigation drawer' and tap 'Settings'.",
+   "Tap the 'Workspace' row.",
+   "Look at the list: 'Personal' plus any team workspaces, and which one is active.",
+   "Tap another workspace row and check for the 'Workspace changed' alert, then compare with Expected."
+  ],
+  "where": "Settings > 'Workspace' > 'Personal' row and any team rows (not in the drawer)"
+ },
+ "S5.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/shared/components/DrawerButton.tsx",
+    "text": "Open navigation drawer"
+   }
+  ],
+  "needs": "phone width (on a wide window the sidebar is permanent)",
+  "note": "On the permanent tablet sidebar no collapse-to-rail control was found in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer' to open the sidebar.",
+   "Tap outside the drawer or swipe it closed to hide it.",
+   "Tap the button again to expand it.",
+   "Compare with Expected: the navigation hides and expands again."
+  ],
+  "where": "'Open navigation drawer' button at the top left of the Chat tab (opens and closes the drawer)"
+ },
+ "S5.07": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Search"
+   }
+  ],
+  "needs": "a signed-in account with some chats",
+  "note": "The drawer has no inline search field; searching happens on the separate Search screen (apps/mobile/app/(app)/search.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Tap the search icon at the top right of the drawer.",
+   "Type part of a chat title in the search field.",
+   "Compare with Expected: results filter to matching conversations."
+  ],
+  "where": "Open navigation drawer > 'Search' icon at the top right of the drawer (opens the Search screen, not an inline filter)"
+ },
+ "S5.08": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "'New chat' is only in the drawer; no New chat button was found in the Chat tab top bar.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Tap 'New chat'.",
+   "Look at the Chat screen: a new empty chat should open."
+  ],
+  "where": "Open navigation drawer > 'New chat' (first row in the drawer list)"
+ },
+ "S5.09": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Pinned"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Pin"
+   }
+  ],
+  "needs": "a chat to pin",
+  "note": "In the code the Pinned section comes after the Projects section, not at the very top of the list.",
+  "reachable": "yes",
+  "steps": [
+   "Long press a chat row in the drawer and choose 'Pin'.",
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Look for the 'Pinned' heading and the pinned chat under it.",
+   "Compare with Expected: pinned items sit in their own section."
+  ],
+  "where": "Open navigation drawer > 'Pinned' heading (appears after the Projects section, above 'Recents')"
+ },
+ "S5.10": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Recents"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "No recent chats"
+   }
+  ],
+  "needs": "a signed-in account with chats",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Find the 'Recents' heading.",
+   "Tap a conversation row under it.",
+   "Compare with Expected: the conversation opens."
+  ],
+  "where": "Open navigation drawer > 'Recents' heading and its chat rows"
+ },
+ "S5.11": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "See all"
+   }
+  ],
+  "needs": "a project with chats in it",
+  "note": "The Projects section is on by default (FEATURES.projects is true in apps/mobile/lib/v1FeatureFlags.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Under 'Projects', tap the chevron beside a project that has chats.",
+   "Look for the chats listed under that project and the 'See all' link.",
+   "Compare with Expected: recent chats are shown grouped under their projects."
+  ],
+  "where": "Open navigation drawer > 'Projects' heading > project name > chevron 'Show chats in' the project"
+ },
+ "S5.12": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "See all chats"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "This Week"
+   }
+  ],
+  "needs": "chats from several days",
+  "note": "The drawer itself does not group by date; grouping is on the chats list. The code heading is 'This Week' (capital W), and the date headings are literal English, not translated.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Tap 'See all chats' at the bottom of Recents.",
+   "Look at the date headings on the chats list.",
+   "Compare with Expected: Today, Yesterday, This week, Older."
+  ],
+  "where": "Open navigation drawer > 'See all chats' > the chats list with headings 'Pinned', 'Today', 'Yesterday', 'This Week', 'Older'"
+ },
+ "S5.13": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Open conversation: {{title}}"
+   }
+  ],
+  "needs": "a signed-in account with at least two chats",
+  "note": "The row accessibility hint 'Long press for more actions' is a literal string in apps/mobile/src/features/drawer/components/DrawerContent.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Look at a conversation row: its title, a dot if unread, a pin icon if pinned.",
+   "Tap the active-looking row and note its highlight.",
+   "Tap another row and check that the chat opens and the highlight moves."
+  ],
+  "where": "Open navigation drawer > a chat title under 'Recents' or 'Pinned'"
+ },
+ "S5.14": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Open project: {{name}}"
+   }
+  ],
+  "needs": "a project",
+  "note": "No long-press actions were found on the drawer project row; project actions live on the project page (apps/mobile/app/(app)/projects/settings/[id] route).",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Tap a project name under 'Projects'.",
+   "Look at the project page that opens.",
+   "Compare with Expected: the project opens."
+  ],
+  "where": "Open navigation drawer > 'Projects' heading > a project name"
+ },
+ "S5.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Needs you"
+   }
+  ],
+  "needs": "a Cloud account with AGI Work enabled",
+  "note": "The AGI Work row is in the folded More list and shows only when FEATURES.cloudTasks and showAgiWork are on.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Tap 'More' if needed, then tap 'AGI Work'.",
+   "Look at the task cards: each shows its state and origin.",
+   "Tap a card and check that the task opens."
+  ],
+  "where": "Open navigation drawer > 'More' > 'AGI Work'"
+ },
+ "S5.16": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Search"
+   }
+  ],
+  "needs": "a signed-in account with chats or projects",
+  "note": "Kind icons appear only while searching, and the icon in apps/mobile/src/features/chat/ChatsListScreen.tsx has no accessibility label in the code read. Drawer rows show no type icon, only a pin and an unread dot.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer'.",
+   "Tap the search icon, then type a word.",
+   "Look at the icon at the left of each result row.",
+   "Compare with Expected: each row shows its resource type."
+  ],
+  "where": "Open navigation drawer > 'Search' icon > type a word; result rows show a kind icon (chat, project, file, library, artifact, destination)"
+ },
+ "S5.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Running"
+   }
+  ],
+  "needs": "a Cloud account with a running task",
+  "note": "Drawer chat rows show no running marker in the code read; the marker is on AGI Work task cards only.",
+  "reachable": "yes",
+  "steps": [
+   "Start a cloud task that is running.",
+   "Open the drawer, tap 'More' if needed, then 'AGI Work'.",
+   "Tap the 'Running' filter.",
+   "Compare with Expected: the running task is marked as running, and its card label includes the state."
+  ],
+  "where": "Open navigation drawer > 'More' > 'AGI Work' > 'Running' filter"
+ },
+ "S5.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Needs you"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/runPresentation.ts",
+    "text": "Waiting for your approval"
+   }
+  ],
+  "needs": "a Cloud task waiting for approval or input",
+  "note": "The drawer chat rows have no needs-input marker in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer, tap 'More' if needed, then 'AGI Work'.",
+   "Tap the 'Needs you' filter.",
+   "Look for a card with a warning border and the line 'Waiting for your approval' or 'Waiting for connector input'.",
+   "Compare with Expected: blocked items are marked."
+  ],
+  "where": "Open navigation drawer > 'More' > 'AGI Work' > 'Needs you' filter"
+ },
+ "S5.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "Unread"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Mark as read"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Open conversation: {{title}}, unread"
+   }
+  ],
+  "needs": "a chat with a new reply you have not opened",
+  "note": "The code read does not confirm that opening a chat clears the dot by itself; only the Mark as read action was confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer and find a row with a small dot (unread).",
+   "Long press the row and tap 'Mark as read'.",
+   "Look again: the dot should be gone.",
+   "Compare with Expected: unread marker clears when read."
+  ],
+  "where": "Open navigation drawer > a chat row with a dot; or 'See all chats' > 'Unread' filter"
+ },
+ "S5.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Move to project"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Archive"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/ChatsListScreen.tsx",
+    "text": "More actions for"
+   }
+  ],
+  "needs": "a signed-in account with chats; Archive and Share show only for Cloud chats",
+  "note": "Drawer rows have no visible overflow button; the \u22ef button exists only on the chats list. Share is shown only for non-temporary Cloud chats.",
+  "reachable": "yes",
+  "steps": [
+   "Long press a chat row in the drawer.",
+   "Read the actions: Rename, Pin, Move to project, Duplicate, Mark as read, Archive (Cloud), Delete.",
+   "Or open 'See all chats' and tap the row's 'More actions for' button.",
+   "Compare with Expected: share, rename, pin, archive, move and delete are present."
+  ],
+  "where": "Open navigation drawer > long press a chat row (actions sheet); or 'See all chats' > the row's 'More actions for' button"
+ },
+ "S5.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/conversation-actions/useConversationActions.ts",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx",
+    "text": "Chat title"
+   }
+  ],
+  "needs": "a signed-in account with a chat",
+  "note": "No Escape-key cancel was found in the code; the inline field cancels on blur, and Done saves.",
+  "reachable": "yes",
+  "steps": [
+   "Long press a chat row in the drawer.",
+   "Tap 'Rename'.",
+   "Type a new title and press the Done key on the keyboard.",
+   "Compare with Expected: the new title shows in the row and persists after reopening."
+  ],
+  "where": "Open navigation drawer > long press a chat row > 'Rename'; the title becomes an editable 'Chat title' field"
+ },
+ "S5.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/notifications/index.tsx",
+    "text": "Go back"
+   }
+  ],
+  "needs": "none",
+  "note": "No forward navigation control was found in the code read; back is the only in-app history control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then open a sub-page such as Workspace.",
+   "Tap the back control at the top left (labelled 'Go back' on screens that set it) or swipe from the left edge on iPhone.",
+   "Look at the screen: it should return to the previous screen.",
+   "Look for a forward control: none was found in the code read."
+  ],
+  "where": "'Go back' button on screens that have one (for example the Notifications screen); Android hardware back button"
+ },
+ "S5.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/search/mobileDestinations.ts",
+    "text": "Notifications"
+   },
+   {
+    "file": "apps/mobile/app/(app)/notifications/index.tsx",
+    "text": "Mark all as read"
+   }
+  ],
+  "needs": "an account with notifications",
+  "note": "On a phone the drawer menu button shows the unread count in its label but does not open notifications; the notification route is reached through search.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer and tap the search icon.",
+   "Type 'Notifications' and tap the result.",
+   "Look at the list: unread rows are marked 'Unread,' in their label.",
+   "Tap 'Mark as read' on a row, or 'Mark all as read', and check the unread state clears."
+  ],
+  "where": "Open navigation drawer > search icon > type 'Notifications' > the 'Notifications' result (phone); on tablet the 'Open notifications' pip button"
+ },
+ "S5.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/profile/index.tsx",
+    "text": "Profile"
+   },
+   {
+    "file": "apps/mobile/app/(app)/profile/index.tsx",
+    "text": "Subscription"
+   },
+   {
+    "file": "apps/mobile/app/(app)/profile/index.tsx",
+    "text": "Log Out"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The drawer footer has no profile control; the entry is the Settings profile header.",
+  "reachable": "yes",
+  "steps": [
+   "Tap the button labelled 'Open navigation drawer', then tap 'Settings'.",
+   "Tap your profile header at the top of Settings.",
+   "Look at the 'Profile' screen: 'Chats' and 'Messages' counts and the AGI Cloud section with 'Subscription' and 'Log Out'.",
+   "Tap 'Log Out' and check the confirmation text, then dismiss it without confirming. Compare with Expected."
+  ],
+  "where": "Open navigation drawer > 'Settings' > the profile header at the top > 'Profile' screen"
+ },
+ "S5.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/about.tsx",
+    "text": "Help Center"
+   },
+   {
+    "file": "apps/mobile/app/(app)/about.tsx",
+    "text": "Service Status"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/presentation.ts",
+    "text": "Report App Issue"
+   }
+  ],
+  "needs": "none",
+  "note": "No keyboard-shortcuts item and no separate support-contact item was found on the About screen; the 'Support' heading is the only group.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer, tap 'Settings', then 'About'.",
+   "Look at the 'Support' section.",
+   "Tap 'Report App Issue' to check that the feedback form opens, then go back.",
+   "Compare with Expected: help centre, support contact, feedback and shortcuts are in one place."
+  ],
+  "where": "Settings > 'About' > 'Support' section ('Help Center', 'Service Status', 'Report App Issue')"
+ },
+ "S5.31": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a Free account signed in on a build with native purchases, in Cloud mode",
+  "note": "Owner hold: FEATURES.billing is false in apps/mobile/lib/v1FeatureFlags.ts, so Upgrade leads to the Subscription screen (apps/mobile/app/(app)/settings/cloud-billing.tsx), not a live purchase flow.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to a Free Cloud account and switch the drawer to Cloud.",
+   "Open the drawer and look at the bottom: 'Upgrade' appears beside 'Settings'.",
+   "Tap 'Upgrade'.",
+   "Compare with Expected: the plan upgrade flow opens (currently the Subscription screen)."
+  ],
+  "where": "Open navigation drawer > 'Upgrade' chip at the bottom of the drawer, next to 'Settings'"
+ },
+ "S5.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/edge-cases/components/copy.ts",
+    "text": "You're offline. Local chats still work on this device."
+   }
+  ],
+  "needs": "a device or simulator whose network you can switch off",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Turn off Wi-Fi or mobile data on the device.",
+   "Look at the top of the screen for the banner.",
+   "Turn the network back on.",
+   "Compare with Expected: the banner clears when back online."
+  ],
+  "where": "Any screen after sign-in: turn off the device's Wi-Fi or network"
+ },
+ "S5.35": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/shared/components/DrawerButton.tsx",
+    "text": "Open navigation drawer"
+   }
+  ],
+  "needs": "a Free or paid account signed in; phone width (below the tablet split-view threshold)",
+  "note": "\"Open navigation drawer\" is an accessibility label, not visible text; the button shows only a menu icon. The code opens the drawer with a Back/Escape handler (src/features/shell/useDrawerDismiss.ts), but I did not confirm from code where focus lands after closing.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Chat screen on a phone-width window (or an iPhone).",
+   "Tap the menu button at the top left of the header. It has no visible words; its accessibility label is \"Open navigation drawer\".",
+   "Check that navigation slides in from the left as a drawer over the content.",
+   "Press Escape on a keyboard, or tap the dimmed area beside the drawer, or use the Back gesture or key.",
+   "Check that the drawer closes and focus returns to the content behind it, as Expected says."
+  ],
+  "where": "Any main screen on a phone-width window (for example Chat) > tap the menu button at the top left of the header, labelled \"Open navigation drawer\" for screen readers"
+ },
+ "S5.37": {
+  "labels": [],
+  "needs": "a tablet, or a window wide enough for the permanent sidebar",
+  "note": "This is a layout rule with no control of its own: src/shared/hooks/useResponsiveLayout.ts sets usesPersistentDrawer when the viewport is wide enough for the drawer width plus a minimum content width, and app/(app)/_layout.tsx uses drawerType 'permanent' when it is true. I did not read the exact width constants in this pass, and I did not confirm whether the menu button is hidden on the permanent sidebar.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the app on an iPad, or resize the window to a wide size.",
+   "Sign in and look at the left edge of the Chat screen.",
+   "Check that the navigation list stays visible next to the content.",
+   "Make the window narrow again and check that navigation returns to a slide-in drawer."
+  ],
+  "where": "Tablet or wide window (iPad, or a resized window wide enough for the permanent sidebar) > the navigation sidebar stays on the left beside the content instead of a phone drawer"
+ },
+ "S5.38": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Share link"
+   }
+  ],
+  "needs": "a paid or Cloud account; a temporary cloud chat; a second app to open the link from (for example Notes)",
+  "note": "Share link appears only for temporary cloud chats in the code I read. I did not find a stable link control for projects or tasks in apps/mobile, and the link route apps/mobile/app/(app)/open/[target]/[id].tsx redirects to home for an invalid target or id. The app scheme is agiworkforce and the https://agiworkforce.com/open/ prefix is declared in apps/mobile/app.config.js.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with Cloud mode on, and open a temporary cloud chat.",
+   "Open the chat's action menu from the screen header.",
+   "Tap \"Share link\" and copy the link that appears.",
+   "Open that link on the phone, or in another app that opens links.",
+   "Check that the same chat opens directly in the app, as Expected says."
+  ],
+  "where": "Open a temporary cloud chat > its menu > \"Share link\"; then open the copied link on the phone (the https://agiworkforce.com/open/... address opens the app)"
+ },
+ "S5.39": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "This chat is not available"
+   },
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Project unavailable"
+   },
+   {
+    "file": "apps/mobile/app/+not-found.tsx",
+    "text": "Page Not Found"
+   }
+  ],
+  "needs": "a second account, or a conversation or project that was deleted; for the missing page, a way to open an unknown address",
+  "note": "I did not confirm how a person types an unknown address into the app, so the missing-page step may need a tester-side link. The loading text \"Loading Cloud project\" is in apps/mobile/app/(app)/projects/[id].tsx, and the chat loading state is a message skeleton in apps/mobile/app/(app)/chat/[id].tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an account that cannot see a chat or project (or use one that was deleted).",
+   "Open that chat or project from its link.",
+   "Look for the loading state first (\"Loading Cloud project\" or the message skeleton), then for the unavailable screen.",
+   "Check that the message on screen matches Expected: a clear unavailable message, not a blank screen.",
+   "For a missing page, open an address the app does not have and check that \"Page Not Found\" appears with a \"Go Home\" button."
+  ],
+  "where": "Open a chat or project that is gone or not in this account (for example from an old link) > \"This chat is not available\" or \"Project unavailable\" message; an address the app does not have > \"Page Not Found\" with \"Go Home\""
+ }
+}

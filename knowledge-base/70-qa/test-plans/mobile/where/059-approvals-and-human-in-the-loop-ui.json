@@ -1,0 +1,534 @@
+{
+ "S59.01": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a signed-in account that can use tools",
+  "note": "The quoted code lines in the plan are stale; the buttons are built in apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that can use tools (AGI Cloud).",
+   "Set Settings > Capabilities > Action approvals to Ask before every action.",
+   "Ask the agent for an action that needs approval, for example a write.",
+   "Tap Allow once on that one card.",
+   "Look: only that call runs, and the reply continues with its result."
+  ],
+  "where": "Chat > the tool call card in the transcript > Allow once or Deny"
+ },
+ "S59.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a Cloud task run paused for approval with several pending calls",
+  "note": "Deny is applied to all pending calls in the same way; the tab is labelled AGI Work, not Tasks.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap AGI Work (shown only when cloud tasks are on).",
+   "Open a run that has Waiting for your approval.",
+   "Read the listed tool calls in that section.",
+   "Tap Approve (it approves every pending call of that run at once).",
+   "Look: the run continues and the pending calls are no longer listed as waiting."
+  ],
+  "where": "Drawer > AGI Work > open a run labelled Waiting for your approval > Approve"
+ },
+ "S59.03": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow for this chat"
+   }
+  ],
+  "needs": "a Cloud account with a tool that asks for approval",
+  "note": "The button appears only when the server offers the session scope for that tool.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with tools and trigger an approval for a tool.",
+   "Tap Allow for this chat on the card.",
+   "If the tool is marked destructive, confirm in the dialog that opens.",
+   "Ask the agent to use the same tool again in the same chat.",
+   "Look: the second call runs without a new card asking first."
+  ],
+  "where": "Chat > the tool call card > Allow for this chat"
+ },
+ "S59.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Allow"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Block"
+   }
+  ],
+  "needs": "a Cloud account with a connected app",
+  "note": "Code shows allow/ask/block per tool only; no single app-wide setting was found. Unset tools follow Action approvals.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to the Cloud group, then tap Connectors.",
+   "Open a connected app.",
+   "Under Tool permissions, find a tool and read its Policy row.",
+   "Tap Allow, Ask or Block on that tool.",
+   "Look: the row shows the new choice, and the tool follows it on its next run."
+  ],
+  "where": "Settings > Cloud > Connectors > open a connector > Tool permissions"
+ },
+ "S59.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/capabilities/index.tsx",
+    "text": "Action approvals"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Run read-only actions without asking"
+   }
+  ],
+  "needs": "a signed-in Cloud account; a second device for the cross-device check",
+  "note": "The sync code is in apps/mobile/src/features/settings/tool-approvals/useToolApprovalPolicySync; I did not read its storage details, so cross-device persistence is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Capabilities, then tap Action approvals.",
+   "Choose Run read-only actions without asking.",
+   "Close the screen, force-quit the app and open it again.",
+   "Open Action approvals again.",
+   "Look: the same choice is still selected. Repeat on a second signed-in device if you have one."
+  ],
+  "where": "Settings > Capabilities > Action approvals"
+ },
+ "S59.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Ask before every action"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Run read-only actions without asking"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Skip approvals"
+   }
+  ],
+  "needs": "a signed-in Cloud account",
+  "note": "Skip approvals is disabled when the workspace blocks it. The short composer labels (Ask, Auto, Skip) are defined in the same file, but I did not find the composer control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Capabilities, then tap Action approvals.",
+   "Read the three choices: Ask before every action, Run read-only actions without asking, Skip approvals.",
+   "Tap each choice in turn; a Recommended tag sits on Ask before every action.",
+   "Look: the selected choice moves, and the Safety default card below updates to match."
+  ],
+  "where": "Settings > Capabilities > Action approvals"
+ },
+ "S59.10": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Run read-only actions without asking"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Reads, searches, page fetches and sandboxed code run on their own; writes still ask."
+   }
+  ],
+  "needs": "a signed-in Cloud account with a tool that reads and one that writes",
+  "note": "No separate mode with this name exists; the behaviour is the middle option of the same selector.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Capabilities, then tap Action approvals.",
+   "Tap Run read-only actions without asking.",
+   "In a chat, ask the agent to search or read something, then to write or send something.",
+   "Look: the read runs with no card; the write stops at an approval card."
+  ],
+  "where": "Settings > Capabilities > Action approvals > Run read-only actions without asking"
+ },
+ "S59.11": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Run read-only actions without asking"
+   }
+  ],
+  "needs": "a signed-in Cloud account",
+  "note": "Same control as S59.10; the risk split comes from the server review.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Capabilities, then tap Action approvals.",
+   "Tap Run read-only actions without asking.",
+   "In a chat, ask for a search or page read, then for a riskier action such as a delete or a purchase.",
+   "Look: the search runs by itself; the riskier action shows a card and waits."
+  ],
+  "where": "Settings > Capabilities > Action approvals > Run read-only actions without asking"
+ },
+ "S59.12": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/tool-approval-presentation.ts",
+    "text": "No parameters."
+   }
+  ],
+  "needs": "a signed-in Cloud account with a tool that asks for approval",
+  "note": "The risk label text comes from TOOL_APPROVAL_RISK_LABELS, which I did not locate in packages, so the exact wording is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent for an action that needs approval.",
+   "Read the card: the tool summary line, the risk label, and the parameter rows.",
+   "Check any notice (for example the private-data notice for high risk).",
+   "Look: the card says what the tool will do and why it asks."
+  ],
+  "where": "Chat > the tool call card (above the Allow once and Deny buttons)"
+ },
+ "S59.13": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   }
+  ],
+  "needs": "a signed-in account with a send tool that needs approval",
+  "note": "Row names come from the argument key (humanised), not a fixed string; the recipient key list is in packages/contracts/types/src/tool-approval-stakes.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to send an email or message that needs approval.",
+   "Read the card before tapping anything.",
+   "Find the row for recipients (To, Cc, Bcc, channel or attendees).",
+   "Look: the exact address or name appears above Allow once."
+  ],
+  "where": "Chat > the approval card for a send (email, message or invite) > read the To row above Allow once"
+ },
+ "S59.14": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx",
+    "text": "Raw JSON"
+   }
+  ],
+  "needs": "a signed-in account with a tool that reaches an outside service",
+  "note": "The destination is shown as a parameter row, not as a dedicated label; the stakes code was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent for an action that sends data to a web address or service.",
+   "Read the parameter rows on the card, in monospace.",
+   "Find the url, host or target row.",
+   "Look: the exact destination is shown before you tap Allow once."
+  ],
+  "where": "Chat > the approval card for an outbound action > read the parameter rows above Allow once"
+ },
+ "S59.15": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   }
+  ],
+  "needs": "a signed-in account with a payment tool that needs approval",
+  "note": "Amount and item rows come from argument keys in packages/contracts/types/src/tool-approval-stakes.ts; the exact wording depends on the tool.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent for a purchase or payment that needs approval.",
+   "Read the card before tapping anything.",
+   "Find the amount row (for example Amount) and the item row.",
+   "Look: the exact amount and what is bought are shown before approval."
+  ],
+  "where": "Chat > the approval card for a payment or purchase > read the amount row above Allow once"
+ },
+ "S59.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx",
+    "text": "Raw JSON"
+   }
+  ],
+  "needs": "a signed-in account with a command or code tool that needs approval",
+  "note": "Where the command runs is not shown as its own row; only the arguments are shown.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to run a command that needs approval.",
+   "Read the parameter rows on the card (monospace text).",
+   "Open Raw JSON to see the full arguments.",
+   "Look: the exact command line is shown before Allow once."
+  ],
+  "where": "Chat > the approval card for a command > read the parameter rows above Allow once"
+ },
+ "S59.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx",
+    "text": "Raw JSON"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   }
+  ],
+  "needs": "a signed-in account with a write tool that needs approval",
+  "note": "Records are shown as argument rows; there is no dedicated list of affected records in the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to change or create files or records that needs approval.",
+   "Read the path and item rows on the card.",
+   "Open Raw JSON if you need the full arguments.",
+   "Look: the exact file or record names are shown before approval."
+  ],
+  "where": "Chat > the approval card for a write > read the parameter rows and any stakes above Allow once"
+ },
+ "S59.18": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   }
+  ],
+  "needs": "a signed-in account with a file edit tool that needs approval",
+  "note": "The diff shows only when the arguments include a before and after shape (detectFileDiff); it is drawn by apps/mobile/src/features/chat/components/ToolFileDiffBlock.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to edit a file that needs approval.",
+   "Look at the card before tapping anything.",
+   "Read the proposed diff block (removed and added lines).",
+   "Look: the proposed change is visible before you tap Allow once."
+  ],
+  "where": "Chat > the approval card for a file edit > the diff block above Allow once"
+ },
+ "S59.19": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allowed"
+   }
+  ],
+  "needs": "a signed-in Cloud account with a tool that asks for approval",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent for an action that needs approval.",
+   "Tap Allow once.",
+   "Look: the card changes to Allowed and the tool runs; the result appears in the transcript."
+  ],
+  "where": "Chat > the approval card > Allow once"
+ },
+ "S59.20": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Denied"
+   }
+  ],
+  "needs": "a signed-in Cloud account with a tool that asks for approval",
+  "note": "The model's reply to a denial was not verified from code.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent for an action that needs approval.",
+   "Tap Deny.",
+   "Look: the card shows Denied, the action does not run, and the agent replies that it was refused."
+  ],
+  "where": "Chat > the approval card > Deny"
+ },
+ "S59.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx",
+    "text": "Add guidance"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx",
+    "text": "Tell the agent what to do instead"
+   }
+  ],
+  "needs": "a signed-in Cloud account with a tool that asks for approval",
+  "note": "The agent's continuation after guidance is not verified from the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent for an action that needs approval.",
+   "Tap Add guidance under the card.",
+   "Type what to do instead, for example Use the draft folder.",
+   "Tap Deny (or Allow once) to send it.",
+   "Look: the guidance is sent with the decision and the agent continues from it."
+  ],
+  "where": "Chat > the approval card > Add guidance > type in the box > Allow once or Deny"
+ },
+ "S59.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ToolCallTimeline.tsx",
+    "text": "This approval request expired or is no longer active."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "text": "Approval expired"
+   }
+  ],
+  "needs": "a pending approval that is left unanswered",
+  "note": "I did not find a fixed time limit in the code read; expiry looks tied to the turn no longer being live (isApprovalTurnLive in stores/chat/chatExecutionStore.ts). Unverified.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Leave an approval card unanswered in a chat for a long time, or let the run pause or end.",
+   "Reopen the chat.",
+   "Look: the card shows an expired line and its Allow and Deny buttons are not usable."
+  ],
+  "where": "No control: a pending approval that is no longer live shows an expired line in the chat"
+ },
+ "S59.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/tool-approvals/ApprovalHistory.tsx",
+    "text": "Approval history"
+   }
+  ],
+  "needs": "a signed-in Cloud account with past approvals",
+  "note": "The section is hidden in local-only mode, and it shows a retry message when it fails to load.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Capabilities, then tap Action approvals.",
+   "Scroll to Approval history.",
+   "Tap an earlier entry if the list offers it.",
+   "Look: past requests appear with their decisions."
+  ],
+  "where": "Settings > Capabilities > Action approvals > Approval history"
+ },
+ "S59.25": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Unset tools follow your Action approvals setting."
+   }
+  ],
+  "needs": "a Cloud account with a connector tool set to Allow or an always-allow grant",
+  "note": "The reset control's visible text was not found; only its accessibility label Reset <tool> to default was. Folder or site grants were not found in mobile code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, go to Cloud, then tap Connectors.",
+   "Open a connector that has a tool set to Allow.",
+   "Under Tool permissions, find the tool and tap its reset control (labelled Reset to default).",
+   "Ask the agent to use that tool in a chat.",
+   "Look: the approval card asks again."
+  ],
+  "where": "Settings > Cloud > Connectors > open a connector > Tool permissions > reset a tool"
+ },
+ "S59.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   }
+  ],
+  "needs": "two signed-in devices on the same account and a paused task",
+  "note": "The result on device A depends on a server refresh; I did not confirm the refresh path, so the first-device update is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task that pauses for approval on device A.",
+   "Sign in to the same account on device B and open AGI Work.",
+   "Open the same run and tap Approve.",
+   "Look: device A shows the run moving on and the decision recorded."
+  ],
+  "where": "Drawer > AGI Work > open a run labelled Waiting for your approval > Approve (on a second device)"
+ },
+ "S59.28": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Always allow"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/tool-approval-presentation.ts",
+    "text": "This tool can change or delete data, and its effect may not be reversible."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx",
+    "text": "Cancel"
+   }
+  ],
+  "needs": "a signed-in account with a destructive tool that asks for approval",
+  "note": "The code shows a confirmation dialog for destructive tools; it does not remove the permanent option or force a re-ask. The high-risk private-data notice is in packages/contracts/types/src/tool-approval-policy.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the agent to run a destructive tool (a delete or change that cannot be undone).",
+   "Tap Always allow or Allow for this chat on the card.",
+   "Read the dialog title and message; it has Cancel and a confirm button.",
+   "Look: the dialog warns before the permission is saved; Cancel leaves the tool asking."
+  ],
+  "where": "Chat > the approval card for a destructive tool > Always allow or Allow for this chat > confirmation dialog"
+ },
+ "S59.30": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   }
+  ],
+  "needs": "a signed-in Cloud account with a multi-step task that asks for approval",
+  "note": "Resume behaviour is in apps/mobile/stores/chat/chatExecutionStore.ts; I did not trace it fully.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the agent for a multi-step task that includes one approval.",
+   "Tap Allow once on that card.",
+   "Look: the same assistant reply continues below the card, without starting a new message."
+  ],
+  "where": "No control of its own: the same chat message continues after Allow once, Deny or Add guidance"
+ },
+ "S59.31": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allowed"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Denied"
+   }
+  ],
+  "needs": "a signed-in Cloud account with two approval requests",
+  "note": "The outcome text after a run was not traced in detail.",
+  "reachable": "yes",
+  "steps": [
+   "Approve one action with Allow once and deny another with Deny.",
+   "Look at each card after the decision.",
+   "Read the decided label (Allowed or Denied) and the result or outcome line below it."
+  ],
+  "where": "Chat > the approval card after a decision (the transcript row keeps the decision)"
+ }
+}

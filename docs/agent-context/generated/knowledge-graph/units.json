@@ -2695,12 +2695,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 252,
+      "files": 254,
       "roles": {
         "asset": 1,
         "config": 21,
-        "doc": 184,
-        "generated": 45,
+        "doc": 185,
+        "generated": 46,
         "other": 1
       }
     },
@@ -2754,6 +2754,29 @@
         "other": 1,
         "source": 2,
         "test": 1
+      }
+    },
+    {
+      "path": "knowledge-base",
+      "name": "knowledge-base",
+      "kind": "directory",
+      "purpose": null,
+      "owner": null,
+      "trustBoundary": null,
+      "status": null,
+      "entry": [],
+      "agentsDoc": "AGENTS.md",
+      "checks": [],
+      "dependsOn": [],
+      "dependents": [],
+      "lanes": [],
+      "files": 2804,
+      "roles": {
+        "asset": 2,
+        "config": 553,
+        "doc": 2169,
+        "other": 42,
+        "source": 38
       }
     },
     {

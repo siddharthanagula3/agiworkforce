@@ -1,0 +1,242 @@
+{
+ "S62.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/subagent.rs",
+    "text": "Subagent tasks"
+   },
+   {
+    "file": "apps/cli/src/subagent.rs",
+    "text": "Usage: /workflow <goal>. Plans the goal into stages and runs each step as a subagent."
+   }
+  ],
+  "needs": "a session where subagents can start (a model run that can call the task tool)",
+  "note": "The list belongs to the session. Parent ownership is implied, not labelled; the Code line's registry.rs:484 is the /tasks list function.",
+  "reachable": "yes",
+  "steps": [
+   "Start agi and send a request that makes the model spawn subagents, for example /workflow <goal>.",
+   "When subagents have started, type /tasks and press Enter.",
+   "Look for the line \"Subagent tasks (N)\" and the rows under it.",
+   "Compare with Expected: the rows are the child tasks of this session. No line on screen names a parent task."
+  ],
+  "where": "agi, then type /tasks"
+ },
+ "S62.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/subagent.rs",
+    "text": "Subagent tasks"
+   }
+  ],
+  "needs": "a session with at least one subagent",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a run with at least one subagent, for example /workflow <goal>.",
+   "Type /tasks and press Enter.",
+   "Look for \"Subagent tasks (N)\" with one row per child: id, role, status and description.",
+   "Compare with Expected: each child working under the task appears as a row."
+  ],
+  "where": "agi, then type /tasks"
+ },
+ "S62.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/subagent.rs",
+    "text": "Task {id} [{status}] {description}"
+   }
+  ],
+  "needs": "a session with at least one subagent",
+  "note": "The role column has no heading in the list output.",
+  "reachable": "yes",
+  "steps": [
+   "Run /tasks and read the second column of each row, for example reviewer or general-purpose.",
+   "Type /tasks show <id> with a row id from the list.",
+   "Look for the header \"Task <id> [status] role: description\".",
+   "Compare with Expected: each child shows its role label. The list has no column heading for role."
+  ],
+  "where": "agi, then type /tasks"
+ },
+ "S62.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/subagent.rs",
+    "text": "Model {} \u00b7 {} in / {} out tokens \u00b7 {}"
+   }
+  ],
+  "needs": "a finished subagent",
+  "note": "The Model line appears only after the task has a result; a running or failed task with no usage shows no model.",
+  "reachable": "yes",
+  "steps": [
+   "Run /tasks and copy the id of a finished subagent.",
+   "Type /tasks show <id> and press Enter.",
+   "Look for the line starting with \"Model\" that gives the model name, tokens and cost.",
+   "Compare with Expected: the model name labels that agent. The list view does not show the model."
+  ],
+  "where": "agi, then type /tasks show <id>"
+ },
+ "S62.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "working at once"
+   }
+  ],
+  "needs": "a session where two or more subagents run at the same time",
+  "note": "/tasks prints a snapshot into the chat; it does not refresh. The live cue shows only a count, not per-agent status.",
+  "reachable": "yes",
+  "steps": [
+   "Start a run that spawns subagents and, while they are still working, type /tasks.",
+   "Read the [running] status on each row.",
+   "Wait, then type /tasks again and read the status change, for example [completed] or [failed: ...].",
+   "Compare with Expected: each agent has its own status. Also watch the working line above the prompt for the count of subagents working at once."
+  ],
+  "where": "agi, then type /tasks"
+ },
+ "S62.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/subagent.rs",
+    "text": "Its whole conversation ({} steps): /tasks transcript {id}"
+   }
+  ],
+  "needs": "two or more finished subagents",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Run /tasks and copy the id of a finished subagent.",
+   "Type /tasks show <id> and press Enter.",
+   "Read the block under the header: it holds that task's result text, then Files modified if any.",
+   "Repeat for a second id and compare with Expected: each agent's result is its own block."
+  ],
+  "where": "agi, then type /tasks show <id>"
+ },
+ "S62.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/subagent.rs",
+    "text": "on your subscription"
+   }
+  ],
+  "needs": "two or more finished subagents",
+  "note": "Usage appears only after the agent finishes.",
+  "reachable": "yes",
+  "steps": [
+   "Run /tasks show <id> for a finished subagent.",
+   "Read the Model line: input and output tokens, then the cost in credits or \"on your subscription\".",
+   "Run the same for a second finished subagent.",
+   "Compare with Expected: usage is shown per agent. No session total per agent appears in this view."
+  ],
+  "where": "agi, then type /tasks show <id>"
+ },
+ "S62.09": {
+  "labels": [],
+  "needs": "two or more subagents running at the same time",
+  "note": "Searched apps/cli/src for a live multi-task panel. Found only the /tasks text list (a snapshot) and the working-line count \"working at once\" in tui_app.rs. No single live overview of several running tasks was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S62.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/approval_overlay.rs",
+    "text": "Tool Approval"
+   }
+  ],
+  "needs": "a subagent that asks for a permission",
+  "note": "The approval box floats over the chat, not an overview. The overlay code has no subagent-specific label, so the box may not show which agent is asking.",
+  "reachable": "yes",
+  "steps": [
+   "Start a run where a subagent needs permission, for example /workflow <goal> that edits files, in a permission mode that asks.",
+   "When the \"Tool Approval\" box appears over the chat, read its key list.",
+   "Press the key that approves the request.",
+   "Type /tasks and check the waiting task now shows [running] or a later status. Compare with Expected: unblocked without leaving the view."
+  ],
+  "where": "Any request that needs approval > \"Tool Approval\" box"
+ },
+ "S62.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Transcript of task"
+   },
+   {
+    "file": "apps/cli/src/subagent.rs",
+    "text": "Its whole conversation ({} steps): /tasks transcript {id}"
+   }
+  ],
+  "needs": "a finished subagent that kept a transcript",
+  "note": "If the task kept no transcript the app says so. The drill-down is a typed command, not a click.",
+  "reachable": "yes",
+  "steps": [
+   "Run /tasks and copy the id of a finished subagent.",
+   "Type /tasks show <id> and read the last line, which gives the step count and the command.",
+   "Type /tasks transcript <id> and press Enter.",
+   "Compare with Expected: the full conversation of that task appears, step by step."
+  ],
+  "where": "agi, then type /tasks transcript <id>"
+ },
+ "S62.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "answering the side question"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Usage: /btw <question>, ask a side question"
+   }
+  ],
+  "needs": "a request that takes a while to answer",
+  "note": "The code cited tui_app.rs:7304 is an input-handling line, not a fork. /btw is the closest match. /background (/bg) hands the whole conversation to a background run and clears the chat, so it does not match.",
+  "reachable": "yes",
+  "steps": [
+   "Send a long request to the main chat so it keeps working.",
+   "While it is working, type /btw <question>, for example /btw what is the project name, and press Enter.",
+   "Read the status \"answering the side question\" and the side answer in the chat.",
+   "Compare with Expected: the side question is answered while the main request keeps running."
+  ],
+  "where": "agi, then type /btw <question>"
+ },
+ "S62.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Branched conversation"
+   }
+  ],
+  "needs": "a conversation with messages and session saving on (not --no-session-persistence)",
+  "note": "The branch is created as a separate managed session. It is not opened interactively in the current screen.",
+  "reachable": "yes",
+  "steps": [
+   "Send a few messages so the conversation has content.",
+   "Type /fork and press Enter.",
+   "Read the reply \"Branched conversation '<name>' as managed session <id>. Resume with: agiworkforce --session <id>\".",
+   "Compare with Expected: the branch is not continued on the same screen; resume it with the printed command in a new run."
+  ],
+  "where": "agi, then type /fork (also /branch)"
+ },
+ "S62.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Usage: /advisor <question>, consult a catalog-selected advisor model"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Advisor failed: {}"
+   }
+  ],
+  "needs": "an advisor model available in the catalog",
+  "note": "The agent can also call the advisor tool itself; that path is not a typed step.",
+  "reachable": "yes",
+  "steps": [
+   "Type /advisor followed by a question, for example /advisor is this plan safe to ship?, and press Enter.",
+   "Wait for the advisor reply in the chat.",
+   "Read the end of the reply, which shows the line \"[advisor model: <name>]\".",
+   "Compare with Expected: the answer from the advisor model is shown. If it fails, the chat shows \"Advisor failed:\"."
+  ],
+  "where": "agi, then type /advisor <question>"
+ }
+}

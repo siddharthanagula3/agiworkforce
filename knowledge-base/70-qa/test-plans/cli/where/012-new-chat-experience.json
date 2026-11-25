@@ -1,0 +1,277 @@
+{
+ "S12.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Welcome to AGI"
+   },
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Start a new conversation"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal, go to any folder, and type \"agi\" then press Enter.",
+   "Look at the first screen: it shows \"Welcome to AGI\", the Model and Folder rows, and no earlier messages.",
+   "Check that the composer is ready for typing below the start content.",
+   "Type \"/new\" and press Enter, then confirm the conversation area is empty again."
+  ],
+  "where": "Run \"agi\" in a folder; the first screen shows \"Welcome to AGI\" with an empty chat area and the composer. Type \"/new\" (\"Start a new conversation\") to get a fresh empty chat."
+ },
+ "S12.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Welcome to AGI"
+   },
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Show or set how replies address you and read (/personalize set <field> <value>)"
+   }
+  ],
+  "needs": "none",
+  "note": "No greeting line with a name was found in the start-screen code, so the neutral-greeting check may only be a no-name check. The /personalize description is the only personal-setting text found.",
+  "reachable": "unsure",
+  "steps": [
+   "Type \"agi\" in a terminal and look at the first screen: the code shows \"Welcome to AGI\", Model and Folder rows and no name line.",
+   "Type \"/personalize\" to see how replies address you and check that no personal detail appears on the new-chat screen.",
+   "Compare with Expected: the greeting should be neutral with no personal details."
+  ],
+  "where": "Run \"agi\" (start screen shows \"Welcome to AGI\"); personal-name setting is under \"/personalize\"."
+ },
+ "S12.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the folders you worked in most recently, to start a session in one with agi -C."
+   }
+  ],
+  "needs": "a folder you have worked in before",
+  "note": "The code gives a command-line list only. The start screen's \"Recent activity\" shows sessions, not projects. Searched apps/cli/src for recent-project shortcuts on the start screen; none found.",
+  "reachable": "unsure",
+  "steps": [
+   "Type \"agi projects recent\" in a terminal and press Enter.",
+   "Read the list of folders it prints (default limit 10).",
+   "Compare with Expected: the code only lists folders for \"agi -C\"; it does not open a project or start a chat from the new-chat screen."
+  ],
+  "where": "\"agi projects recent\" in a terminal lists recent folders; no recent-project shortcut was found on the new-chat screen."
+ },
+ "S12.07": {
+  "labels": [],
+  "needs": "a folder with recently edited files",
+  "note": "Ordering is by file modification time (apps/cli/src/mentions.rs), not recently used files. The picker label text was not found as a literal string.",
+  "reachable": "yes",
+  "steps": [
+   "Start \"agi\" in a git folder where you changed a few files recently.",
+   "Type \"@\" in the composer.",
+   "Look at the picker: the most recently modified files should appear at the top.",
+   "Compare with Expected: the code ranks by file modification time, not by files you used in chat, so a file you only read will not move up."
+  ],
+  "where": "In the composer, type \"@\" to open the file picker; recently changed files are listed first."
+ },
+ "S12.10": {
+  "labels": [
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Answer from a web search (/search <question>)"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Usage: /search <question>, answer from a web search"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start \"agi\" and type \"/search\" followed by a question, for example \"/search latest release notes\".",
+   "Press Enter to send.",
+   "Look for the answer to be based on a web search (the code sets a flag so only the next message searches).",
+   "Compare with Expected: the search should apply to that one message only."
+  ],
+  "where": "Type \"/search <question>\" in the composer and press Enter."
+ },
+ "S12.12": {
+  "labels": [
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Generate an image (/image <prompt>)"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Nothing generated yet. Try /image a red bicycle."
+   }
+  ],
+  "needs": "none",
+  "note": "No separate image mode was found; the entry is the /image command.",
+  "reachable": "yes",
+  "steps": [
+   "Start \"agi\" and type \"/image a red bicycle\" then press Enter.",
+   "Wait for the generated image to appear, shown as an image chip.",
+   "Type \"/image open\" to open the last generated image.",
+   "Compare with Expected: the code has no image-creation mode; it is a one-shot command, so check whether the send generates an image as described."
+  ],
+  "where": "Type \"/image <prompt>\" in the composer and press Enter (alias \"/imagine\")."
+ },
+ "S12.14": {
+  "labels": [
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Toggle voice input (Whisper)"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The code has both a dictate path and run_voice_mode; the help text describes voice input only.",
+  "reachable": "yes",
+  "steps": [
+   "Start \"agi\" and type \"/voice\" then press Enter.",
+   "Speak into the microphone when prompted.",
+   "Check that your speech is turned into text and a spoken conversation can run.",
+   "Compare with Expected: the code's help text says \"Toggle voice input\", so confirm it starts a voice conversation rather than only input."
+  ],
+  "where": "Type \"/voice\" in the composer (alias \"/v\") to start voice input or voice mode."
+ },
+ "S12.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Plan a goal into steps and run them as subagents"
+   }
+  ],
+  "needs": "none",
+  "note": "Agentic work is reached through slash commands, not a mode choice on the new-chat screen. Whether a blocker applies in a given session was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Start \"agi\" and type \"/workflow\" to see the usage text.",
+   "Type \"/workflow <a goal>\" and press Enter.",
+   "Check that the goal is broken into steps and run as subagents.",
+   "Compare with Expected: the code may refuse the workflow with a blocker message (workflow_blocker), which should be shown on screen."
+  ],
+  "where": "Type \"/workflow <goal>\" in the composer; \"/bg <instruction>\" and \"/thread <instruction>\" are related entries."
+ },
+ "S12.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Folder"
+   }
+  ],
+  "needs": "a code project folder",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal, go to a code project folder, and type \"agi\".",
+   "Look at the first screen for the \"Folder\" row showing this project path.",
+   "Type a coding request, for example \"list the files in this project\".",
+   "Compare with Expected: the agent should work on this repository."
+  ],
+  "where": "Run \"agi\" inside a project folder (or \"agi -C <folder>\"); the start screen shows the Folder row."
+ },
+ "S12.17": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/cli/src for \"temporary\", \"incognito\" and \"private\": no in-chat control found. The flag help is \"Disable session persistence for this run.\" (apps/cli/src/cli_options.rs).",
+  "reachable": "unsure",
+  "steps": [
+   "Type \"agi --no-session-persistence\" in a terminal and start a chat.",
+   "Check whether the chat is kept in history afterwards (for example with \"/history\").",
+   "Compare with Expected: the code only offers this as a launch flag for the whole run, not a switch before or during a chat."
+  ],
+  "where": "Launch with \"agi --no-session-persistence\" (flag only); no in-chat temporary switch was found."
+ },
+ "S12.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Model"
+   },
+   {
+    "file": "crates/agiworkforce-command-registry/src/lib.rs",
+    "text": "Switch active model (/model <model-id>)"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type \"agi\" and look at the first screen's Model row.",
+   "Read the model name shown next to it.",
+   "Type \"/model\" to see the model list and compare the name with what the next message will use.",
+   "Compare with Expected: the model name should be visible before you send a message."
+  ],
+  "where": "Run \"agi\"; the first screen shows the Model row with the model name, and the status line shows it too."
+ },
+ "S12.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Link this directory to an account project by id or name."
+   }
+  ],
+  "needs": "an account project",
+  "note": "No project picker on the new-chat screen was found; searched apps/cli/src for project selection before sending.",
+  "reachable": "unsure",
+  "steps": [
+   "In a terminal, go to the folder for the new chat.",
+   "Type \"agi projects link <project id or name>\" and press Enter.",
+   "Type \"agi\" and check the first screen for the Folder row and the linked project.",
+   "Compare with Expected: the project should be chosen before sending; the code links a folder, not a chat, from the command line."
+  ],
+  "where": "Type \"agi projects link <project>\" in the folder you want to use (no in-chat project picker was found)."
+ },
+ "S12.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "read-only tools only, no file edits. The model plans before acting."
+   }
+  ],
+  "needs": "none",
+  "note": "Mode explanations come from mode_description; no examples were found in the code. The banner appears after cycling, not necessarily on the first screen.",
+  "reachable": "yes",
+  "steps": [
+   "Start \"agi\" and press Shift+Tab once.",
+   "Read the banner that appears, which names the mode and explains it.",
+   "Press Shift+Tab again to cycle through the other modes.",
+   "Compare with Expected: each explanation should appear, but the code has no example text for each mode."
+  ],
+  "where": "Press Shift+Tab on the chat screen to cycle modes; a banner shows each mode's explanation."
+ },
+ "S12.22": {
+  "labels": [],
+  "needs": "a fresh install (first-run setup not yet done)",
+  "note": "Searched apps/cli/src/onboarding.rs for \"tour\", \"tips\" and feature text: none found. The banner text (print_welcome_banner) was not read in full.",
+  "reachable": "unsure",
+  "steps": [
+   "Remove the setup marker or use a fresh install, then type \"agi\".",
+   "Read the welcome banner and each setup step.",
+   "Compare with Expected: the code shows setup choices only; no short feature introduction was found."
+  ],
+  "where": "First-run setup when \"agi\" is started for the first time (steps: welcome banner, trust this folder, choose auth, model, effort, permission mode)."
+ },
+ "S12.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Sign in to get started, open to everyone"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Skip for now"
+   }
+  ],
+  "needs": "a fresh install and no account",
+  "note": "No guest usage limit text was found in the code searched; the only sign-in text is the auth choice and \"not signed in (agi login)\" in the status line (apps/cli/src/tui/tui_app.rs).",
+  "reachable": "unsure",
+  "steps": [
+   "Start \"agi\" for the first time and continue to the auth choice.",
+   "Choose \"Skip for now\" and start a chat.",
+   "Check whether a sign-in prompt or limit message appears, and compare with Expected.",
+   "Type \"/login\" to see the sign-in route."
+  ],
+  "where": "First-run setup, choose \"Skip for now\" or \"AGI cloud\" (Sign in to get started, open to everyone)."
+ }
+}

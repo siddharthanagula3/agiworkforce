@@ -1,0 +1,174 @@
+{
+ "S81.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Compare Plans"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/account-auth/planComparison.ts",
+    "text": "Compare prices and upgrade on Web"
+   }
+  ],
+  "needs": "a signed-in account (the list also opens signed out)",
+  "note": "No \"1x\" wording and no concrete allowance number was found in the plan copy; the baseline appears only by name in \"Same usage as <plan>\" (managed-usage-limits.ts:236) and in the multiplier lines.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Compare Plans\" and choose \"Code: Compare Plans\".",
+   "Read the list. Each row shows the plan name, a usage line, and an Includes or Adds over line.",
+   "Find the usage line on the paid plans. Look for \"Same usage as <plan>\" or \"<n>x more usage than <plan>\" and check that the baseline plan is named.",
+   "Compare with Expected: a plan that is the baseline for 5x/15x should be named with its concrete allowance. The Free row says \"A usage allowance, free models only\"."
+  ],
+  "where": "Command Palette > Code: Compare Plans"
+ },
+ "S81.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Current session"
+   },
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "This week"
+   }
+  ],
+  "needs": "a signed-in paid account is best to see the usage rows",
+  "note": "The code names only the 5-hour session window and the weekly window; the Expected monthly window is not in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Compare Plans\" and choose \"Code: Compare Plans\".",
+   "Read the usage line of a paid plan, for example \"<n>x more usage per session and <m>x more weekly usage than <plan>\".",
+   "Open Code: Account & Usage (Cmd+Shift+P) and read the usage rows \"Current session\" and \"This week\" for the windows.",
+   "Compare with Expected: the copy should name which allowance is multiplied, the current session window and the weekly window. No monthly window was found in the code."
+  ],
+  "where": "Command Palette > Code: Compare Plans"
+ },
+ "S81.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/account-auth/planComparison.ts",
+    "text": "Compare prices and upgrade on Web"
+   }
+  ],
+  "needs": "a signed-in account, ideally on a plan other than the top one, so that the \"Adds over\" line appears",
+  "note": "The feature list is built from billing-catalog.ts; the enforcement of each gate is inner behaviour and is not confirmed from the extension UI.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Compare Plans\" and choose \"Code: Compare Plans\".",
+   "Read the detail line under each plan: \"Includes: ...\", \"Adds over <plan>: ...\" or \"No features beyond <plan>\".",
+   "Compare the feature lists between two plans and check that they differ in features as well as usage.",
+   "Compare with Expected: each difference should be listed. The server-side enforcement of each gate is not visible from the extension and needs the web app or a live test."
+  ],
+  "where": "Command Palette > Code: Compare Plans"
+ },
+ "S81.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Open Actions"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Switch model\u2026"
+   }
+  ],
+  "needs": "a Free account and a paid account, to compare which options are gated",
+  "note": "The Effort row and Switch model row were found in the action sheet; no plan gate on them was found in the code, and the server clamp is inner behaviour.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Open Actions\" and choose \"Code: Open Actions\".",
+   "Under the \"Model\" separator, read the \"Effort: <level>\" row. Its description reads \"Set reasoning effort (low / medium / high / max)\".",
+   "Choose \"Switch model\u2026\" and see which models are listed.",
+   "Compare with Expected: the Effort and model choice should be shown as gated options for some plans. The code does not show a plan gate on these rows, and the server-side clamp of each request is not visible from the UI."
+  ],
+  "where": "Command Palette > Code: Open Actions > Model > Effort: <level>"
+ },
+ "S81.15": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/usage-vocabulary.ts",
+    "text": "Most capable models"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & Usage"
+   }
+  ],
+  "needs": "a paid account with a flagship weekly allowance; the cap-used message needs the allowance used up",
+  "note": "The admission block message is in billing-catalog.ts (flagship_weekly_limit_reached); the cap-used state is hard to reach from the UI and is not confirmed here.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Account & Usage\" and choose \"Code: Account & Usage\".",
+   "Find the row labelled \"Most capable models\" with its usage and reset time.",
+   "Compare its description and limit with the weekly row \"This week\".",
+   "Compare with Expected: the flagship weekly cap should be shown separately and, when used up, the blocked-request message should appear. The row is shown only when the account has a flagship allowance."
+  ],
+  "where": "Command Palette > Code: Account & Usage > \"Most capable models\" row"
+ },
+ "S81.25": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Paid Cloud capabilities are paused until billing is resolved"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Manage billing & subscription"
+   }
+  ],
+  "needs": "a paid account with a subscription that needs attention (for example a failed renewal), which the tester may not be able to create",
+  "note": "No grace-period rule for paid plans was found in the extension. Grace language exists only for enterprise contracts (packages/contracts/types/src/enterprise/contract-lifecycle.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Account & Usage\" and choose \"Code: Account & Usage\".",
+   "Look for a warning row \"<plan> subscription: <status>\" with the description \"Paid Cloud capabilities are paused until billing is resolved\".",
+   "Read the \"Manage billing & subscription\" row and its description.",
+   "Compare with Expected: a failed renewal should show what access remains and how to fix it. The extension shows only that paid capabilities are paused; no grace-period rule or grace length was found for paid plans."
+  ],
+  "where": "Command Palette > Code: Account & Usage > \"<plan> subscription: <status>\" warning row"
+ },
+ "S81.27": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Account & Usage"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Cloud usage"
+   }
+  ],
+  "needs": "the same account signed in on two surfaces (VS Code and the web)",
+  "note": "The extension reads the server plan through /api/usage (apps/extension-vscode/src/utils/api.ts); the sharing itself is inner behaviour seen only as matching values.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in to the VS Code extension with an account that has a paid plan.",
+   "Open Command Palette > Code: Account & Usage and note the \"Plan: <name>\" description on the \"Cloud usage\" or \"Cloud quota\" row.",
+   "Sign in to the same account on the web, and open its usage page.",
+   "Compare with Expected: both surfaces should show the same plan and usage. The per-surface server enforcement is not visible from the UI."
+  ],
+  "where": "Code: Account & Usage shows the plan name, same as the web app for the same account"
+ },
+ "S81.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/account-auth/planComparison.ts",
+    "text": "Compare prices and upgrade on Web"
+   },
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Upgrade for higher capacity"
+   }
+  ],
+  "needs": "a signed-in account on a plan below the top plan",
+  "note": "The \"why a blocked feature needs a plan\" text is in packages/contracts/types/src/billing-catalog.ts and was not confirmed as shown in VS Code.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P, type \"Compare Plans\" and choose \"Code: Compare Plans\".",
+   "Read the detail line of each plan. Plans above your plan show \"Adds over <your plan>: <features>\", and your plan shows its own features.",
+   "Open Code: Open Actions and find \"Upgrade for higher capacity\" (or run Code: Upgrade Your Plan) to see the upgrade prompt.",
+   "Compare with Expected: each plan should explain what it adds, and a blocked feature should say which plan it needs. The blocked-feature wording is in the server copy, not the extension."
+  ],
+  "where": "Command Palette > Code: Compare Plans, then the \"Adds over\" detail of each plan"
+ }
+}

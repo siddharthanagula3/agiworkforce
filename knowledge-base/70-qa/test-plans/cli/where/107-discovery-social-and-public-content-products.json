@@ -1,0 +1,38 @@
+{
+ "S107.13": {
+  "labels": [],
+  "needs": "external-service",
+  "note": "The plan's Code line has no location. I searched apps/cli for attribution, lineage, provenance, 'copied from', 'copied_from' and publisher. The only hits were license text in apps/cli/assets/THIRD_PARTY_NOTICES.txt and Rust test code, so no product screen shows publisher, author, source or version lineage.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S107.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "agi marketplace add <github url>"
+   },
+   {
+    "file": "apps/cli/src/cloud/marketplaces.rs",
+    "text": "Marketplaces on your account"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Marketplaces"
+   }
+  ],
+  "needs": "a signed-in AGI account with the marketplace capability, a public GitHub repository with a marketplace manifest",
+  "note": "The Code line's apps/cli/src/lib.rs:3635 is unrelated: it is the 'Recent project folders' code. The real path is add_marketplace at apps/cli/src/lib.rs:2758 (clap 'marketplace add' at apps/cli/src/lib.rs:2340-2352) and the slash path at apps/cli/src/repl/mod.rs:353. The sources list shows a name and repository URL, but no separate publisher field; the 'Added' line shows only the source name.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI CLI with an account that has the marketplace capability (canUseMarketplace). Without it the add step is refused.",
+   "In a terminal, type `agi marketplace add owner/repo` for a public GitHub repository that has a marketplace manifest. Optionally add `--ref <branch or tag>` and `--name <name>`.",
+   "Look for the line 'Added <name> to your account (<N> plugins).'",
+   "Type `agi marketplace sources`. Look for the new row with its id, its name, its status, its plugin count and its repository URL under 'Marketplaces on your account'.",
+   "In the chat, type `/plugin`, press the right arrow key until the Marketplaces tab shows, and look for the hint 'agi marketplace add <github url>'.",
+   "Compare with Expected: the publisher's marketplace is named (name and repository URL) and its plugins become available."
+  ],
+  "where": "Terminal: type `agi marketplace add <owner/repo>` (also in chat: `/marketplace add <owner/repo>`). To view: `agi marketplace sources`, or in chat `/plugin`, then switch to the Marketplaces tab with the right arrow key."
+ }
+}

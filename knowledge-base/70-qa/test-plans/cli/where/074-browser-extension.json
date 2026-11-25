@@ -1,0 +1,29 @@
+{
+ "S74.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Chrome integration"
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "Paired, but the browser is not answering."
+   },
+   {
+    "file": "apps/cli/src/claude_parity.rs",
+    "text": "AGI Desktop is running, but no browser is paired with it."
+   }
+  ],
+  "needs": "none for the status; a Mac with AGI Desktop and the AGI Chrome extension to see a paired state",
+  "note": "The cited line apps/cli/src/agent/mod.rs:1107 is refresh_browser_availability, which only caches the paired answer for tool offering; it has no screen. The status is shown by /chrome (apps/cli/src/claude_parity.rs render_chrome_state). No reconnect control exists in apps/cli: searched for reconnect, native host and extension status, and only Remote Control and connector reconnect matched. The plan's Expected asks for a reconnect control, which the CLI does not have.",
+  "reachable": "yes",
+  "steps": [
+   "Start the AGI CLI in a terminal on a Mac where AGI Desktop may or may not be running.",
+   "Type /chrome and press Enter.",
+   "Read the \"Chrome integration\" block. It says one of: \"Paired. This session can read and act in the browser you are looking at.\", \"Paired, but the browser is not answering.\", \"AGI Desktop is running, but no browser is paired with it.\" or \"Not available: AGI Desktop is not running.\"",
+   "Follow the line the block gives for the state, for example \"Start AGI Desktop, pair the extension, then run /chrome again.\" Run /chrome again and check that the state now matches.",
+   "Compare with Expected: the status shows whether the native host is connected. There is no reconnect button in the CLI; the reconnect path is the instructions printed in the block."
+  ],
+  "where": "Type \"/chrome\" in the AGI CLI (TUI or REPL). The bottom bar also shows \"browser paired \u00b7 /chrome\", \"browser not answering \u00b7 /chrome\" or \"browser not paired \u00b7 /chrome\"."
+ }
+}

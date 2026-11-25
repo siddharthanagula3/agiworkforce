@@ -1,0 +1,267 @@
+{
+ "S23.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Projects"
+   },
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "New project"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectEditorModal.tsx",
+    "text": "Create project"
+   }
+  ],
+  "needs": "a signed-in account to save to the account; the project must appear after a sync",
+  "note": "After Create project the editor only closes (useProjectEditor.ts); the project is not opened automatically, which differs from Expected's 'opens as its own workspace'.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the menu button at the top left, then tap Projects.",
+   "Tap the New project pill at the bottom of the screen (or Create Project on the empty screen).",
+   "Type a name in the Name field. The Create project button stays grey until a name is typed.",
+   "Tap Create project.",
+   "Look for the new project card in the Projects list, and compare with Expected. The code closes the sheet and does not open the new project by itself, so tap the card to open it as its own workspace."
+  ],
+  "where": "Drawer (menu button, top left) > Projects > New project (bottom pill). Fill Name, then tap Create project."
+ },
+ "S23.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/useProjectActions.ts",
+    "text": "Edit project"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectEditorModal.tsx",
+    "text": "Description"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectEditorModal.tsx",
+    "text": "Save project"
+   }
+  ],
+  "needs": "a project you can edit (not archived or shared with you)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects and press and hold a project card.",
+   "Tap Edit project in the menu that opens.",
+   "Change the Name, and type or change the Description. The Description field is optional.",
+   "Tap Save project.",
+   "Check the card in the Projects list (or the project header) shows the new name and description, as Expected says."
+  ],
+  "where": "Projects > long-press a project card > Edit project. Or open the project and use the More project actions button (three dots, top right) > Edit project."
+ },
+ "S23.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/CloudProjectOverview.tsx",
+    "text": "Icon"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/CloudProjectOverview.tsx",
+    "text": "Colour"
+   }
+  ],
+  "needs": "a cloud project on a signed-in account (Cloud mode)",
+  "note": "The icon and colour picker exists only in the cloud project header; the create and edit form has no icon or colour control. Local projects have none in the code I read.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects and tap a cloud project card.",
+   "Tap the coloured icon at the top left of the header.",
+   "In the sheet, tap a different Colour swatch, then tap a different icon under Icon.",
+   "Close the sheet and look at the header icon. Then go back to Projects and check the card shows the same icon and colour, as Expected says."
+  ],
+  "where": "Projects > open a cloud project > tap the coloured project icon at the top left of the project header. The sheet shows Icon and Colour."
+ },
+ "S23.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Chats"
+   },
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectInstructionsSheet.tsx",
+    "text": "Instructions"
+   }
+  ],
+  "needs": "a project that has at least one chat or file (for counts)",
+  "note": "The header with counts is CloudProjectOverview, shown for cloud projects. The count words are chat/chats and file/files.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects and tap a project card.",
+   "Look at the top header: the project name, then the description under it if one was set.",
+   "Read the grey line under the description, which shows chat and file counts and Last used.",
+   "Look at the tab row (Chats, Work, Sources) and tap Sources, then Chats to check the sections are there."
+  ],
+  "where": "Projects > tap a project card. The header shows the name, description and a line with chat and file counts; the tabs below are Chats, Work, Sources (and Artifacts, Routines on cloud projects)."
+ },
+ "S23.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectChatsTab.tsx",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectChatsTab.tsx",
+    "text": "No chats yet"
+   }
+  ],
+  "needs": "a project with chats; a second chat is useful",
+  "note": "A second route exists: the project's menu in the Projects list has New chat in project, which sets the project and opens the chat screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects and tap a project card, then stay on the Chats tab.",
+   "Look for the list of chats. If there are none, the empty text says No chats yet.",
+   "Tap a chat row to open it, then go back.",
+   "Tap New chat, send a message, then go back to the project and check the new chat is listed under the project."
+  ],
+  "where": "Projects > tap a project card > Chats tab > New chat. Existing chats are listed in the same tab."
+ },
+ "S23.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx",
+    "text": "Add sources"
+   },
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a file to upload; a signed-in account for cloud projects",
+  "note": "The code has no download or share control on the Sources screen (I searched src/features/projects/components for Download, Save and Share); the file row opens a viewer only. Expected's 'download' cannot be checked in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects, tap a project card, then tap the Sources tab.",
+   "Tap Add sources and pick a file from the document picker.",
+   "Wait for the file row to appear in the list (it may show an indexing state).",
+   "Tap the file row to preview it, then check the preview shows the file.",
+   "Tap the trash icon on the row and confirm Remove, then check the file is gone from the list."
+  ],
+  "where": "Projects > tap a project card > Sources tab > Add sources. Tap a file row to preview it. The remove icon on a row deletes it."
+ },
+ "S23.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx",
+    "text": "Add sources"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx",
+    "text": "Add text"
+   }
+  ],
+  "needs": "a file to upload; a signed-in account for cloud projects",
+  "note": "Files and text are reachable. I searched ProjectSourcesTab.tsx for drive and google and found no Google Drive entry, so the connected-service part of Expected is not in the UI code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects, tap a project card, then tap the Sources tab.",
+   "Tap Add text, type a Title and some content, then tap Add.",
+   "Check a new row appears in the Sources list with that title.",
+   "Tap Add sources and add a file, then check it appears too.",
+   "Check whether any Google Drive or connected-service option appears on the Sources screen (expected to be missing for now)."
+  ],
+  "where": "Projects > tap a project card > Sources tab > Add sources (files) or Add text (typed text)."
+ },
+ "S23.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectInstructionsSheet.tsx",
+    "text": "Instructions"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectEditorModal.tsx",
+    "text": "Custom Instructions"
+   }
+  ],
+  "needs": "a project you can edit (not archived or shared with you)",
+  "note": "The instructions entry is hidden for archived or shared projects; the create and edit form also has a Custom Instructions box.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects and tap a project card.",
+   "Tap Instructions under the project header.",
+   "Type an instruction, such as a short style rule, then tap the check button at the top right to save.",
+   "Reopen Instructions and check the text is still there.",
+   "Open Chats > New chat in this project, ask a question, and check the reply follows the instruction as Expected says."
+  ],
+  "where": "Projects > tap a project card > Instructions (the button under the header, next to the quick actions). Type in the box, then tap the check button at the top right."
+ },
+ "S23.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "text": "AGI Work"
+   },
+   {
+    "file": "apps/mobile/src/features/tasks/components/StartWorkSheet.tsx",
+    "text": "Start task"
+   },
+   {
+    "file": "apps/mobile/app/(app)/projects/[id].tsx",
+    "text": "Work"
+   }
+  ],
+  "needs": "a cloud account on a plan that includes AGI Work (the page says so if not)",
+  "note": "Starting work is done from AGI Work, not from the project's Work tab; the project's Work tab only lists runs. The New task button is labelled in CloudTasksScreen.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the menu button at the top left, then tap AGI Work (tap More if it is not shown).",
+   "Tap New task (the floating button), and pick a project under Project (optional).",
+   "Type a goal and tap Start task.",
+   "Open Projects, tap the project, then tap the Work tab.",
+   "Look for the new run in the Work list and its state, and compare with Expected. If the list is empty it says No work yet."
+  ],
+  "where": "AGI Work (in the drawer, under Projects; it may sit under More) > New task. Choose a project under Project (optional), fill the goal, then tap Start task. The project's Work tab lists its runs."
+ },
+ "S23.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "Search projects"
+   },
+   {
+    "file": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+    "text": "No matches"
+   }
+  ],
+  "needs": "a few projects with different names and descriptions",
+  "note": "The search bar is hidden when there are no projects, and on the Shared with you filter.",
+  "reachable": "yes",
+  "steps": [
+   "Open Projects and make sure you have at least two projects with different names.",
+   "Tap the Search projects bar at the bottom and type part of one project's name. Check only that project stays in the list.",
+   "Clear the search and type a word that appears only in a project's description. Check that project appears.",
+   "Type a word that matches nothing. Check the text No matches appears."
+  ],
+  "where": "Projects (drawer) > Search projects bar at the bottom of the list. Type part of a name or description."
+ },
+ "S23.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/useProjectActions.ts",
+    "text": "Delete"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/useProjectActions.ts",
+    "text": "Delete project?"
+   }
+  ],
+  "needs": "a project you own, and a test chat inside it",
+  "note": "The client menu shows Delete with no visible owner check in useProjectActions.ts; the server decides who may delete. The confirm message says the sources are deleted and chats move out of the project.",
+  "reachable": "yes",
+  "steps": [
+   "Note the project name and open its Chats tab to note a chat in it.",
+   "Open Projects, press and hold the project card, then tap Delete.",
+   "Read the Delete project? message, then tap Cancel first to check Cancel keeps the project.",
+   "Repeat, and tap Delete to confirm.",
+   "Check the project is gone from the Projects list, and its chat still appears in the chat list (not in the project), as Expected says."
+  ],
+  "where": "Projects > tap and hold a project card > Delete. Or open the project, tap More project actions (three dots, top right) > Delete. Confirm with Delete."
+ }
+}

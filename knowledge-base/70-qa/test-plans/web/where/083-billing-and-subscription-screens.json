@@ -1,0 +1,678 @@
+{
+ "S83.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Compare plans"
+   },
+   {
+    "file": "apps/web/app/pricing/page.tsx",
+    "text": "Price"
+   }
+  ],
+  "needs": "none",
+  "note": "The comparison is a section of the page, not a dialog; the file has no S83.19 or S83.25, so 25 items are listed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Pricing page (/pricing), or the plans page reached from Settings > Billing.",
+   "Scroll to the section headed \"Compare plans\".",
+   "Read the columns \"Plan\", \"Price\", \"Billing\" and \"Usage capacity\" and the rows for usage, models, admin and data.",
+   "Compare the plans shown with what the Expected line asks for: price, usage and features before choosing."
+  ],
+  "where": "Pricing > Compare plans"
+ },
+ "S83.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Monthly"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Annual"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Team & Enterprise"
+   }
+  ],
+  "needs": "none",
+  "note": "The toggle appears only on the Team & Enterprise panel, and only when yearly team checkout is available; it is not on the Individual tab.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Pricing page (/pricing).",
+   "Select the \"Team & Enterprise\" tab.",
+   "Click \"Annual\", then \"Monthly\" in the toggle beside the seat price.",
+   "Look at the price text and the billing line (\"billed yearly\" or \"billed monthly\") and compare with Expected."
+  ],
+  "where": "Pricing > Team & Enterprise > Monthly / Annual"
+ },
+ "S83.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Upgrade plan"
+   },
+   {
+    "file": "apps/web/app/upgrade/UpgradeChooser.tsx",
+    "text": "Upgrade"
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradeConfirmDialog.tsx",
+    "text": "Upgrade to {planLabel}"
+   }
+  ],
+  "needs": "a Free account and a card for the Stripe checkout",
+  "note": "The plan says the owner decision on this item is still open.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Free account, press \u2318, and choose \"Billing\".",
+   "Click \"Upgrade plan\".",
+   "Choose a paid plan on the \"Upgrade\" page and read the \"Upgrade to\" dialog.",
+   "Click the confirm button and complete the Stripe checkout page.",
+   "Return to Billing and check the plan name and status shown under the Billing heading against Expected."
+  ],
+  "where": "Settings > Billing > Upgrade plan"
+ },
+ "S83.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Switch to a smaller plan"
+   },
+   {
+    "file": "apps/web/features/billing/components/DowngradeReviewDialog.tsx",
+    "text": "Switch to a smaller plan"
+   },
+   {
+    "file": "apps/web/features/billing/components/DowngradeReviewDialog.tsx",
+    "text": "Limits"
+   }
+  ],
+  "needs": "a paid account billed through Stripe",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Press \u2318, and choose \"Billing\" with a paid Stripe-billed account.",
+   "Click \"Switch to a smaller plan\".",
+   "In the dialog, read the \"Price\", \"Usage\" and \"Limits\" sections.",
+   "Read the switch date line and the button \"Switch on\" or \"Switch to\" and compare with Expected before confirming."
+  ],
+  "where": "Settings > Billing > Switch to a smaller plan"
+ },
+ "S83.05": {
+  "labels": [
+   {
+    "file": "apps/web/app/upgrade/UpgradeChooser.tsx",
+    "text": "Upgrading starts a new billing period today, with credit for unused time on your plan."
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradeConfirmDialog.tsx",
+    "text": "Total due today"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "The proration amounts appear only when a paid Stripe charge exists to credit.",
+  "reachable": "yes",
+  "steps": [
+   "Start from a Free account: press \u2318, and choose \"Billing\", then click \"Upgrade plan\".",
+   "Read the sentence about starting a new billing period and credit for unused time.",
+   "Choose a paid plan and open the confirmation dialog.",
+   "Read \"Total due today\" and the \"Renews\" line and compare with Expected."
+  ],
+  "where": "Settings > Billing > Upgrade plan > choose a paid plan"
+ },
+ "S83.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Tax"
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Total due today"
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Tax is calculated at checkout."
+   }
+  ],
+  "needs": "a Free account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Upgrade plan\" from Settings > Billing.",
+   "Choose a paid plan and read the order panel.",
+   "Look for the \"Tax\" line and the \"Total due today\" line.",
+   "If the panel says \"Tax is calculated at checkout.\", note that tax is only added on the Stripe page, and compare with Expected."
+  ],
+  "where": "Settings > Billing > Upgrade plan > choose a paid plan"
+ },
+ "S83.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/UpgradePromotionCode.tsx",
+    "text": "Add a promotion code"
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradePromotionCode.tsx",
+    "text": "Promotion code"
+   }
+  ],
+  "needs": "a Free account and a valid promotion code",
+  "note": "No valid promotion code was found in the code, so the tester needs one from the owner.",
+  "reachable": "yes",
+  "steps": [
+   "Open \"Upgrade plan\" from Settings > Billing and choose a paid plan.",
+   "In the confirmation dialog, find the \"Promotion code\" field.",
+   "Click \"Add a promotion code\" and type a code.",
+   "Check the discount line shown below the code, such as \"% off\", and compare with Expected."
+  ],
+  "where": "Settings > Billing > Upgrade plan > choose a paid plan > Add a promotion code"
+ },
+ "S83.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Free trial"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Trial ends on"
+   },
+   {
+    "file": "apps/web/features/billing/components/UpgradeOrderPanel.tsx",
+    "text": "Your free trial ends on"
+   }
+  ],
+  "needs": "an account on a trial (or a plan offered with a trial)",
+  "note": "Trial terms appear only when a trial is offered; the code does not show when that happens.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Billing with an account on a trial.",
+   "Read the \"Free trial\" badge and the \"Trial ends on\" row.",
+   "Read the text under the plan name about the trial end date.",
+   "Open \"Upgrade plan\" and choose a plan with a trial, then read \"Your free trial ends on\" and the charge after it, and compare with Expected."
+  ],
+  "where": "Settings > Billing (status row \"Trial ends on\" or badge \"Free trial\")"
+ },
+ "S83.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Payment"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Add payment method"
+   }
+  ],
+  "needs": "a Free or paid account with no saved card",
+  "note": "The button opens the Stripe billing portal, not an in-app card form.",
+  "reachable": "yes",
+  "steps": [
+   "Press \u2318, and choose \"Billing\".",
+   "Find the \"Payment\" heading.",
+   "If no card is saved, click \"Add payment method\".",
+   "Complete the card form that opens and compare the new card with Expected."
+  ],
+  "where": "Settings > Billing > Payment > Add payment method"
+ },
+ "S83.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Payment"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Default"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Manage cards"
+   }
+  ],
+  "needs": "a saved card on a paid or Stripe-billed account",
+  "note": "Removing or changing a card happens in the billing portal; no remove control was found in the app code.",
+  "reachable": "yes",
+  "steps": [
+   "Press \u2318, and choose \"Billing\".",
+   "Under \"Payment\", read each saved card line with its \"Default\" badge and \"Expires\" date.",
+   "Click \"Manage cards\" to change or remove a card in the billing portal.",
+   "Compare the default card, update and remove options with Expected."
+  ],
+  "where": "Settings > Billing > Payment"
+ },
+ "S83.11": {
+  "labels": [],
+  "needs": "a paid checkout or a Stripe billing portal session",
+  "note": "The billing address form is collected on the Stripe checkout page (tax-policy.ts sets billing_address_collection to 'required'); I found no in-app billing address field, and searched apps/web for 'billing address'.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S83.12": {
+  "labels": [],
+  "needs": "a business buyer account and a paid checkout",
+  "note": "Tax identifier collection is enabled on Stripe checkout (apps/web/lib/billing/tax-policy.ts); I found no in-app tax ID field, and searched apps/web for 'Tax ID' and 'VAT'.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S83.13": {
+  "labels": [
+   {
+    "file": "apps/web/app/billing/UpgradeWelcome.tsx",
+    "text": "You&rsquo;re all set."
+   }
+  ],
+  "needs": "a Free account and a completed paid checkout",
+  "note": "The heading in the code is written with an HTML entity for the apostrophe.",
+  "reachable": "yes",
+  "steps": [
+   "Complete a paid upgrade on the Stripe checkout page.",
+   "Return to the app; it opens Billing with success in the address.",
+   "Wait for the page to update the plan.",
+   "Read the heading \"You're all set.\" and the plan name beside it, and compare with Expected."
+  ],
+  "where": "Finish a paid checkout > Billing > You're all set."
+ },
+ "S83.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Your last {planLabel} payment didn&rsquo;t go through"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Update payment method"
+   },
+   {
+    "file": "apps/web/app/payment-failure/page.tsx",
+    "text": "Payment didn&rsquo;t go through."
+   }
+  ],
+  "needs": "a paid account with a failed renewal",
+  "note": "The notice is shown only for past-due or unpaid Stripe-billed plans.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account whose renewal failed, press \u2318, and choose \"Billing\".",
+   "Read the red notice at the top of the page.",
+   "Read the text \"Your last ... payment didn't go through\" and the status \"past due\" or \"unpaid\".",
+   "Check that the notice shows how to fix it with the buttons \"Pay\" and \"Update payment method\", and compare with Expected."
+  ],
+  "where": "Settings > Billing (past-due notice)"
+ },
+ "S83.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Update payment method"
+   },
+   {
+    "file": "apps/web/app/payment-failure/page.tsx",
+    "text": "Open billing"
+   }
+  ],
+  "needs": "a paid account with a failed payment",
+  "note": "The payment-failure page button \"Open billing\" leads to /settings/billing.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account with a failed payment and open Settings > Billing.",
+   "In the red notice, click \"Update payment method\" (or the \"Pay\" link for the open invoice).",
+   "Complete the payment in the billing portal or on the invoice page.",
+   "Return to Billing and check that the notice is gone and the status is active, as Expected says."
+  ],
+  "where": "Settings > Billing > Update payment method"
+ },
+ "S83.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Invoices"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Credit history"
+   }
+  ],
+  "needs": "a paid account with invoices and credit purchases",
+  "note": "A Free account shows only empty-state text; the invoice list is also at /billing/invoices.",
+  "reachable": "yes",
+  "steps": [
+   "Press \u2318, and choose \"Billing\".",
+   "Scroll to the \"Invoices\" heading and read the table.",
+   "Scroll to the \"Credit history\" heading and read its rows.",
+   "Compare the lists with Expected: past bills and credit purchases."
+  ],
+  "where": "Settings > Billing > Invoices (and Settings > Billing > Credit history)"
+ },
+ "S83.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Invoices"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Pay"
+   },
+   {
+    "file": "apps/web/app/billing/invoices/InvoiceList.tsx",
+    "text": "PDF"
+   }
+  ],
+  "needs": "a paid account with an issued invoice",
+  "note": "The Settings link opens the hosted invoice page; the PDF file link is on the invoices page.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Billing and scroll to \"Invoices\".",
+   "Find an invoice row with a link labelled \"Pay\" or \"View\".",
+   "Click the link; it opens the hosted invoice in a new tab.",
+   "On /billing/invoices, check the \"PDF\" link in the \"Invoice\" column and compare with Expected."
+  ],
+  "where": "Settings > Billing > Invoices > Pay / View"
+ },
+ "S83.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPaymentHistory.tsx",
+    "text": "Receipt"
+   }
+  ],
+  "needs": "an account with at least one credit purchase",
+  "note": "The exact section that shows this table in Settings > Billing was not confirmed; the component's export name in the source is 'n'.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Billing with an account that has bought credits or paid a top-up.",
+   "Find the payment history table and its \"Receipt\" column.",
+   "Click the receipt link for a payment.",
+   "Check that a receipt exists for each payment, including credit purchases, and compare with Expected."
+  ],
+  "where": "Settings > Billing (payment history table, column \"Receipt\")"
+ },
+ "S83.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPaymentHistory.tsx",
+    "text": "Refunds"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPaymentHistory.tsx",
+    "text": "Processing"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPaymentHistory.tsx",
+    "text": "Action needed"
+   }
+  ],
+  "needs": "an account with a refund request",
+  "note": "The code uses the status words Processing, Action needed, Refunded, Failed and Canceled, not 'requested'.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Billing and find the \"Refunds\" table below the payment history.",
+   "Read the status shown for each refund.",
+   "Compare the status words with Expected: requested, processing, refunded."
+  ],
+  "where": "Settings > Billing > Refunds table"
+ },
+ "S83.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Cancel plan"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Manage billing"
+   }
+  ],
+  "needs": "a paid account billed through Stripe",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Press \u2318, and choose \"Billing\" with a paid Stripe-billed account.",
+   "Click \"Cancel plan\".",
+   "Complete the cancellation in the billing portal that opens.",
+   "Return to Billing and check the scheduled end date, and compare with Expected."
+  ],
+  "where": "Settings > Billing > Cancel plan"
+ },
+ "S83.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Resume ${planLabel}"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Keep ${planLabel}"
+   }
+  ],
+  "needs": "a paid account with a scheduled cancellation",
+  "note": "The button text is built from the plan name, so the visible label is 'Resume' followed by that name.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account with a cancellation already scheduled and open Settings > Billing.",
+   "Find the notice that says the plan ends on a date.",
+   "Click the \"Resume\" button in that notice (its label includes the plan name).",
+   "Check that the notice disappears and the plan continues, and compare with Expected."
+  ],
+  "where": "Settings > Billing > Resume button in the scheduled-cancellation notice"
+ },
+ "S83.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Your {planLabel} plan ends on {endsOn}."
+   }
+  ],
+  "needs": "a paid account with a scheduled cancellation",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Use an account with a scheduled cancellation and open Settings > Billing.",
+   "Read the notice that starts \"Your ... plan ends on\" and the date after it.",
+   "Check the \"Price\" and status rows below the notice, and compare with Expected."
+  ],
+  "where": "Settings > Billing (notice \"Your ... plan ends on ...\")"
+ },
+ "S83.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "You keep {planLabel} features and credits until then. After that, your account moves to"
+   },
+   {
+    "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+    "text": "Your {planLabel} plan ends on {endsOn}."
+   }
+  ],
+  "needs": "a paid account with a scheduled cancellation",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Use an account with a scheduled cancellation and open Settings > Billing.",
+   "Read the notice under \"Your ... plan ends on\".",
+   "Check the sentence \"You keep ... features and credits until then\" and what it says happens after: the account moves to Free and chats, projects and files stay.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Billing (notice \"You keep ... features and credits until then\")"
+ },
+ "S83.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Manage in the App Store"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Manage on Google Play"
+   }
+  ],
+  "needs": "an account billed through Apple or Google",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Use an account whose subscription was bought in the App Store or Google Play.",
+   "Open Settings > Billing.",
+   "Read the text about the store billing the plan and the button \"Manage in the App Store\" or \"Manage on Google Play\".",
+   "Click the button, check it opens the store page, and compare with Expected."
+  ],
+  "where": "Settings > Billing > Manage in the App Store / Manage on Google Play"
+ },
+ "S83.27": {
+  "labels": [
+   {
+    "file": "apps/web/app/api/checkout/route.ts",
+    "text": "This account already has an active subscription with our payment provider. Open Billing to manage it, or contact support if your plan is not showing yet."
+   }
+  ],
+  "needs": "an account that already has an active paid subscription",
+  "note": "The warning text is returned when checkout is refused; I did not confirm the client shows it before purchase.",
+  "reachable": "yes",
+  "steps": [
+   "Use an account that already has an active paid subscription.",
+   "Open \"Upgrade plan\" from Settings > Billing and choose a paid plan.",
+   "Read the warning if checkout is refused: \"This account already has an active subscription with our payment provider. Open Billing to manage it\".",
+   "Compare with Expected and check the warning appears before any second charge."
+  ],
+  "where": "Settings > Billing > Upgrade plan > choose a paid plan (warning appears when checkout is refused)"
+ },
+ "S83.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Upgrade plan"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Seats"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/pricing.json",
+    "text": "Update seats"
+   }
+  ],
+  "needs": "a Free account for the purchase, or a paid team owner account to change seats",
+  "note": "The Team card title and the exact pricing-page route from Settings were not confirmed; the Upgrade plan link target was not traced past the button. Checkout and upgrade routes exist (apps/web/app/api/checkout/route.ts, apps/web/app/api/upgrade/route.ts) but the seat count is only visible on the pricing page.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Settings, then the Billing tab.",
+   "On the plan row, click \"Upgrade plan\" (shown on a Free plan) or \"Adjust plan\" (on a paid plan).",
+   "On the pricing page, find the Team plan card and its \"Seats\" number box.",
+   "Type a seat count, or use the up and down values, then check the price line changes (\"Seats: ... /mo\" or \"/yr\") and compare with Expected.",
+   "Continue to checkout and check the seat count shown before paying."
+  ],
+  "where": "Settings > Billing > \"Upgrade plan\" (opens the pricing page), then the Team plan card's \"Seats\" box; on a plan already owned, \"Update seats\" is the button"
+ },
+ "S83.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Members"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceBillingSummary.tsx",
+    "text": "Plan and seats"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceBillingSummary.tsx",
+    "text": "Seats used"
+   }
+  ],
+  "needs": "a workspace admin account in a workspace with seats, and a second account in the same workspace to assign",
+  "note": "The seat-type control in Settings > Workspace is labelled only by aria-label (\"Seat type for ...\"), not visible text; the Members page is the route to it per the nav hint \"Roles, invitations, seats\". How a person first reaches the workspace console from the main screen was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a workspace admin and open the Workspace area.",
+   "Click \"Members\" to see the people list, roles and invitations.",
+   "Click \"Billing\" in the same Workspace area and read the \"Plan and seats\" section.",
+   "Compare the \"Seats used\" row (for example \"N of M\") with the members list and the seat assignment controls.",
+   "Invite or assign a member and check the seats used count changes."
+  ],
+  "where": "Workspace > Members (seat counts appear on Workspace > Billing under \"Plan and seats\")"
+ },
+ "S83.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Contacts"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Billing contact"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Procurement contact"
+   }
+  ],
+  "needs": "an enterprise contract on the workspace and an admin account",
+  "note": "The contacts are shown read only; no edit control was found in the component, though the billing-contract API route accepts contact changes.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as an enterprise organization admin and open Workspace, then Billing.",
+   "Scroll to the \"Enterprise contract\" section (shown only when the plan has a contract).",
+   "Read the \"Contacts\" part.",
+   "Compare \"Billing contact\" and \"Procurement contact\" with the names on record; a missing one shows the not-on-record text.",
+   "Check that these are read only, as the section caption says."
+  ],
+  "where": "Workspace > Billing, then the \"Enterprise contract\" section and its \"Contacts\" part"
+ },
+ "S83.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Purchase order"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Payment terms"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx",
+    "text": "Invoices"
+   }
+  ],
+  "needs": "an enterprise contract with a purchase order number and an admin account",
+  "note": "Offline payment reporting exists only as an API route (apps/web/app/api/settings/organization/billing-contract/route.ts, remittanceReference) and the service apps/web/lib/services/enterprise-contracts/invoicing.ts; no UI control for it was found under apps/web/features or apps/web/app. Invoice terms and PO numbers are displayed only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as an enterprise organization admin and open Workspace, then Billing.",
+   "In the \"Enterprise contract\" section, read the \"Payment terms\" and \"Purchase order\" rows.",
+   "Scroll to the \"Invoices\" section and read the recent invoices, newest first.",
+   "Compare the purchase order number and payment terms with the order form on record.",
+   "Note that no screen for reporting a bank transfer was found; check whether offline payment reporting is shown anywhere."
+  ],
+  "where": "Workspace > Billing, then the \"Enterprise contract\" section: \"Purchase order\" row and \"Invoices\" section"
+ },
+ "S83.32": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "Billing"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Credit history"
+   },
+   {
+    "file": "apps/web/features/settings/sections/BillingSection.tsx",
+    "text": "Top-up purchase"
+   }
+  ],
+  "needs": "a Free account shows the empty state; a paid or top-up account shows purchase rows",
+  "note": "The history lists purchases with other credit types (refund, bonus, adjustment, usage); the Settings route to the Billing tab was taken from the nav label, not traced from the first screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Settings, then the \"Billing\" tab.",
+   "Scroll to the \"Credit history\" section.",
+   "Find rows labelled \"Top-up purchase\" for credit purchases.",
+   "Compare each purchase row with the credits bought and the date.",
+   "If there are no purchases, the empty text should say \"No credit activity yet.\""
+  ],
+  "where": "Settings > Billing > \"Credit history\""
+ }
+}

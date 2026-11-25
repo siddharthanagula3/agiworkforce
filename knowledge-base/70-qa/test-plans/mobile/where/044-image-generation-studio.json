@@ -1,0 +1,380 @@
+{
+ "S44.01": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "src/features/image/ImagesScreen.tsx",
+    "text": "Describe an image"
+   }
+  ],
+  "needs": "A signed-in Cloud account with image access (a paid plan or free daily image quota)",
+  "note": "Images screen is reached from the drawer label Images (src/features/drawer/components/DrawerContent.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in Cloud mode (image creation must be available on the account).",
+   "Tap the + button labelled Add to chat, then tap Create image.",
+   "Type a prompt in the message box and send.",
+   "Wait for the card Generating Image to finish, then check that a generated image appears in the conversation and matches Expected."
+  ],
+  "where": "Chat > Add to chat (+) > Create image, then type a prompt and send. Or Drawer > Images > Describe an image, then Create image."
+ },
+ "S44.02": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Image model"
+   },
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   }
+  ],
+  "needs": "A Cloud account with image access and at least two image models offered",
+  "note": "The model list comes from the shared catalog for the active kind; the Images screen itself has no model picker.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in Cloud mode and tap the + button labelled Add to chat.",
+   "Tap Create image.",
+   "Under the heading Image model, look at the list of models and tap a different model.",
+   "Check that the tapped row is now marked selected, then send a prompt.",
+   "Open the generated image and read the caption Generated with <model name> to compare with the model you picked."
+  ],
+  "where": "Chat > Add to chat (+) > Create image > Image model"
+ },
+ "S44.04": {
+  "labels": [
+   {
+    "file": "src/features/image/ImagesScreen.tsx",
+    "text": "Attach photos"
+   },
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Attach up to 4 photos. The first is edited; the rest guide it."
+   }
+  ],
+  "needs": "A photo to upload; a model that accepts reference photos (the chat sheet shows a note when it does not)",
+  "note": "The attachment slots are shown as a strip on the Images screen (testID images.references); the visible word for each slot is not written as a label.",
+  "reachable": "yes",
+  "steps": [
+   "Open Images from the drawer, or open a chat, tap the + button, then tap Create image.",
+   "On Images, tap the button labelled Attach photos and choose a photo.",
+   "In the chat sheet, tap Photos and choose up to 4 photos (shown in the hint text under Image model).",
+   "Check that the chosen photos appear as attachments above the prompt box.",
+   "Send the prompt and check that the first photo is edited and the others guide the result."
+  ],
+  "where": "Drawer > Images > Attach photos (paperclip). Or Chat > Add to chat (+) > Create image > Photos."
+ },
+ "S44.07": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Aspect ratio"
+   },
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   }
+  ],
+  "needs": "A Cloud account with image access; a model that offers more than one ratio (the section is hidden otherwise)",
+  "note": "The option labels come from getImageAspectOptionsForModel; the tester sees whatever ratio names that returns.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in Cloud mode, tap the + button, then tap Create image.",
+   "Under the heading Aspect ratio, tap a different ratio.",
+   "Check that the tapped row is marked selected.",
+   "Send a prompt and open the generated image.",
+   "Compare the image shape with the ratio you picked."
+  ],
+  "where": "Chat > Add to chat (+) > Create image > Aspect ratio"
+ },
+ "S44.11": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Transparent background"
+   }
+  ],
+  "needs": "A Cloud account with image access and an editing-capable image model",
+  "note": "The hint under the row reads Return the image without a background; the row is hidden for text-only models.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in Cloud mode, tap the + button, then tap Create image.",
+   "Pick an image model that accepts reference photos (the row only appears for those models).",
+   "Tap Transparent background so the row is marked selected.",
+   "Send a prompt and open the generated image.",
+   "Check that the background is removed (transparent) in the result."
+  ],
+  "where": "Chat > Add to chat (+) > Create image > Transparent background"
+ },
+ "S44.18": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ImageGenProgress.tsx",
+    "text": "Stop generating"
+   }
+  ],
+  "needs": "A Cloud account with image access; a fast enough moment to tap before the image finishes",
+  "note": "The code only sends a stop request from the card; whether the job is cancelled and not billed is not shown on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Send an image prompt in Cloud mode.",
+   "While the card shows Generating Image, tap the button labelled Stop generating.",
+   "Check that the card stops progressing and no image is added to the conversation.",
+   "Check whether a charge or credit use appears afterwards (not verifiable from the code)."
+  ],
+  "where": "Chat > send an image prompt > tap Stop generating on the image card"
+ },
+ "S44.19": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ImageGenProgress.tsx",
+    "text": "Retry"
+   },
+   {
+    "file": "src/features/chat/components/ImageGenProgress.tsx",
+    "text": "Image Generation Failed"
+   }
+  ],
+  "needs": "A Cloud account with image access and a way to produce a failed generation",
+  "note": "A stopped generation may not reach the failed state that shows Retry; the code does not confirm that. Long-press message actions also have Retry (src/features/chat/components/MessageBubble.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Make an image generation fail, or use one that shows Image Generation Failed.",
+   "Tap the button labelled Retry on the card.",
+   "Check that a new generation starts with the same prompt in the same place in the chat."
+  ],
+  "where": "Chat > failed image card > Retry"
+ },
+ "S44.21": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   },
+   {
+    "file": "src/features/library/index.tsx",
+    "text": "Images"
+   }
+  ],
+  "needs": "At least one image created earlier on the account",
+  "note": "The Images screen (Drawer > Images) also has a grid titled Your images.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer and tap Library.",
+   "Tap the filter chip labelled Images.",
+   "Look for the images in a grid of tiles.",
+   "Tap a tile to open it, then compare with Expected."
+  ],
+  "where": "Drawer > Library > Images"
+ },
+ "S44.22": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Close"
+   },
+   {
+    "file": "src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Zoom in"
+   }
+  ],
+  "needs": "A generated image",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap a generated image in a chat, or an image tile in Library.",
+   "Check that it opens full screen on a black background.",
+   "Use the zoom controls (Zoom in, Zoom out) or pinch to zoom.",
+   "Tap Close in the top bar to return."
+  ],
+  "where": "Chat > tap a generated image. Or Drawer > Library > Images > tap a tile."
+ },
+ "S44.23": {
+  "labels": [
+   {
+    "file": "src/features/image/imageSettingsCaption.ts",
+    "text": "Generated with"
+   }
+  ],
+  "needs": "A generated image made with a prompt",
+  "note": "The caption shows only the model and aspect ratio. Quality and size are not written anywhere in the viewer code.",
+  "reachable": "yes",
+  "steps": [
+   "Tap a generated image in a chat to open the full-screen viewer.",
+   "Read the prompt text shown under the image.",
+   "Read the caption that starts with Generated with, which shows the model name and the aspect ratio.",
+   "Compare with Expected: check whether quality and size are shown."
+  ],
+  "where": "Chat > tap a generated image > read the text under the picture"
+ },
+ "S44.25": {
+  "labels": [
+   {
+    "file": "src/features/library/index.tsx",
+    "text": "Remix"
+   }
+  ],
+  "needs": "A Cloud account with a previously generated image",
+  "note": "Remix is shown only in Cloud mode. The code sets the model and the prompt; it does not show a code path that sets the aspect ratio.",
+  "reachable": "yes",
+  "steps": [
+   "Open Library from the drawer and tap the Images chip.",
+   "Long-press an image tile to open its menu.",
+   "Tap Remix.",
+   "Check that the chat opens in image mode with the earlier prompt and model selected, and compare with Expected (ratio is not clearly set by this path)."
+  ],
+  "where": "Drawer > Library > Images > long-press an image > Remix"
+ },
+ "S44.27": {
+  "labels": [
+   {
+    "file": "src/features/image/services/keepMedia.ts",
+    "text": "Save to Library"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   }
+  ],
+  "needs": "A Cloud account with image access; a temporary chat for the Save to Library option",
+  "note": "Images in normal chats are not shown with a Save to Library option; the code does not show a manual save there. Whether they reach the Library automatically is not confirmed by this audit.",
+  "reachable": "yes",
+  "steps": [
+   "Open a temporary chat in Cloud mode and generate an image.",
+   "Long-press the image.",
+   "Tap Save to Library and wait for the message Saved to your Library.",
+   "Open Drawer > Library > Images and check that the image is there."
+  ],
+  "where": "Chat (temporary chat) > long-press a generated image > Save to Library"
+ },
+ "S44.29": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Save image to Photos"
+   },
+   {
+    "file": "src/features/chat/components/GeneratedImage.tsx",
+    "text": "Save to Photos"
+   }
+  ],
+  "needs": "A phone or simulator with Photos access allowed",
+  "note": "The visible word is Save to Photos, not Download. Full quality is not confirmed by the screen text.",
+  "reachable": "yes",
+  "steps": [
+   "Tap a generated image to open the full-screen viewer.",
+   "Tap the download icon labelled Save image to Photos.",
+   "Allow Photos access if the system asks.",
+   "Open the Photos app and find the saved image, then compare its size with Expected."
+  ],
+  "where": "Chat > tap a generated image > Save image to Photos"
+ },
+ "S44.30": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Copy image"
+   },
+   {
+    "file": "src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Image copied"
+   }
+  ],
+  "needs": "A phone with a text field in another app",
+  "note": "The same action is in the long-press menu on the image in the chat (src/features/chat/components/GeneratedImage.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Tap a generated image to open the full-screen viewer.",
+   "Tap the button labelled Copy image.",
+   "Check that the icon changes and the label reads Image copied.",
+   "Paste into a text field in another app and check that the image pastes."
+  ],
+  "where": "Chat > tap a generated image > Copy image"
+ },
+ "S44.31": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Share image"
+   }
+  ],
+  "needs": "A phone with at least one other app that accepts images",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Tap a generated image to open the full-screen viewer.",
+   "Tap the button labelled Share image.",
+   "Choose another app from the share sheet, such as Messages or Mail.",
+   "Check that the image is attached in that app before sending."
+  ],
+  "where": "Chat > tap a generated image > Share image"
+ },
+ "S44.33": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Change this image"
+   },
+   {
+    "file": "src/features/image/components/ImageChangeSheet.tsx",
+    "text": "Describe the change"
+   }
+  ],
+  "needs": "A generated image from an image model that can edit; the button is hidden for models that cannot",
+  "note": "Edit an area of this image (Paintbrush) is the area-edit option on the same bar. The Change option is hidden for attachments.",
+  "reachable": "yes",
+  "steps": [
+   "Tap a generated image in a chat whose model can edit images.",
+   "Tap the button labelled Change this image.",
+   "Type the change in the box labelled Describe the change, for example a colour change, and submit.",
+   "Compare the new image with the original and check that the same picture was changed."
+  ],
+  "where": "Chat > tap a generated image > Change this image"
+ },
+ "S44.35": {
+  "labels": [
+   {
+    "file": "src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Report this image"
+   },
+   {
+    "file": "src/features/chat/components/MessageBubble.tsx",
+    "text": "Report\u2026"
+   }
+  ],
+  "needs": "A generated image; a test image only, since a report is sent to trust and safety",
+  "note": "The same report is also in the chat message actions as Report\u2026 (the file text is Report with an ellipsis escape).",
+  "reachable": "yes",
+  "steps": [
+   "Tap a generated image to open the full-screen viewer.",
+   "Tap the flag button labelled Report this image.",
+   "Choose a reason in the report sheet and submit it (use a test image only).",
+   "Read the confirmation and check it says what happened to the report."
+  ],
+  "where": "Chat > tap a generated image > Report this image"
+ },
+ "S44.36": {
+  "labels": [
+   {
+    "file": "app/legal/_layout.tsx",
+    "text": "EU AI Act Article 50"
+   }
+  ],
+  "needs": "none",
+  "note": "No visible AI-generated label was found in apps/mobile (searched AI-generated, AI generated, provenance). The legal screen EU AI Act Article 50 describes a C2PA-style claim; the file route sets the claim headers (apps/web/app/api/files/[id]/route.ts).",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Not shown on the image in the app. The AI claim is sent with the file download."
+ }
+}

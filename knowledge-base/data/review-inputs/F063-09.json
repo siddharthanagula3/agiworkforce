@@ -1,0 +1,718 @@
+{
+ "feature": {
+  "id": "F063-09",
+  "aliases": [
+   "Missed runs, retries and held runs",
+   "Missed-run explanation (S63.33)",
+   "Deferred execution after allowance reset (S63.34, not built)",
+   "Connection-expiry repair flow (S63.35, not built)",
+   "If A Run Is Missed / missedExecutionPolicy",
+   "run_once / skip",
+   "Retries After A Failed Run / retryMaxAttempts",
+   "First Retry After (Minutes) / retryBackoffSeconds",
+   "Ran late / Skipped note (describeScheduleRunTiming)"
+  ],
+  "summary": "Explains and handles runs that did not happen on time or failed. The Cloud sweep decides a run is missed when it starts more than two sweep intervals late and then runs it late once or skips it, as the owner chose, and the run history says so. Failed or timed-out runs retry with doubling waits. Holding runs for usage resets and repairing expired connectors are not built.",
+  "purpose": {
+   "what_it_does": "Records why an occurrence ran late or was skipped, applies the owner's 'If A Run Is Missed' choice, retries failed or timed-out runs a chosen number of times with doubling waits, and writes an audit event for missed runs. On Electron Desktop, Local routines have their own missed-run choice and a 2 minute grace.",
+   "why_it_exists": "The Cloud sweep runs about every 15 minutes, machines sleep, and models fail. People need to see what happened to an occurrence instead of guessing (doc: knowledge-base/data/area-briefs/063-routines-schedules-and-triggers.md, S63.33 to S63.35).",
+   "who_uses_it": "Owners reading run history on any app; operators reading audit events.",
+   "problems_solved": [
+    "A routine fired hours late: the history says 'Ran late: scheduled for X, started Y later.'",
+    "A stale occurrence should not run: choose skip and see 'Skipped the run scheduled for X'.",
+    "A flaky run: retries try again before the routine moves on.",
+    "A skipped run must not use up the run limit: the slot is given back."
+   ],
+   "use_cases": [
+    "Morning digest that is pointless after noon: set 'Skip it and wait for the next occurrence'.",
+    "Billing report that must still happen: keep 'Run it once, late'.",
+    "Flaky external site: Retries After A Failed Run 3, first retry after 5 minutes.",
+    "Check why a routine did not run overnight in the run history."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: card History button, each run row shows a badge ('skipped' when skipped) and a grey note; the 'If A Run Is Missed' choice sits in the form section 'When It May Run, And What Happens If It Fails' (apps/web/features/schedules/components/ScheduleRunHistory.tsx:76-87, :165-169; ScheduleForm.tsx:555-557, :644-662).",
+    "Desktop (Electron): the same Web page; Local routines dialog has 'If a run is missed' (apps/web/features/schedules/components/LocalRoutinesSection.tsx:553-560 region, label at 'local-routine-missed').",
+    "Desktop (internal Tauri): run history rows show the same note via describeScheduleRunTiming (apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx:997, :1422); no missed or retry fields in its form.",
+    "Mobile: note under the run status in run history (apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:213-216; apps/mobile/src/features/schedules/service.ts:142).",
+    "CLI: agi schedules runs <id> prints 'ran late for the occurrence due <time>' for late runs; a skipped run shows as cancelled with the server's error text (apps/cli/src/schedules.rs:489-499, :631-668).",
+    "VS Code: run list detail and the label 'Skipped' (apps/extension-vscode/src/features/schedules/schedulePresentation.ts:118-136, :154-157).",
+    "Chrome side panel: note under each run (apps/extension/src/features/side-panel/schedulesSection.ts:1077-1078)."
+   ],
+   "prerequisites": [
+    "A Cloud routine that has had at least one late, skipped or failed occurrence.",
+    "Retries only apply to occurrences started by the schedule, not manual runs (schedule-service.ts:1713-1716)."
+   ],
+   "screens_and_controls": [
+    "'If A Run Is Missed' select: 'Run it once, late' or 'Skip it and wait for the next occurrence'; helper: 'A missed occurrence is recorded on the run history and written to the audit log either way.' (ScheduleForm.tsx:644-662).",
+    "'Retries After A Failed Run' (0 to 5) and 'First Retry After (Minutes)' (1 to 1440); helper: 'A failed or timed-out run is tried again after this wait, doubling each time, before the schedule moves on to its next occurrence.' (ScheduleForm.tsx:592-640).",
+    "'Only Run During' window: an occurrence outside the window is not run late; it moves to the next one inside it (ScheduleForm.tsx:561-585).",
+    "Run row badge and note (Web ScheduleRunHistory.tsx:87, :165-169)."
+   ],
+   "journey": [
+    "Choose the missed-run policy and retry settings in the routine form and save.",
+    "The sweep claims a due occurrence. If it is more than the grace period late, the missed-run rule applies.",
+    "Run it once, late: the run goes ahead and its result carries the missed-run details; the history says 'Ran late: scheduled for <when>, started <how late> later.'",
+    "Skip: the run is recorded as cancelled with skipped, the run slot is returned, and the history says 'Skipped the run scheduled for <when>: it was missed by <how late>, and this schedule skips missed runs.'",
+    "If a run fails or times out and retries remain, the routine is scheduled again after the wait (doubling) for the same occurrence.",
+    "Open run history to read notes, errors and output."
+   ],
+   "feedback_and_outputs": [
+    "Notes from describeScheduleRunTiming: 'Ran late...' and 'Skipped the run scheduled for...' and, for condition watches, 'Skipped: the condition was not met. <detail>' (packages/contracts/cloud-contracts/src/schedules.ts:740-765).",
+    "Run error text for a skip: 'Skipped the occurrence scheduled for <time>: it was missed by more than the grace period' (schedule-service.ts:2264).",
+    "Audit event type schedule_missed_execution with outcome success for run late and failure for skip (schedule-service.ts:2120-2138).",
+    "Failed or timed-out status badge and error text on the run (ScheduleRunHistory.tsx:87, :172-176)."
+   ],
+   "settings": [
+    "missedExecutionPolicy (run_once default, skip) (schedule-service.ts:760-763).",
+    "retryMaxAttempts 0 to 5, default 0; retryBackoffSeconds 60 to 86,400, default 300 (schedule-service.ts:86-89, :741-757).",
+    "AGI_DB_LOW_POWER environment setting raises the grace to two hours and limits sweeps (apps/web/lib/server/cron-low-power.ts:6-21; schedule-service.ts:81-85)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Detection: late by more than missedExecutionGraceMs counts as missed; applies only to scheduled, first attempts (schedule-service.ts:2102-2118). Grace is twice the 15 minute sweep interval (30 minutes) or twice an hour in low-power mode (packages/platform/utils/src/scheduling/schedule-time.ts:259; schedule-service.ts:81-85).",
+    "Policy: skip finalizes the run as cancelled with {missedExecution, skipped:true}, returns the run slot; run_once continues and stores the missed details in the result; both write an audit event (schedule-service.ts:2256-2268, :2120-2138, :2156-2166).",
+    "A run that resumes after approval keeps its missed-run details (schedule-service.ts:2220, :2039).",
+    "Retries: failed or timeout, scheduled triggers only, while retriesSpent is below retryMaxAttempts, no cap reached and the expiry not passed; delay is backoff doubled per retry, exponent capped at 10, capped at one day; a retry claims under its own key and does not spend a run (schedule-service.ts:1643-1647, :1713-1735; :1381-1382).",
+    "Shared note text via describeScheduleRunTiming, used by Web, Tauri desktop, Mobile, VS Code and Chrome (see user_experience).",
+    "Condition-not-met runs are also recorded as skipped and give the run slot back (schedule-service.ts:2269-2277).",
+    "Electron Local routines: missed beyond 120 seconds with policy skip records a run in state 'skipped'; run_once starts it; a computer sleep marks the interrupted claim and never replays it (apps/desktop/electron/runtime/localRoutineEngine.ts:145, :511-537; test title apps/desktop/electron/__tests__/localRoutineEngine.test.ts:587).",
+    "Expired worker leases are recovered by the sweep so a run does not stay 'running' for ever (schedule-service.ts:2360-2400; exact recovery steps not read)."
+   ],
+   "incomplete": [
+    "CLI shows only 'ran late' lines from the result; a skipped run appears as cancelled with the error text, not as 'skipped' (apps/cli/src/schedules.rs:489-499).",
+    "Mobile replaces a cancelled run's error with 'This run was canceled.' and so loses the skip explanation text except the timing note (apps/mobile/src/features/schedules/service.ts:126-131).",
+    "Missed and retry fields are only on the Web form (and Local missed choice on Electron); Mobile, CLI, VS Code, Chrome, Tauri desktop cannot set them (no matches in those apps' schedule code).",
+    "A routine whose owner left the workspace is not claimed and only a server warning is logged; the owner sees nothing on the routine (schedule-service.ts:1317-1335)."
+   ],
+   "disconnected_or_disabled": [
+    "In low-power mode the cron route returns early after the first 15 minutes of each hour (apps/web/app/api/cron/run-schedules/route.ts:21-22; cron-low-power.ts:17-19)."
+   ],
+   "not_available": [
+    "Held run that waits for the usage allowance to reset and then runs: no code found; brief S63.34 missing on every app.",
+    "Expired connector repair flow: no code found in schedule-service, the executor or the web schedules feature for reconnect or expired connectors; brief S63.35 missing on every app.",
+    "Chrome: the brief says no missed-run note, but code shows one (schedulesSection.ts:1077-1078); the brief is out of date."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "S63.33: when an occurrence is missed or skipped, the run history says so and why. Done on Web, Desktop, Mobile, CLI, VS Code; the brief lists Chrome as none.",
+     "source": "doc: knowledge-base/data/area-briefs/063-routines-schedules-and-triggers.md (S63.33)"
+    },
+    {
+     "statement": "S63.34: a run that hits the usage allowance is held and runs automatically after the allowance resets. Missing on every app.",
+     "source": "doc: knowledge-base/data/area-briefs/063-routines-schedules-and-triggers.md (S63.34)"
+    },
+    {
+     "statement": "S63.35: when a connector a routine depends on expires, the user is told on the routine and led to reconnect. Missing on every app.",
+     "source": "doc: knowledge-base/data/area-briefs/063-routines-schedules-and-triggers.md (S63.35)"
+    },
+    {
+     "statement": "A run is missed when it starts more than twice the sweep interval late; run_once runs it late, skip records it and gives the run slot back; both write an audit event.",
+     "source": "apps/web/lib/services/schedule-service.ts:83-85, :2102-2138, :2156-2166"
+    },
+    {
+     "statement": "Failed or timed-out scheduled runs retry with doubling wait up to the chosen count (0 to 5).",
+     "source": "apps/web/lib/services/schedule-service.ts:86-89, :1643-1647, :1713-1735"
+    },
+    {
+     "statement": "The note text comes from describeScheduleRunTiming in the shared contracts.",
+     "source": "packages/contracts/cloud-contracts/src/schedules.ts:740-765"
+    },
+    {
+     "statement": "Mobile v1 only needs the pieces required for Cloud sign-in and future dispatch; Desktop and CLI carry deeper automation later.",
+     "source": "doc: docs/product/requirements.md (section 20)"
+    }
+   ],
+   "acceptance_criteria": [
+    "A scheduled occurrence started more than 30 minutes after its due time (normal mode) is treated as missed; one started within 30 minutes is not.",
+    "With 'Run it once, late' the run executes and its history note reads 'Ran late: scheduled for <time>, started <duration> later.'",
+    "With 'Skip it...' no model call happens, the run shows as skipped with the skip note, and the routine's run counter is not increased by that occurrence.",
+    "Both policies create a schedule_missed_execution audit event.",
+    "With Retries After A Failed Run 2 and first retry 5 minutes, a failed run is tried again after 5 minutes, then 10 minutes, then the routine moves on; a manual run is not retried.",
+    "A retry does not reduce the Maximum Runs allowance.",
+    "Run history on Web, Mobile, VS Code and Chrome shows the same note text for the same run.",
+    "A Local routine on Electron with skip and a due time more than 2 minutes old shows state 'skipped'."
+   ],
+   "inferred": [
+    "The Chrome run list should show missed notes because it calls the shared function, but no test title for it was found [inferred] (schedulesSection.ts:1077).",
+    "A usage-allowance refusal currently surfaces as a failed run (which retries if configured) because the reservation call is not guarded in runClaimedSchedule [inferred] (scheduled-agent-executor.ts:1056; schedule-service.ts:2309-2335).",
+    "The two-sweep grace means a routine only appears missed after about 30 minutes, which is roughly two missed cron ticks [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Hold a run that hits the allowance, show 'Waiting for your allowance to reset', and run it after the reset time.",
+    "[proposed] When a connector token has expired, mark the run and the routine with a repair link to the connector screen.",
+    "[proposed] Show the skip note on CLI and Mobile with the same wording as Web.",
+    "[proposed] Tell the owner on the routine when a workspace departure stops it from running."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "service",
+    "name": "detectMissedExecution and missedExecutionGraceMs",
+    "path": "apps/web/lib/services/schedule-service.ts",
+    "role": "Missed detection and grace (lines 83-85, 2102-2118)"
+   },
+   {
+    "kind": "service",
+    "name": "runClaimedSchedule",
+    "path": "apps/web/lib/services/schedule-service.ts",
+    "role": "Applies skip or run_once, condition skip, error to status mapping (lines 2198-2335)"
+   },
+   {
+    "kind": "service",
+    "name": "auditMissedExecution",
+    "path": "apps/web/lib/services/schedule-service.ts",
+    "role": "Audit event schedule_missed_execution (2120-2138)"
+   },
+   {
+    "kind": "service",
+    "name": "releaseExecutionSlot",
+    "path": "apps/web/lib/services/schedule-service.ts",
+    "role": "Gives back a run slot for a skipped occurrence (2156-2166)"
+   },
+   {
+    "kind": "service",
+    "name": "finalizeScheduleRun retry branch and retryDelaySeconds",
+    "path": "apps/web/lib/services/schedule-service.ts",
+    "role": "Retry decision and doubling wait (1643-1735)"
+   },
+   {
+    "kind": "service",
+    "name": "claimDueScheduleRuns",
+    "path": "apps/web/lib/services/schedule-service.ts",
+    "role": "Claims due routines, own idempotency key for retries (1341-1410)"
+   },
+   {
+    "kind": "service",
+    "name": "recoverExpiredScheduleRun and findExpiredClaims",
+    "path": "apps/web/lib/services/schedule-service.ts",
+    "role": "Lease recovery (2360-2420)"
+   },
+   {
+    "kind": "job",
+    "name": "cron run-schedules",
+    "path": "apps/web/app/api/cron/run-schedules/route.ts",
+    "role": "Sweep waves; low-power skip"
+   },
+   {
+    "kind": "config",
+    "name": "cron entry for run-schedules",
+    "path": "vercel.json",
+    "role": "Every 15 minutes (lines 50-51)"
+   },
+   {
+    "kind": "config",
+    "name": "SWEEP_INTERVAL_MS",
+    "path": "packages/platform/utils/src/scheduling/schedule-time.ts",
+    "role": "15 minute sweep interval (line 259)"
+   },
+   {
+    "kind": "config",
+    "name": "low-power switch",
+    "path": "apps/web/lib/server/cron-low-power.ts",
+    "role": "AGI_DB_LOW_POWER and cron skip window"
+   },
+   {
+    "kind": "schema",
+    "name": "describeScheduleRunTiming",
+    "path": "packages/contracts/cloud-contracts/src/schedules.ts",
+    "role": "Shared note text for all clients (740-765)"
+   },
+   {
+    "kind": "component",
+    "name": "RunRow (Web)",
+    "path": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+    "role": "Badge and note"
+   },
+   {
+    "kind": "component",
+    "name": "ScheduleForm missed and retry fields",
+    "path": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "role": "Inputs (592-662)"
+   },
+   {
+    "kind": "component",
+    "name": "DesktopCloudSchedules run history",
+    "path": "apps/desktop/src/features/schedules/DesktopCloudSchedules.tsx",
+    "role": "Tauri note display (997, 1422)"
+   },
+   {
+    "kind": "service",
+    "name": "mapRun (mobile)",
+    "path": "apps/mobile/src/features/schedules/service.ts",
+    "role": "Adds timingNote, replaces error text (lines 123-146)"
+   },
+   {
+    "kind": "component",
+    "name": "Mobile RunRow",
+    "path": "apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx",
+    "role": "Shows timingNote (213)"
+   },
+   {
+    "kind": "command",
+    "name": "CLI run_outcome_lines / render_runs",
+    "path": "apps/cli/src/schedules.rs",
+    "role": "Prints ran-late line (489-499, 631-668)"
+   },
+   {
+    "kind": "component",
+    "name": "schedulePresentation (VS Code)",
+    "path": "apps/extension-vscode/src/features/schedules/schedulePresentation.ts",
+    "role": "Run label 'Skipped' and detail (118-157)"
+   },
+   {
+    "kind": "component",
+    "name": "Chrome buildRunEntry",
+    "path": "apps/extension/src/features/side-panel/schedulesSection.ts",
+    "role": "Note and error per run (1067-1090)"
+   },
+   {
+    "kind": "service",
+    "name": "LocalRoutineEngine tick",
+    "path": "apps/desktop/electron/runtime/localRoutineEngine.ts",
+    "role": "Local missed-run policy with 120 second grace (145, 480-537)"
+   },
+   {
+    "kind": "table",
+    "name": "scheduled_tasks and scheduled_task_runs",
+    "path": "apps/web/db/neon/0209_scheduled_task_rules_and_policies.sql",
+    "role": "missed_execution_policy and retry columns"
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Vercel cron calls /api/cron/run-schedules every 15 minutes; in low-power mode it returns early after minute 15 of the hour.",
+     "runs_on": "our servers",
+     "evidence": "vercel.json:50-51; apps/web/app/api/cron/run-schedules/route.ts:21-22; apps/web/lib/server/cron-low-power.ts:17-19"
+    },
+    {
+     "what_happens": "The sweep cancels expired approvals, recovers expired leases, then claims due routines (enabled, active, next run due, not past expiry, under run limit unless retrying, owner allowed to run unattended and active in the workspace). The claim inserts a run row with an idempotency key built from the due time and retry number.",
+     "runs_on": "our servers",
+     "evidence": "schedule-service.ts:1341-1410, :2477-2492"
+    },
+    {
+     "what_happens": "For each claim, the cap check runs; then missed detection compares now with the due time; skip policy finalizes the run as cancelled, run_once continues.",
+     "runs_on": "our servers",
+     "evidence": "schedule-service.ts:2238-2268"
+    },
+    {
+     "what_happens": "The executor runs the routine (model call to the provider); on error the status becomes failed, on timeout timeout, on outside cancel cancelled.",
+     "runs_on": "outside service",
+     "evidence": "schedule-service.ts:2309-2335; apps/web/lib/services/scheduled-agent-executor.ts:866-1187"
+    },
+    {
+     "what_happens": "finalizeScheduleRun writes the run result and decides the next time: retry with doubling delay, or next occurrence, or completed/expired, or pause at cap; failed and timed-out runs queue a notification, cancelled ones do not.",
+     "runs_on": "our servers",
+     "evidence": "schedule-service.ts:1653-1810, :1822-1847"
+    },
+    {
+     "what_happens": "Clients list runs; the shared function turns the stored missedExecution and skipped fields into the note text.",
+     "runs_on": "device",
+     "evidence": "packages/contracts/cloud-contracts/src/schedules.ts:740-765; ScheduleRunHistory.tsx:76"
+    },
+    {
+     "what_happens": "Electron Local routines: the on-device engine ticks every second and applies its own missed rule with a 120 second grace.",
+     "runs_on": "device",
+     "evidence": "apps/desktop/electron/runtime/localRoutineService.ts:226-240; localRoutineEngine.ts:480-537"
+    }
+   ],
+   "data": [
+    {
+     "what": "Missed details {policy, scheduledFor, detectedAt, lateByMs} and skipped flag",
+     "where_stored": "scheduled_task_runs.result (JSON)",
+     "synced": "Returned with each run through the API",
+     "retained_or_deleted": "With the run; removed when the routine is deleted"
+    },
+    {
+     "what": "Retry state (retry_attempt, retry_scheduled_for, attempt_count)",
+     "where_stored": "scheduled_tasks and scheduled_task_runs",
+     "synced": "attemptCount returned with the run",
+     "retained_or_deleted": "Reset to zero on resume (schedule-service.ts:1269)"
+    },
+    {
+     "what": "Audit event schedule_missed_execution",
+     "where_stored": "audit log via recordAuditEvent (storage table not opened)",
+     "synced": "Server side only",
+     "retained_or_deleted": "unknown"
+    },
+    {
+     "what": "Local routine run states (skipped, cancelled, completed) up to 20 runs",
+     "where_stored": "Electron device store",
+     "synced": "No",
+     "retained_or_deleted": "Oldest dropped beyond 20 (localRoutineEngine.ts:144, :519)"
+    }
+   ],
+   "models_and_providers": "The missed and retry logic does not depend on a model. A retried or late run goes through normal route selection; retries of a failed provider call use the same managed path. Nothing in this feature switches model or provider on failure (no such code found in the retry branch)."
+  },
+  "access_and_usage": {
+   "account": "Signed-in account to read history; the sweep acts for the routine owner and skips owners whose account state forbids unattended work or who left the workspace (schedule-service.ts:1366-1368, :1317-1335).",
+   "permissions": "Owner reads their own runs. Workspace admin visibility of skipped work: only a server log line (schedule-service.ts:1328-1335).",
+   "subscription": "A run for an account without managed compute access is cancelled by the executor with a reason (scheduled-agent-executor.ts:889-915). A usage-allowance hold: none found in the code.",
+   "limits_and_metering": "Retries 0 to 5; backoff 60 to 86,400 seconds, default 300; retry delay doubles with the exponent capped at 10 (schedule-service.ts:86-89, :1643-1647). Retries do not spend a run (schedule-service.ts:1381-1382). Sweep batch limits are in the cron route (not detailed).",
+   "flags": "AGI_DB_LOW_POWER (cron-low-power.ts:6-21). Others: none found.",
+   "model_compatibility": "None found in the code for missed or retry rules.",
+   "provider_restrictions": "None found in the code for these rules.",
+   "local_mode": "Cloud sweep, retries and the missed policy do not apply in Local mode. Electron Local routines have a skip-or-run missed rule with a 2 minute grace, run only while the Desktop app is open, and have no retry code (localRoutineEngine.ts:145, :511-537; LocalRoutinesSection.tsx:218-222; the text 'Runs while the Desktop app is open')."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Late within grace",
+    "behaviour": "Not missed; runs normally with no note",
+    "evidence": "schedule-service.ts:2111"
+   },
+   {
+    "state": "Late beyond grace, run_once",
+    "behaviour": "Runs, note 'Ran late...'",
+    "evidence": "schedule-service.ts:2256-2258; cloud-contracts schedules.ts:757"
+   },
+   {
+    "state": "Late beyond grace, skip",
+    "behaviour": "Run cancelled and shown as skipped; slot returned",
+    "evidence": "schedule-service.ts:2259-2268"
+   },
+   {
+    "state": "Retry attempt",
+    "behaviour": "Not checked for missed again; keeps the same occurrence",
+    "evidence": "schedule-service.ts:2106; :1727"
+   },
+   {
+    "state": "Manual run fails",
+    "behaviour": "Not retried",
+    "evidence": "schedule-service.ts:1713-1716; test title schedule-service.policies.test.ts:288"
+   },
+   {
+    "state": "Retries exhausted",
+    "behaviour": "Routine moves to its next occurrence",
+    "evidence": "schedule-service.ts:1736-1773"
+   },
+   {
+    "state": "Timeout",
+    "behaviour": "Status timeout; retried like a failure",
+    "evidence": "schedule-service.ts:2321-2323, :1717"
+   },
+   {
+    "state": "Worker died",
+    "behaviour": "Lease expiry recovery ends the run with 'Worker lease expired before a terminal result was recorded'",
+    "evidence": "schedule-service.ts:2360"
+   },
+   {
+    "state": "Owner left workspace",
+    "behaviour": "Routine is never claimed; a warning is logged",
+    "evidence": "schedule-service.ts:1317-1335"
+   },
+   {
+    "state": "Sleep or offline on Electron",
+    "behaviour": "Engine suspends on sleep; interrupted claim is marked and not replayed",
+    "evidence": "localRoutineService.ts:218-232; test title localRoutineEngine.test.ts:587"
+   },
+   {
+    "state": "Usage allowance exhausted",
+    "behaviour": "Not handled as a hold; surfaces as a failed run (inferred)",
+    "evidence": "scheduled-agent-executor.ts:1056 [inferred]"
+   },
+   {
+    "state": "Connector expired",
+    "behaviour": "not handled in the code as a repair flow",
+    "evidence": "no reconnect handling in schedule-service.ts or scheduled-agent-executor.ts"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Web note is plain text in the run row; Mobile and VS Code show the same text; no extra role found",
+    "evidence": "ScheduleRunHistory.tsx:165-169"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/lib/services/__tests__/schedule-missed-grace.test.ts",
+     "covers": "Two sweeps of lateness at normal cadence (13); two hourly sweeps in low-power mode (18)."
+    },
+    {
+     "path": "apps/web/lib/services/schedule-service.policies.test.ts",
+     "covers": "Retry claimed under its own key without spending a run (235); retry scheduled after backoff (250); no retry for hand-started runs (288); skips a late occurrence and audits it (305); policy refusal without retry or notice (532); says nothing for skipped or cancelled runs (626)."
+    },
+    {
+     "path": "apps/web/lib/services/schedule-service.test.ts",
+     "covers": "Terminal run states and lease handling (titles 1072, 1114, 1252, 1320)."
+    },
+    {
+     "path": "apps/web/features/schedules/types/schedule-run-usage.test.ts",
+     "covers": "Run usage display helpers (not the timing note)."
+    },
+    {
+     "path": "apps/mobile/__tests__/schedule-service.test.ts",
+     "covers": "Maps terminal run states and does not expose provider diagnostics (222, 244)."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/schedules.test.ts",
+     "covers": "Names a manual run and keeps the server's error text (127); lists run history with outcomes (283)."
+    },
+    {
+     "path": "apps/desktop/electron/__tests__/localRoutineEngine.test.ts",
+     "covers": "Elapsed one-shot with the selected missed-run policy (697); sleep interruption never duplicated (587)."
+    },
+    {
+     "path": "apps/extension/__tests__/schedule-action-controls.test.ts",
+     "covers": "Chrome schedule controls; no missed-note test found by title."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Run it once, late",
+     "steps": [
+      "Create a routine with 'Run it once, late'.",
+      "Prevent the sweep for over 30 minutes (stop cron in a test database).",
+      "Run the sweep."
+     ],
+     "expected": "Run executes; history note 'Ran late: scheduled for <time>, started <duration> later.'; an audit event exists."
+    },
+    {
+     "name": "Skip",
+     "steps": [
+      "Set 'Skip it and wait for the next occurrence'.",
+      "Repeat the delay and sweep."
+     ],
+     "expected": "Run is skipped, no output, no credits; Runs counter unchanged; next occurrence is scheduled."
+    },
+    {
+     "name": "Retries with doubling",
+     "steps": [
+      "Set Retries After A Failed Run 2 and First Retry After 5 minutes.",
+      "Make the run fail (invalid connector or forced error in a test).",
+      "Watch the runs and the next-run time."
+     ],
+     "expected": "Retry after about 5 minutes, then about 10; attempt counts rise; after the last retry the next normal occurrence is scheduled."
+    },
+    {
+     "name": "Manual run not retried",
+     "steps": [
+      "Press Run now on a routine with retries configured and force a failure."
+     ],
+     "expected": "One failed run; no retry scheduled."
+    },
+    {
+     "name": "Same note across apps",
+     "steps": [
+      "Produce a skipped run.",
+      "Open its history on Web, Mobile, VS Code and Chrome; run agi schedules runs."
+     ],
+     "expected": "Web, Mobile, VS Code, Chrome show the shared skip note; CLI shows cancelled and the error text, not the 'skipped' word."
+    },
+    {
+     "name": "Held run after allowance (not built)",
+     "steps": [
+      "Exhaust the plan allowance and let a run fall due."
+     ],
+     "expected": "Current behaviour to record: unknown; required behaviour in the brief is a held run that starts after the reset."
+    }
+   ],
+   "diagnostics": [
+    "Audit event type schedule_missed_execution; log 'Scheduled task batch completed' with counts (schedule-service.ts:2520).",
+    "Run row fields: scheduled_for, attempt_count, status, error, result.missedExecution.",
+    "Task fields: retry_attempt, retry_scheduled_for, last_error, next_execution_at.",
+    "Log 'Scheduled tasks were not claimed: their owner is no longer an active member of the workspace'.",
+    "Cron response {\"skipped\":\"db_low_power\"} when low power is on."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Held run after the usage allowance resets is not built.",
+    "affects": "All apps; paid and Free users who hit an allowance.",
+    "evidence": "Brief S63.34; no hold code found in schedule-service.ts or scheduled-agent-executor.ts",
+    "work_needed": "Define the hold state, the reset time source, and the resume job; show it in history."
+   },
+   {
+    "gap": "Expired connector repair flow is not built.",
+    "affects": "All apps; routines with connectors.",
+    "evidence": "Brief S63.35; no reconnect handling found in the schedule feature code read",
+    "work_needed": "Detect an expired connector at run time, mark the routine, and link to the reconnect screen."
+   },
+   {
+    "gap": "Missed and retry settings can be set only on the Web form (and Electron Local missed choice).",
+    "affects": "Mobile, CLI, VS Code, Chrome, Tauri desktop users.",
+    "evidence": "No such fields in those apps' schedule code",
+    "work_needed": "Add fields or document web-only."
+   },
+   {
+    "gap": "CLI does not label a skipped run as skipped; Mobile replaces the cancelled error text.",
+    "affects": "CLI and Mobile users.",
+    "evidence": "apps/cli/src/schedules.rs:489-499; apps/mobile/src/features/schedules/service.ts:126-131",
+    "work_needed": "Use the shared note wording."
+   },
+   {
+    "gap": "The brief says Chrome has no missed-run note, but code has one; its run history also exists although the brief marks it missing.",
+    "affects": "Documentation accuracy.",
+    "evidence": "schedulesSection.ts:1067-1090",
+    "work_needed": "Update brief rows S63.22 and S63.33."
+   },
+   {
+    "gap": "No notice when a routine silently stops because its owner left the workspace.",
+    "affects": "Workspace routines.",
+    "evidence": "schedule-service.ts:1317-1335 logs only",
+    "work_needed": "Show a reason on the routine and tell an admin."
+   },
+   {
+    "gap": "The missed-run grace is a fixed multiple of the sweep, not a user setting.",
+    "affects": "Owners who want a tighter or looser rule.",
+    "evidence": "schedule-service.ts:83-85",
+    "work_needed": "Decide whether to expose it; rate limits and similar values should be configuration (doc: AGENTS.md section 8)."
+   },
+   {
+    "gap": "No test title found that checks the Chrome missed note or the CLI ran-late line.",
+    "affects": "Test coverage.",
+    "evidence": "Searched apps/extension/__tests__ and apps/cli/src/schedules.rs test titles",
+    "work_needed": "Add tests."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:cli",
+   "surface:vscode",
+   "surface:chrome",
+   "mode:cloud",
+   "mode:local",
+   "table:scheduled_tasks",
+   "table:scheduled_task_runs",
+   "SYS-observability-and-operations",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-connectors-plugins-and-skills",
+   "SYS-agents-tools-and-automation",
+   "SYS-api-and-contracts",
+   "SYS-execution-boundaries",
+   "SYS-model-catalog-and-routing",
+   "F063-07",
+   "F063-08"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/schedule-service.ts",
+    "evidence": "detectMissedExecution, runClaimedSchedule, finalizeScheduleRun (lines 1653-1810, 2102-2335)"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:packages/contracts/cloud-contracts/src/schedules.ts",
+    "evidence": "describeScheduleRunTiming (740-765)"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/cron/run-schedules",
+    "evidence": "apps/web/app/api/cron/run-schedules/route.ts:19"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/schedules/[id]/runs",
+    "evidence": "apps/web/app/api/schedules/[id]/runs/route.ts (file exists; handler lines not read)"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:scheduled_task_runs",
+    "evidence": "result JSON and attempt_count (schedule-service.ts:1665-1680)"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:scheduled_tasks",
+    "evidence": "retry_attempt, retry_scheduled_for (schedule-service.ts:1756-1768)"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:vercel.json",
+    "evidence": "cron every 15 minutes, lines 50-51"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/web/lib/server/cron-low-power.ts",
+    "evidence": "AGI_DB_LOW_POWER setting"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "ScheduleRunHistory.tsx:76-169"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "mobile ScheduleRunHistory.tsx:213"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "schedulePresentation.ts:118-157"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:chrome",
+    "evidence": "schedulesSection.ts:1077"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:cli",
+    "evidence": "apps/cli/src/schedules.rs:489-499"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/services/__tests__/schedule-missed-grace.test.ts",
+    "evidence": "titles at lines 13 and 18"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/services/schedule-service.policies.test.ts",
+    "evidence": "titles 235-305"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/desktop/electron/__tests__/localRoutineEngine.test.ts",
+    "evidence": "titles 587, 697"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "executor access check cancels runs without access (scheduled-agent-executor.ts:889-915)"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "SYS-connectors-plugins-and-skills",
+    "evidence": "connector repair flow has no code (brief S63.35)"
+   }
+  ],
+  "unknowns": [
+   "Where the audit event is stored and how long it is kept.",
+   "What the recovery code does for an expired lease beyond the error text (schedule-service.ts:2360-2420 only partly read).",
+   "Exact error a usage-allowance refusal raises in reserveManagedUsageRequest and how it shows in run history.",
+   "Whether a skipped Cloud run counts toward notifications in any app (the code sends none for cancelled runs).",
+   "Wording of the Local routine 'run once' option label (only 'Skip missed runs' read).",
+   "Behaviour of the older Tauri local scheduler (scheduler_* commands, AgiWorkScheduled.tsx) for missed runs beyond one visible sentence at line 148.",
+   "Handler details of GET /api/schedules/[id]/runs."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "6",
+   "claim": "Low-power mode: the cron route returns early after minute 15 of the hour (route.ts:21-22; cron-low-power.ts:17-19)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Behaviour is right: lowPowerCronSkip returns {skipped:'db_low_power'} when UTC minutes >= 15 and AGI_DB_LOW_POWER is '1'. The route lines cited (21-22) are the MAX_WAVES constant and the GET signature. The call is at route.ts:28.",
+   "evidence": "apps/web/app/api/cron/run-schedules/route.ts:28; apps/web/lib/server/cron-low-power.ts:17-19",
+   "correction": "Cite route.ts:28 for the low-power early return."
+  },
+  {
+   "section": "7",
+   "claim": "Local mode: Cloud sweep, retries and missed policy do not apply; Electron Local routines have a 2 minute grace, run only while Desktop is open, no retry code",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The 2 minute grace and the no-retry claim hold. A grep for 'retry' in localRoutine*.ts found nothing. The 'Runs while the Desktop app is open' text is at LocalRoutinesSection.tsx:199, not 218-222. The same text adds 'The model may still run in the cloud', so a Local routine's model call can leave the device.",
+   "evidence": "apps/web/features/schedules/components/LocalRoutinesSection.tsx:199",
+   "correction": "Cite LocalRoutinesSection.tsx:199, and note the on-screen text says the model may still run in the cloud."
+  }
+ ],
+ "missing_facts": [
+  "A reached credit cap stops retries. When a retry would otherwise fire, the cap pauses the routine, via isCreditCapReached in the retry predicate and the pauseForCreditCap path (schedule-service.ts:1643-1647, :2130-2250). The page names the cap only in passing.",
+  "A run resumed after approval skips both missed detection and the condition check (`if (!options.resume)`, schedule-service.ts:2256-2257). The page notes only that the missed details are kept.",
+  "The skip error text is 'Skipped the occurrence scheduled for ...' but a condition-watch skip is stored as status 'cancelled' with the error 'Condition not met: ...' (schedule-service.ts:2269-2277). The page covers this only through the note text."
+ ]
+}

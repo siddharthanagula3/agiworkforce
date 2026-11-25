@@ -1,0 +1,414 @@
+{
+ "S12.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Message input"
+   }
+  ],
+  "needs": "none",
+  "note": "The empty new-chat canvas is drawn in app/(app)/(tabs)/chat.tsx (testID chat.new-chat.middle). The ChatEmptyState component cited in the plan is only used for a saved conversation that has no messages (chat/[id]), not on the new-chat screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, or stay on the chat tab if it is already open.",
+   "Tap the menu button at the top left to open the drawer, then tap New chat.",
+   "Look for an empty conversation area with no earlier messages, a greeting at the top, and the composer at the bottom with its text field."
+  ],
+  "where": "Drawer (top-left menu) > New chat"
+ },
+ "S12.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Nickname"
+   }
+  ],
+  "needs": "a signed-in account, or a local chat (no account needed), and a name to type",
+  "note": "The name comes from the nickname first, then the first word of the full name, then (in Cloud) the account first name. The greeting text is built in packages/platform/utils/src/greeting.ts. The plan cites ChatEmptyState, which is not the new-chat greeting (see S12.01).",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer and tap Settings, then tap Personalization.",
+   "Type a name in the Nickname field and leave the screen so it saves.",
+   "Open the drawer and tap New chat.",
+   "Look at the greeting at the top of the new chat, which should read with your name, for example Good morning, <name>."
+  ],
+  "where": "Drawer > Settings > Personalization > Nickname (type your name), then Drawer > New chat"
+ },
+ "S12.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+    "text": "Nickname"
+   }
+  ],
+  "needs": "none (a local chat works without an account)",
+  "note": "No separate on/off switch for personalization was found. Clearing the nickname sets nameOptedOut, and the greeting then has no name. If a Full Name is still saved in local mode, its first word is still used. The line How can I help you? is not shown on the new-chat screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer, tap Settings, then tap Personalization.",
+   "Clear the Nickname field (leave it empty) and leave the screen so it saves.",
+   "Open the drawer and tap New chat.",
+   "Look at the greeting: it should be a plain time-of-day phrase such as Good morning with no name and no personal details."
+  ],
+  "where": "Drawer > Settings > Personalization > Nickname (clear the field), then Drawer > New chat"
+ },
+ "S12.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/mobile (src, app, components) for TaskChip, taskChip, Quick task and Task categor: nothing found. TaskChips.tsx does not exist. The + sheet has Create image, Create video and Create file rows, which are not one-tap task shortcuts that set up the next message.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Add to Chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Attach from Library"
+   }
+  ],
+  "needs": "a file to upload in an earlier chat (so there is a recent file to offer)",
+  "note": "Recent files come from recentMobileFiles in apps/mobile/src/features/search/mobileGlobalSearch. The Attach from Library section only appears when there are library items, and in Cloud mode it also loads the cloud library.",
+  "reachable": "yes",
+  "steps": [
+   "On the new-chat screen, tap the + button at the left of the composer.",
+   "Look at the Add to Chat sheet, under the Camera, Photos and File cards, for the Attach from Library section.",
+   "If recent files are listed there, tap one to attach it to the next message.",
+   "Compare with Expected: the recently used files should be offered in one step."
+  ],
+  "where": "New chat > + (Add to chat, left of the composer text field) > Attach from Library"
+ },
+ "S12.09": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Connect your apps"
+   }
+  ],
+  "needs": "a signed-in Cloud account that can use connectors",
+  "note": "The connector suggestion chips (NewChatConnectorSuggestions.tsx) render only inside ChatEmptyState, which MessageList shows for a saved conversation with zero messages (chat/[id]), not on the new-chat screen. The new-chat + sheet has a Connectors row (Manage connectors), which lists connectors but does not recommend them. Searched apps/mobile for NewChatConnectorSuggestions and ChatEmptyState usage.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S12.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Add to Chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Web search"
+   }
+  ],
+  "needs": "a Cloud account granted web search, and a model that supports search",
+  "note": "The row appears only in Cloud mode when the account has canUseWebSearch and the model supports search. The plan's TaskChips.tsx source no longer exists.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to Cloud (Drawer > Cloud), then open the new-chat screen.",
+   "Tap the + button at the left of the composer to open the Add to Chat sheet.",
+   "Turn on the Web search switch row.",
+   "Close the sheet, type a question that needs current facts, send it, and check that the answer uses web results."
+  ],
+  "where": "New chat > + (Add to chat) > Web search toggle"
+ },
+ "S12.11": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Deep research"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Add to Chat"
+   }
+  ],
+  "needs": "a Cloud account whose plan grants deep research, and a model that supports research and search (which plan includes it was not verified)",
+  "note": "The row is hidden unless FEATURES.research, Cloud mode, the model's research and search capabilities, and canUseDeepResearch are all true.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to Cloud, then open the new-chat screen.",
+   "Tap the + button and find the Deep research row in the Add to Chat sheet.",
+   "Turn on the Deep research switch and close the sheet.",
+   "Send a question and look for the Research chip above the composer (accessibility label Deep Research active)."
+  ],
+  "where": "New chat > + (Add to chat) > Deep research switch"
+ },
+ "S12.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "app/(app)/(tabs)/chat.tsx",
+    "text": "Create an image"
+   }
+  ],
+  "needs": "a Cloud account granted image creation (canUseImages) and an image model in the catalogue",
+  "note": "The Create image row only shows when FEATURES.imageGen, Cloud mode, an image model and canUseImages are all present.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to Cloud, then open the new-chat screen.",
+   "Tap the + button and tap Create image in the Add to Chat sheet.",
+   "Look at the new-chat heading: it should change to Create an image, and the composer is now in image mode.",
+   "Type a prompt and tap send; look for a generated image in the reply."
+  ],
+  "where": "New chat > + (Add to chat) > Create image"
+ },
+ "S12.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create video"
+   },
+   {
+    "file": "app/(app)/(tabs)/chat.tsx",
+    "text": "Create a video"
+   }
+  ],
+  "needs": "a Cloud account granted video generation (canUseVideoGeneration)",
+  "note": "The row only shows when FEATURES.videoGen, Cloud mode, a video model and canUseVideoGeneration are all present. Blocked requests show an alert from resolveMobileVideoGenerationRequest.",
+  "reachable": "yes",
+  "steps": [
+   "Switch to Cloud, then open the new-chat screen.",
+   "Tap the + button and tap Create video in the Add to Chat sheet.",
+   "Look at the new-chat heading: it should change to Create a video, with duration and aspect options.",
+   "Type a prompt and send; look for the video generation start (a notice may appear if the request is blocked)."
+  ],
+  "where": "New chat > + (Add to chat) > Create video"
+ },
+ "S12.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Start voice mode"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "/voice"
+   }
+  ],
+  "needs": "a microphone, microphone permission, and a plan with voice (canUseVoice)",
+  "note": "The button shows only when the composer is empty and voice is allowed. Typing /voice in the composer also opens voice mode.",
+  "reachable": "yes",
+  "steps": [
+   "Open the new-chat screen and leave the composer text field empty.",
+   "Look at the right end of the composer for the round button with the voice action.",
+   "Tap it. A voice intro sheet may show first; continue through it.",
+   "Look for the voice conversation screen (hands-free voice mode) and compare with Expected."
+  ],
+  "where": "New chat > empty composer > Start voice mode (round button at the right end of the composer)"
+ },
+ "S12.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/WorkModeSwitch.tsx",
+    "text": "Work"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/WorkModeSwitch.tsx",
+    "text": "Chat"
+   }
+  ],
+  "needs": "a signed-in Cloud account (if signed out, tapping Work opens sign-in)",
+  "note": "The switch is the segment with accessibilityLabel Chat or Work. The hint text says Your next messages run as AGI Work: planned, multi-step work with tools.",
+  "reachable": "yes",
+  "steps": [
+   "Open the new-chat screen and look at the header switch with the words Chat and Work.",
+   "Tap Work.",
+   "Look for the Work state: an approval mode control appears above the composer.",
+   "Send a task that needs several steps and tools, then compare with Expected (planned, multi-step work)."
+  ],
+  "where": "New chat > header switch Chat or Work > Work"
+ },
+ "S12.16": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "AGI Code"
+   },
+   {
+    "file": "apps/mobile/src/features/cloud-code/CloudCodeSessionsScreen.tsx",
+    "text": "New session"
+   }
+  ],
+  "needs": "a signed-in Cloud account; a GitHub repository is needed to pick a repository",
+  "note": "The coding entry is not in the new-chat + sheet; it is the AGI Code drawer item. The plan's cited line numbers moved but the feature is present.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the drawer.",
+   "Tap AGI Code.",
+   "Tap New session on the AGI Code screen.",
+   "Look at the New session sheet: Task, Repository, Network access and Start session sections should appear, which is the coding-agent setup."
+  ],
+  "where": "Drawer > AGI Code > New session"
+ },
+ "S12.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+    "text": "Enable temporary chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+    "text": "Turn on temporary chat?"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+    "text": "Temporary"
+   }
+  ],
+  "needs": "none",
+  "note": "The toggle is rendered in app/(app)/(tabs)/chat.tsx header. Whether a temporary chat is kept out of history is not judged here.",
+  "reachable": "yes",
+  "steps": [
+   "Open the new-chat screen and look at the top-right corner for the eye-off icon.",
+   "Tap it. An alert titled Turn on temporary chat? appears.",
+   "Tap Turn on. The icon now shows a Temporary label in purple.",
+   "Send a message, then check that the chat does not appear in your chat history after it finishes (compare with Expected)."
+  ],
+  "where": "New chat > top-right eye-off icon (Enable temporary chat) > Turn on"
+ },
+ "S12.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ModelSelectorButton.tsx",
+    "text": "Fast"
+   }
+  ],
+  "needs": "none",
+  "note": "The model name is shown from the selected model (getShortDisplayName), so its text varies. The word Fast appears only when fast mode is on. The button is hidden in image and video modes.",
+  "reachable": "yes",
+  "steps": [
+   "Open the new-chat screen.",
+   "Look at the bottom row of the composer, next to the + button: the model name is shown there.",
+   "Tap the model name. The model picker sheet opens.",
+   "Close the picker without changing anything and compare the name shown with the model you expected."
+  ],
+  "where": "New chat > composer bottom row, the model name beside the + button"
+ },
+ "S12.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Workspace: {{name}}"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a signed-in Cloud account; a second account in the same organization to check an organization workspace",
+  "note": "The line shows only in Cloud mode when a workspace resolves. The mode toggle is imported by the drawer (DrawerContent.tsx); its exact placement was inferred from the import, not seen on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open the drawer and tap Cloud in the mode toggle.",
+   "Tap New chat.",
+   "Look just under the greeting for a line that reads Workspace: <name>, with a building icon (organization) or a person icon (personal).",
+   "Compare the name with the workspace you expected."
+  ],
+  "where": "Drawer > Cloud (mode toggle) > New chat, read the line under the greeting"
+ },
+ "S12.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Project"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSelectorBar.tsx",
+    "text": "Projects"
+   }
+  ],
+  "needs": "at least one project already created",
+  "note": "The In <name> line is drawn in app/(app)/(tabs)/chat.tsx with testID chat.new-chat.project. The Project row shows Choose until a project is picked.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure at least one project exists (create one from the drawer if needed).",
+   "On the new-chat screen, tap the + button and tap Project in the Add to Chat sheet.",
+   "Choose a project in the Projects list.",
+   "Look for the line In <project name> under the greeting, with an X to start outside it (compare with Expected)."
+  ],
+  "where": "New chat > + (Add to chat) > Project, then pick a project in the Projects picker"
+ },
+ "S12.22": {
+  "labels": [
+   {
+    "file": "app/(public)/onboarding.tsx",
+    "text": "Your AI workspace for everyday work."
+   }
+  ],
+  "needs": "a fresh install or a reset of the first-run flag",
+  "note": "The onboarding intro is a single hero screen with a feature sentence (Chat, write, code, research, and organize projects in one place.). No per-feature tour for the new-chat controls was found. The exact text of the hero button was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Start from a fresh install, or reset the onboarding flag, and open the app past the age check.",
+   "Read the hero screen: it shows the tagline Your AI workspace for everyday work. and the list of key notices.",
+   "Tap the main button at the bottom of the hero screen to continue.",
+   "Compare the intro with Expected: a short overview of the key features before the first chat."
+  ],
+  "where": "First launch after sign-up or install: the onboarding hero screen (shown when onboarding-done is not set)"
+ },
+ "S12.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Message input"
+   }
+  ],
+  "needs": "none",
+  "note": "The draft is restored by getDraft in ChatInput.tsx with draftKey new-chat (set in app/(app)/(tabs)/chat.tsx). Restore after a full app reload was not verified in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the new-chat screen and type a few words into the Message input field, without sending.",
+   "Open the drawer and go to another screen (for example Settings), then go back to New chat.",
+   "Look at the composer: the typed words should be back in the field.",
+   "Optionally fully close and reopen the app and compare the field again (persistence across reload is not confirmed in code)."
+  ],
+  "where": "New chat > type in the Message input > switch to another screen > back to New chat"
+ },
+ "S12.24": {
+  "labels": [
+   {
+    "file": "app/(app)/(tabs)/chat.tsx",
+    "text": "Run AI privately on this device, no account needed."
+   },
+   {
+    "file": "app/(public)/onboarding.tsx",
+    "text": "Sign in to use Cloud"
+   }
+  ],
+  "needs": "a signed-out or Free account",
+  "note": "No numeric guest limit (for example a message count) was found in the code, so the stated-limits part of Expected could not be checked. Searched apps/mobile for guest-related limit code with no match.",
+  "reachable": "yes",
+  "steps": [
+   "Sign out (or use a fresh install) and open the new-chat screen in Local mode.",
+   "Look for the line Run AI privately on this device, no account needed. in the download-model banner.",
+   "Tap Work in the header switch; a sign-in step opens instead of Work.",
+   "Compare with Expected: local use works without an account, and Cloud use prompts sign-in."
+  ],
+  "where": "New chat > header switch Chat or Work > Work while signed out (opens sign-in); or Drawer > Cloud while signed out"
+ }
+}

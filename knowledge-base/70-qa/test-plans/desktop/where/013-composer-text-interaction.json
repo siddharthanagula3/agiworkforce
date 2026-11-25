@@ -1,0 +1,759 @@
+{
+ "S13.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the chat home screen.",
+   "Click the message box that says \"Ask anything. Type / for commands\".",
+   "Type a short plain sentence such as \"hello test\".",
+   "Click the round \"Send message\" button at the right end of the box (or press Enter).",
+   "Look: the sentence appears as your message in the chat and a reply starts. Compare with Expected."
+  ],
+  "where": "Chat home (first screen after sign-in) > message box that says \"Ask anything. Type / for commands\" > \"Send message\" button"
+ },
+ "S13.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Send with Enter"
+   }
+  ],
+  "needs": "none",
+  "note": "Shift+Enter is handled in code (ChatComposerNew.tsx key handler) and is not written on screen except in the Settings hint for Send with Enter.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box that says \"Ask anything. Type / for commands\".",
+   "Type \"line one\".",
+   "Press Shift+Enter and type \"line two\", then press Shift+Enter again and type \"line three\".",
+   "Do not press plain Enter. Click \"Send message\".",
+   "Look: the sent message shows three separate lines, as typed. Compare with Expected."
+  ],
+  "where": "Chat home > message box \"Ask anything. Type / for commands\" > press Shift+Enter between lines"
+ },
+ "S13.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "none",
+  "note": "The resting cap is max-h-[240px] in ComposerInput.tsx; the tester can confirm the cap by eye only.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box that says \"Ask anything. Type / for commands\".",
+   "Type one line, then press Shift+Enter and type another line. Repeat until you have about ten lines.",
+   "Look: the box gets taller after each new line.",
+   "Keep adding lines until the box stops growing; it has a maximum height and then the text scrolls inside it. Compare with Expected."
+  ],
+  "where": "Chat home > message box \"Ask anything. Type / for commands\" (the box grows as you type)"
+ },
+ "S13.04": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Expand message input"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Collapse message input"
+   }
+  ],
+  "needs": "none",
+  "note": "The button only appears when the text is taller than about 120px (COMPOSER_EXPANDABLE_HEIGHT_PX in ChatComposerNew.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type or paste about ten lines of text.",
+   "Look for a small icon button at the top-right corner of the box.",
+   "Hover over it to see the tooltip \"Expand message input\" and click it.",
+   "Look: the box becomes much taller, and the same button now reads \"Collapse message input\". Click it again to return to normal height. Compare with Expected."
+  ],
+  "where": "Chat home > message box > \"Expand message input\" button at the top-right corner of the box (appears once the text is long)"
+ },
+ "S13.05": {
+  "labels": [],
+  "needs": "none",
+  "note": "Only the inline expand control (S13.04) was found. No full-screen or external-editor control exists in the code: searched apps/web and packages/ui for \"Exit full\", \"fullscreen\", \"full screen\", \"Open in\" and \"Edit in\" in the composer files; the only hits are the map and artifact preview.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S13.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Send message"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "none",
+  "note": "The disabled-reason text was not checked against the live UI; the button uses disabledReason in SendButton.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type a short sentence.",
+   "Look at the right end of the box: the round Send message button appears.",
+   "Click it (or hover to see the tooltip \"Send message\").",
+   "Look: the message is sent. Then clear the box and look at the same spot: a voice button appears instead when voice is available. Compare with Expected, including whether a disabled state shows a reason when sending is blocked."
+  ],
+  "where": "Chat home > message box > round \"Send message\" button at the right end of the box (after you type)"
+ },
+ "S13.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Stop generation"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Stop the current response"
+   }
+  ],
+  "needs": "a reply that takes several seconds to generate",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type \"Write a 500 word essay about rivers\", then click Send message.",
+   "While the reply is still streaming, look at the right end of the box: the button has changed to a stop control.",
+   "Hover over it to see the tooltip \"Stop generation\", then click it.",
+   "Look: the reply stops early and the text already written stays on screen. Compare with Expected."
+  ],
+  "where": "Chat home > send a message that needs a long answer > the same round button at the right end of the box, now a Stop control"
+ },
+ "S13.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Send with Enter"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "none",
+  "note": "The Settings switch \"Send with Enter\" changes what Enter does; with it off, Enter adds a new line and Cmd+Enter sends.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type \"first line\".",
+   "Press Shift+Enter.",
+   "Look: the cursor moves to a new line inside the box and nothing is sent.",
+   "Type \"second line\" and compare with Expected."
+  ],
+  "where": "Chat home > message box > press Shift+Enter (Enter alone sends)"
+ },
+ "S13.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "none",
+  "note": "Undo comes from the composer editor extension in packages/ui/unified-chat/src/composer-editor/extensions/index.ts, but which composer arm is used depends on apps/web/features/chat/lib/composer-editor-gate.ts; the tester should check the behaviour in the running app.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the message box and type \"alpha beta\".",
+   "Press Cmd+Z: the last typed words are removed.",
+   "Press Shift+Cmd+Z: the words come back.",
+   "Compare with Expected. The effect is visible only in the box text."
+  ],
+  "where": "Chat home > message box; undo and redo use the keyboard (Cmd+Z and Shift+Cmd+Z on a Mac), with no button"
+ },
+ "S13.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Attach clipboard"
+   }
+  ],
+  "needs": "a copied image or file on the Mac",
+  "note": "\"Attach clipboard\" is a separate desktop-only row in the + menu and is not needed for paste.",
+  "reachable": "yes",
+  "steps": [
+   "Copy one sentence from another app, click the message box and press Cmd+V: the sentence appears in the box.",
+   "Copy an image (or a file in Finder) and press Cmd+V in the box.",
+   "Look: the image or file appears as an attachment chip or preview above the box, not as text.",
+   "Compare with Expected."
+  ],
+  "where": "Chat home > message box > paste with Cmd+V (text, and copied files or images)"
+ },
+ "S13.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "formatted text copied from another app",
+  "note": "The paste decision reads the plain-text clipboard data in packages/platform/utils/src/composerPaste.ts; the rendered result was not verified.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Copy a line that has bold or a link from a web page (or from Notes).",
+   "Click the message box \"Ask anything. Type / for commands\" and press Cmd+V.",
+   "Look: the text appears with no bold, no link and no colours.",
+   "Compare with Expected."
+  ],
+  "where": "Chat home > message box > paste formatted text with Cmd+V; no control, the effect is seen in the box"
+ },
+ "S13.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Paste as plain text"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Put it back in the message"
+   }
+  ],
+  "needs": "a copied piece of source code",
+  "note": "Code detection is in packages/ui/unified-chat/src/lib/largePaste.ts (pastedCodeFence); the exact number of lines needed to trigger it was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Copy four or more lines of source code from an editor.",
+   "Click the message box and press Cmd+V.",
+   "Look: a notice appears above the box saying \"That paste looked like code, so it was wrapped in a code block.\" and the code is inside a code block.",
+   "Click \"Paste as plain text\" in the notice, then look: the same code comes back as plain text without the fence. Compare with Expected."
+  ],
+  "where": "Chat home > message box > paste source code with Cmd+V > notice \"Paste as plain text\""
+ },
+ "S13.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Put it back in the message"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "a long text copied to the clipboard (over 10,000 characters)",
+  "note": "The 10,000-character threshold is LARGE_PASTE_THRESHOLD in packages/platform/utils/src/composerPaste.ts; the hard message limit is 100,000 characters (packages/contracts/cloud-contracts/src/conversations.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Copy a long text of about 11,000 characters (for example a long article).",
+   "Click the message box and press Cmd+V.",
+   "Look: the box stays short; a notice appears above it saying the paste was long and was attached as a file named Pasted text.txt.",
+   "Click \"Put it back in the message\" to see the text return to the box, or dismiss the notice. Compare with Expected."
+  ],
+  "where": "Chat home > message box > paste a very long text with Cmd+V > notice with \"Put it back in the message\""
+ },
+ "S13.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "limit reached"
+   }
+  ],
+  "needs": "a very long text (about 75,000 characters)",
+  "note": "The counter threshold is 75% of 100,000 characters (COMPOSER_COUNTER_THRESHOLD in ChatComposerNew.tsx). No token counter was found.",
+  "reachable": "yes",
+  "steps": [
+   "Paste or type a very long text (the counter appears once the text reaches 75,000 characters).",
+   "Look under the message box for a line reading the character count, for example \"75,000 / 100,000 characters\".",
+   "Keep adding text until the count reaches the limit; the line then adds \"limit reached\" in red.",
+   "Compare with Expected. No token or context indicator was found in the composer."
+  ],
+  "where": "Chat home > message box > character counter under the box (shows only when the text is long)"
+ },
+ "S13.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "none",
+  "note": "Drafts are written to browser storage (apps/web/features/chat/components/Composer/composer-draft-storage.ts), so they stay per browser. Temporary (incognito) chats do not save drafts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the message box \"Ask anything. Type / for commands\" and type \"draft autosave test\" without sending.",
+   "Wait a few seconds, then reload the page (Cmd+R).",
+   "Look: the text \"draft autosave test\" is still in the box after reload. Compare with Expected."
+  ],
+  "where": "Chat home > message box; the draft is saved while you type and comes back after a reload"
+ },
+ "S13.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Couldn't send. Restored here so you can try again."
+   }
+  ],
+  "needs": "a way to turn off the internet connection",
+  "note": "Code shows a notice only for failed sends; after a plain reload the draft is restored from storage, and the code does not show a notice for that case.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type \"recovery test\".",
+   "Turn off the Mac's Wi-Fi or internet, then click Send message.",
+   "Look: the text returns to the box and a notice reads \"Couldn't send. Restored here so you can try again.\"",
+   "Turn the internet back on. Also reload the page with unsent text to see whether the text comes back. Compare with Expected."
+  ],
+  "where": "Chat home > message box; failed send shows the notice \"Couldn't send. Restored here so you can try again.\""
+ },
+ "S13.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Ask anything. Type / for commands"
+   }
+  ],
+  "needs": "two conversations",
+  "note": "The sidebar label was not traced; the parking logic is in ChatComposerNew.tsx around the conversation-change effect.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open conversation A and type \"draft for A\" in the message box without sending.",
+   "Open a different conversation (or a new chat) from the sidebar.",
+   "Look: the message box in the other chat does not contain \"draft for A\".",
+   "Go back to conversation A and look: \"draft for A\" is back. Compare with Expected."
+  ],
+  "where": "Sidebar conversation list > two conversations; each keeps its own unsent text"
+ },
+ "S13.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Show follow-up suggestions in chats"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/CommandPalette.tsx",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "Partial: FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT is false (apps/web/features/chat/components/messages/ChatMessageList.tsx line 1104, not 1048 as the plan says). Whether the Settings switch reaches the message list was not traced end to end.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings (command palette entry \"Settings\", shortcut Cmd+,) and open General.",
+   "Turn on the switch \"Show follow-up suggestions in chats\".",
+   "Go back to a chat, ask a question and wait for the reply to finish.",
+   "Look under the reply for suggested follow-up questions; click one and check that it fills or sends the next message. Compare with Expected."
+  ],
+  "where": "Settings > General > \"Show follow-up suggestions in chats\" switch; suggestions then appear under a chat reply"
+ },
+ "S13.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Custom commands"
+   },
+   {
+    "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
+    "text": "New command"
+   },
+   {
+    "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
+    "text": "Create command"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, open General and scroll to Custom commands.",
+   "Click \"New command\", give it a name, and write a template containing {{input}}; click \"Create command\".",
+   "Open a chat, click the message box, type \"/\" and the command name.",
+   "Choose the command and press Enter.",
+   "Look: the template appears in the box with the text you type in place of {{input}}. Compare with Expected."
+  ],
+  "where": "Settings > General > Custom commands > New command; then chat message box > type \"/\" and choose the command"
+ },
+ "S13.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
+    "text": "Commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
+    "text": "Your skills"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box \"Ask anything. Type / for commands\" and type \"/\".",
+   "Look: a list opens with group headings such as \"Commands\", \"Skills\" and \"Your skills\".",
+   "Type \"/sk\" to filter the list and see it narrow.",
+   "Pick an item with the arrow keys and Enter, or click it with the mouse. Compare with Expected."
+  ],
+  "where": "Chat home > message box > type \"/\""
+ },
+ "S13.23": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Add attachments and tools"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Skills"
+   }
+  ],
+  "needs": "a skill available in your account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"+\" button labelled \"Add attachments and tools\" at the left of the box.",
+   "Click the \"Skills\" group and choose a skill.",
+   "Look: a chip with the skill name appears above the box, with a remove button.",
+   "Type a message and send it; check that the reply uses the skill. Compare with Expected."
+  ],
+  "where": "Chat home > message box > \"Add attachments and tools\" (+ button) > Skills (or type \"/\" and choose a skill)"
+ },
+ "S13.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Mentions"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Project or folder"
+   }
+  ],
+  "needs": "at least one project in your account",
+  "note": "Which chip text appears after picking a project was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type \"@\".",
+   "Look: a list labelled \"Mentions\" opens with project rows.",
+   "Type the first letters of a project name and pick it with the arrow keys and Enter.",
+   "Look: the project is shown as a chip or the project picker shows its name, and the message is scoped to it. Compare with Expected."
+  ],
+  "where": "Chat home > message box > type \"@\" then a project name (list labelled \"Mentions\")"
+ },
+ "S13.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Mentions"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add from library"
+   }
+  ],
+  "needs": "a file already in your library (upload one first with \"Add from library\" or the + menu)",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box and type \"@\".",
+   "Look: the \"Mentions\" list shows files from your library.",
+   "Type part of a file name and pick it with Enter.",
+   "Look: the file appears as an attachment and is sent with the message. Compare with Expected."
+  ],
+  "where": "Chat home > message box > type \"@\" then a file name (list labelled \"Mentions\")"
+ },
+ "S13.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add working folder"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Mentions"
+   }
+  ],
+  "needs": "the AGI Desktop app and a folder on the Mac",
+  "note": "Folder rows come only when a desktop host is present (use-mention-folders.ts); how a folder gets listed was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "In the AGI Desktop app, click the \"+\" button \"Add attachments and tools\".",
+   "Click \"Add working folder\" and pick a folder on the Mac.",
+   "Click the message box, type \"@\" and look in the \"Mentions\" list for folder rows.",
+   "Pick a folder row and check that the message is sent with that folder in context. Compare with Expected."
+  ],
+  "where": "AGI Desktop app > chat message box > \"Add attachments and tools\" (+) > \"Add working folder\", then type \"@\" and look for folder rows"
+ },
+ "S13.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Use the browser"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+    "text": "Choose a tab"
+   }
+  ],
+  "needs": "the AGI Desktop app, and a Chrome window paired with the extension (Settings > Capabilities)",
+  "note": "The tab list appears only for the read-page action; the desktop asks for approval each time, per the dialog text.",
+  "reachable": "yes",
+  "steps": [
+   "In the AGI Desktop app, click the \"+\" button \"Add attachments and tools\" and click \"Use the browser\".",
+   "In the dialog titled \"Use the browser\", choose the read-page action and click \"Choose a tab\".",
+   "Pick a tab from the Tab list that appears.",
+   "Run the action and approve it when asked; look for the page text attached to the message. Compare with Expected."
+  ],
+  "where": "AGI Desktop app > chat message box > \"Add attachments and tools\" (+) > \"Use the browser\" > dialog \"Use the browser\" > \"Choose a tab\""
+ },
+ "S13.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Connected apps"
+   }
+  ],
+  "needs": "a connected app",
+  "note": "The mention list shows at most 6 connected apps. The @ trigger is set in packages/ui/unified-chat/src/composer-editor/extensions/mention.ts. The reference look after insertion was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat with an empty message box.",
+   "Click in the message box and type @.",
+   "Look for the Connected apps heading in the menu that opens, under any skills, projects and files.",
+   "Click a connected app name.",
+   "Compare with Expected: the app is added to the message as a reference and the menu closes."
+  ],
+  "where": "Message box > type @ > Connected apps > click an app name"
+ },
+ "S13.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Clear project or folder selection"
+   }
+  ],
+  "needs": "a file to upload",
+  "note": "A project or folder chip comes from the Project or folder picker, and a skill chip is labelled with the skill name and a Remove control. The file chip step was checked in code only, not traced in full.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button left of the message box.",
+   "Click Add photos & files and choose a file (or click Skills and pick a skill).",
+   "Look above the message box for a chip with a close control.",
+   "Click the close control on the chip.",
+   "Compare with Expected: the chip shows the attached context and disappears when removed."
+  ],
+  "where": "Message box > + (Add attachments and tools) > Add photos & files"
+ },
+ "S13.32": {
+  "labels": [],
+  "needs": "a connected app that offers a prompt or a resource",
+  "note": "Chips labelled Prompt: and Resource: with Remove selected connector context exist in apps/web/features/chat/components/Composer/ChatComposerNew.tsx (about lines 5170-5190), and a Use prompt button is in apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx (line 345). I could not confirm a path from sign-in to that panel. Web search is automatic and has no chip (ChatComposerNew.tsx line 3409). I searched for a page-source chip and found none.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S13.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Deep Research"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Run code"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Add attachments and tools"
+   }
+  ],
+  "needs": "none",
+  "note": "The pill exposes its names as an Active options label. Run code and the chosen output format also appear in this pill. Whether Deep Research is gated by plan was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button left of the message box.",
+   "Click Deep Research.",
+   "Close the menu and look at the row beside the + button.",
+   "Look for a pill with a count badge that names the active option (Deep Research).",
+   "Compare with Expected: the active tool shows near the composer. Tools show as one pill with a count, not one chip per tool."
+  ],
+  "where": "Message box > + (Add attachments and tools) > Deep Research"
+ },
+ "S13.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Output"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/skills.ts",
+    "text": "Document"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/skills.ts",
+    "text": "Presentation"
+   }
+  ],
+  "needs": "none",
+  "note": "The Output row is disabled when office file creation is unavailable, and it shows a title explaining why. Whether a Free account can use it was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button left of the message box.",
+   "Click Output to expand its list.",
+   "Click Document, Presentation or Spreadsheet.",
+   "Look at the Output row: it now reads Output with the chosen format, and the pill beside + updates.",
+   "Compare with Expected. Click the same format again to clear it."
+  ],
+  "where": "Message box > + (Add attachments and tools) > Output"
+ },
+ "S13.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Add attachments and tools"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add from library"
+   }
+  ],
+  "needs": "none",
+  "note": "Some rows can show Not used here or Upgrade badges depending on the plan and surface.",
+  "reachable": "yes",
+  "steps": [
+   "Click the round + button left of the message box (its label is Add attachments and tools).",
+   "Look at the menu that opens.",
+   "Check for these rows: Add photos & files, Add from library, Create image, Create video, Skills, Connectors, Output and Deep Research.",
+   "Compare with Expected: each row lists a way to add files, media or context."
+  ],
+  "where": "Message box > + (Add attachments and tools)"
+ },
+ "S13.36": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Start voice input"
+   },
+   {
+    "file": "apps/web/features/chat/hooks/use-dictation.ts",
+    "text": "Dictation is off in Voice settings"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The button is disabled when Settings > Voice > Dictation is off (VoiceSection in apps/web/features/settings/sections/VoiceSection.tsx). The stop behaviour was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Click the microphone button beside the message box.",
+   "Allow microphone access if the browser asks.",
+   "Speak a sentence.",
+   "Click the microphone button again to stop, if it does not stop by itself.",
+   "Compare with Expected: the spoken words appear in the message box and nothing is sent."
+  ],
+  "where": "Message box > microphone button labelled Start voice input"
+ },
+ "S13.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The button shows only when the account has the canUseVoice capability and no reply is running. The reply-speaking path was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Leave the message box empty.",
+   "Look at the right end of the message box for a round button labelled Start voice mode. Typing text replaces it with Send.",
+   "Click it and allow microphone access.",
+   "Speak, then listen for the spoken reply.",
+   "Compare with Expected: a hands-free voice conversation starts from the composer."
+  ],
+  "where": "Message box (left empty) > round button labelled Start voice mode"
+ },
+ "S13.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Queued"
+   },
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Follow-up behavior"
+   }
+  ],
+  "needs": "none",
+  "note": "Enter queues only when Send with Enter is on. The Add message to queue button in apps/web/features/chat/components/Composer/SendButton.tsx is never shown, because the composer passes only send or stop modes. With Follow-up behavior set to Steer, Enter steers the reply instead.",
+  "reachable": "yes",
+  "steps": [
+   "Send a question that gets a long answer.",
+   "While the answer is still appearing, type a new message in the message box.",
+   "Press Enter (Shift+Enter adds a line).",
+   "Look above the message box for a row starting Queued: in a list labelled Queued messages.",
+   "Compare with Expected: when the reply finishes, the queued message is sent."
+  ],
+  "where": "Message box, while a reply is still generating > type > press Enter"
+ },
+ "S13.39": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Edit"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Cancel"
+   }
+  ],
+  "needs": "none",
+  "note": "Edit and Cancel are hidden once a queued message has been steered into the running reply.",
+  "reachable": "yes",
+  "steps": [
+   "Queue a message while a reply is running (as in S13.38).",
+   "Click Edit on the Queued row: the text returns to the message box. Change it and send, which replaces the queued message.",
+   "Or click Cancel on the Queued row.",
+   "Compare with Expected: Cancel removes the row and nothing is sent; Edit puts the text back for changes."
+  ],
+  "where": "Queued row above the message box > Edit or Cancel"
+ },
+ "S13.40": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Steer"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
+    "text": "Guidance for the rest of this research"
+   }
+  ],
+  "needs": "none",
+  "note": "A second route exists: a Steer button on a queued row (ChatComposerNew.tsx) steers a running cloud-agent reply. The Deep Research route is the one traced in full.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button, choose Deep Research, then send a research question.",
+   "While the research card shows it is planning or searching, click Steer.",
+   "Type guidance in the box labelled Guidance for the rest of this research and click Send.",
+   "Compare with Expected: the note Your guidance is applied when the current step finishes appears and the research keeps running."
+  ],
+  "where": "Deep Research card in the chat > Steer"
+ }
+}

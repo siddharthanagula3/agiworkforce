@@ -1,0 +1,318 @@
+{
+ "S55.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Cloud"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connect your tools to AGI Cloud"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with connector access (the screen says Connectors are not available for this account otherwise)",
+  "note": "The state label appears only on connected cards; a catalogue entry that is not connected shows no state text.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud, open Settings, and under the Cloud section tap Connectors.",
+   "Read the list of cards. Each card shows the connector name and, when given, the publisher after it (for example Name, Publisher).",
+   "Tap the Search connectors box at the bottom only to confirm the list is not empty; a connected card shows Connected with a date.",
+   "Compare with Expected: each entry shows name, publisher and state. Connectors that are not connected show no state label, only the name and publisher."
+  ],
+  "where": "Settings > Cloud > Connectors. The screen opens with the title Connectors and the line Connect your tools to AGI Cloud. Each card shows name and publisher."
+ },
+ "S55.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Search connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "none beyond the Connectors screen",
+  "note": "On the phone, the filter for connected cards matches name, publisher and description only, not tool names; the catalogue search is sent to the server, and whether it matches tool names could not be confirmed from the app code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Cloud > Connectors and note the names of a few cards.",
+   "Tap the Search connectors box at the bottom and type part of a connector name you saw.",
+   "Watch the list: only matching cards should remain.",
+   "Clear the box, then type a publisher name or a word from a description, and check that matching cards appear. Then type a tool name (for example one you saw on a connector detail page) and compare with Expected."
+  ],
+  "where": "Settings > Cloud > Connectors > Search connectors box at the bottom of the screen."
+ },
+ "S55.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "All"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Connected"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-directory.ts",
+    "text": "Productivity"
+   }
+  ],
+  "needs": "none beyond the Connectors screen; a category chip appears only when the directory has connectors in that category",
+  "note": "The category list comes from the shared contracts; chips for categories with no listings are hidden, so not every category is always shown.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Cloud > Connectors.",
+   "Look at the row of chips: All and Connected are always there. Scroll the row sideways to find category chips such as Productivity.",
+   "Tap a category chip such as Productivity.",
+   "Compare with Expected: the list should show only connectors in that category. Tap All to return to the full list."
+  ],
+  "where": "Settings > Cloud > Connectors > the row of filter chips under the Add custom MCP box (chips All, Connected, Custom, and category names)."
+ },
+ "S55.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "What it can do"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Sign-in"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Privacy policy"
+   }
+  ],
+  "needs": "none beyond the Connectors screen",
+  "note": "Link rows appear only when the connector has that URL; the tools list appears only when the connector lists tools.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Cloud > Connectors and tap a connector card that is not connected.",
+   "Read the name, the line By (publisher), and the description under it.",
+   "Check the row Sign-in (its value is Account sign-in, API key, Not needed or Checked on connect).",
+   "Scroll to What it can do and the link rows Documentation, Website, Support and Privacy policy. Compare with Expected: description, publisher, sign-in requirement, tools and links."
+  ],
+  "where": "Settings > Cloud > Connectors > tap a connector card. The detail screen shows the name, By publisher, the description, the Sign-in row, What it can do, and the link rows."
+ },
+ "S55.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a connector that is not connected and is released (Coming soon connectors have no Connect button); for a real sign-in step, an outside account for that provider",
+  "note": "Connect is hidden for connectors that are Coming soon or whose setup is on desktop or CLI only; the alert text comes from a shared contracts function.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connector that is not connected and shows the Connect button (not Coming soon).",
+   "Tap Connect.",
+   "In the alert titled Connect [name]?, read the text and tap Allow (or Deny to stop).",
+   "Compare with Expected: after Allow, the real sign-in or key step starts (a browser or in-app sign-in page for an account sign-in connector, or the API key form for an API key connector)."
+  ],
+  "where": "Settings > Cloud > Connectors > tap a connector that is not connected > Connect."
+ },
+ "S55.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Account sign-in"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "packages/contracts/cloud-contracts/src/connector-trust-copy.ts",
+    "text": "Allow"
+   }
+  ],
+  "needs": "an outside account for that provider (the account to approve the grant)",
+  "note": "If the sign-in page is closed before finishing, the app shows an alert saying the connector is not connected yet; the grant is stored by the server, which the app code does not show directly.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connector whose Sign-in row says Account sign-in and tap Connect.",
+   "Tap Allow in the alert Connect [name]?.",
+   "Wait for the provider's own consent page to open (in the app browser or the in-app sign-in sheet) and approve it there.",
+   "Return to the app and compare with Expected: the connector should now show Connected with a date under the Connected filter, and its detail page should show Connected to AGI Cloud and a Granted access section."
+  ],
+  "where": "Settings > Cloud > Connectors > tap a connector whose Sign-in row reads Account sign-in > Connect > Allow."
+ },
+ "S55.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorApiKeySheet.tsx",
+    "text": "API key"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorApiKeySheet.tsx",
+    "text": "Test and save"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "API key"
+   }
+  ],
+  "needs": "an API key for that provider",
+  "note": "The form opens only when the server asks for credentials; otherwise the connector may connect straight after Allow. Whether the key is stored encrypted is not visible in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connector whose Sign-in row says API key and tap Connect, then Allow.",
+   "In the form, tap the API key box (placeholder API key) and type a key.",
+   "Tap Test and save.",
+   "Compare with Expected: a bad key shows an error and nothing is saved; a good key closes the form and the detail page shows Connected to AGI Cloud. The encryption cannot be seen from the screen."
+  ],
+  "where": "Settings > Cloud > Connectors > tap a connector whose Sign-in row reads API key > Connect > Allow > API key form."
+ },
+ "S55.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Granted access"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connected to AGI Cloud"
+   }
+  ],
+  "needs": "a connected connector (a connector that has granted permissions or scopes)",
+  "note": "The section is hidden when the connection reports neither permission sentences nor scopes.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connector that is connected (it shows a Connected date on the list).",
+   "On its detail page, read the Connected to AGI Cloud heading and the rows under it.",
+   "Find the Granted access section: each row shows a permission sentence and the word Read or Write.",
+   "If no sentence rows appear, look for a Granted access row listing scope names. Compare with Expected: the permissions shown should be what was granted."
+  ],
+  "where": "Settings > Cloud > Connectors > tap a connected connector > Connected to AGI Cloud > Granted access section."
+ },
+ "S55.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Not responding"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorTrustSections.tsx",
+    "text": "Connection health"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Authorization expired"
+   }
+  ],
+  "needs": "a connected connector; the not-responding and expired states depend on the provider and cannot be set up from the app",
+  "note": "The word healthy is not shown; a healthy connector shows Connected with a date on the list and no warning box.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Cloud > Connectors and read the state text on each connected card: Connected [date] means healthy; Not responding is amber; Authorization expired, reconnect is red.",
+   "Tap a connected card. Read the warning boxes: Not responding (with Check again), Authorization expired, or Needs to be reconnected.",
+   "Scroll to the section Connection health and read its state and summary text, or Not called in the last hour.",
+   "Compare with Expected: each connector shows whether it is healthy, needs reauthorization or is not responding."
+  ],
+  "where": "Settings > Cloud > Connectors: the state text on each card. On a connector detail page: the Not responding box, Authorization expired, and the Connection health card."
+ },
+ "S55.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+    "text": "Reconnect"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Reauthorize"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Authorization expired"
+   }
+  ],
+  "needs": "an account-sign-in (OAuth) connector whose grant has expired or been revoked, and an outside account for that provider",
+  "note": "The top Reconnect card appears only for account-sign-in connectors whose grant expired; API key connectors show Replace API key instead.",
+  "reachable": "yes",
+  "steps": [
+   "Use a connector whose authorization has expired or been revoked (it shows Authorization expired, reconnect on the list).",
+   "On the Connectors screen, look for the card at the top and tap Reconnect; or tap the connector and scroll to the Authorization expired box.",
+   "Tap Reauthorize on the detail page.",
+   "Compare with Expected: the provider's authorization page should open for the same connector, and after approval the state should change to Connected."
+  ],
+  "where": "Settings > Cloud > Connectors: a card at the top with a Reconnect button, or a connector detail page with Reauthorize (under Authorization expired)."
+ },
+ "S55.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Disconnect"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Connected to AGI Cloud"
+   }
+  ],
+  "needs": "a connected connector you can reconnect afterwards",
+  "note": "The effect on the assistant is not shown on the connector screens; it is an inner behaviour of the server and the chat.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector and scroll to the bottom of its detail page.",
+   "Tap Disconnect. Read the alert Disconnect [name]? and its text about saved tool permissions.",
+   "Tap Disconnect in the alert.",
+   "Compare with Expected: the screen returns to Connectors and the connector no longer shows as connected. Whether the assistant still uses it is not shown on this screen; check it in a chat if needed."
+  ],
+  "where": "Settings > Cloud > Connectors > tap a connected connector > scroll to the bottom > Disconnect > Disconnect (in the alert)."
+ },
+ "S55.23": {
+  "labels": [],
+  "needs": "a connected connector, and an outside account for the provider to check the provider side",
+  "note": "No Revoke wording exists in the mobile connector screens or services/connectors.ts (searched rg -i revoke in apps/mobile/src/features/settings/cloud-connectors and services/connectors.ts). The nearest control is Disconnect, whose alert does not say the provider token is revoked; whether the provider is asked to revoke is not shown in mobile code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "No folder or repository selection for a connector was found in apps/mobile (searched rg -i for repositor and folder in apps/mobile/src and app, filtered for connector, mcp, scope, github and drive). Only unrelated hits came back, such as GitHub repository URLs in the cloud code session sheet and src/features/settings/code/GitHubConnections.tsx, which was not checked as a connector control.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S55.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Write and delete tools"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Allow"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx",
+    "text": "Block"
+   }
+  ],
+  "needs": "a connected connector that has write tools",
+  "note": "The group-level level is read from the saved settings but the app only sends changes per tool, so there is no visible control to set all write tools at once; the global Action approvals row on the Connectors screen is a separate setting.",
+  "reachable": "yes",
+  "steps": [
+   "Open a connected connector that has write tools and scroll to Tool permissions.",
+   "Find the group heading Write and delete tools and read the tool rows under it.",
+   "Tap Allow, Ask or Block on one write tool (Allow runs it automatically, Ask asks first, Block stops it).",
+   "Compare with Expected: the row should show the chosen level. Tap the reset control on a row (Reset [tool] to default) to return it to the default, which follows Action approvals."
+  ],
+  "where": "Settings > Cloud > Connectors > tap a connected connector > Tool permissions > Write and delete tools > tap a tool's Allow, Ask or Block choice."
+ }
+}

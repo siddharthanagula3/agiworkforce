@@ -1,0 +1,54 @@
+{
+ "S65.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/companion/components/StatusBanners.tsx",
+    "text": "Desktop unreachable"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/StatusBanners.tsx",
+    "text": "Reconnecting automatically."
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Connections"
+   }
+  ],
+  "needs": "a computer already paired with AGI Desktop, and access to that computer to stop it",
+  "note": "The Code line pointed to StatusBanners.tsx:42 and that text has moved to line 63 of the same file (the banner is shown when the computer status is 'stale'). The 'Offline' view (ConnectionStateViews.tsx OfflineDesktopView) appears only when a pairing code is held and the status is 'disconnected'; which of the two a tester sees depends on how the computer is stopped, and this was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the side menu and tap Settings.",
+   "Tap Remote control, then tap Connections.",
+   "Make the paired computer unreachable (for example, quit AGI Desktop on it or turn its network off) and wait about 90 seconds.",
+   "Look for the red \"Desktop unreachable\" banner with \"Reconnecting automatically.\" and the Reconnect button, or the \"Offline\" status line with \"Make sure ... is running on this computer.\" Compare with Expected: the app should say the computer is offline and either wait or stop clearly."
+  ],
+  "where": "Settings > Remote control > Connections (the computer status shows at the top of that screen; the status line reads \"Offline\" and the banner reads \"Desktop unreachable\")"
+ },
+ "S65.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx",
+    "text": "Start on Desktop"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx",
+    "text": "What should Desktop work on?"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx",
+    "text": "Recent Dispatch tasks"
+   }
+  ],
+  "needs": "a paid account that includes remote control (the app checks the remote_control plan capability), a computer paired with AGI Desktop that you own, and that computer turned on and connected",
+  "note": "The live path is known to be unfinished: the dispatch.task.create, dispatch.task.cancel, dispatch.task.reply and dispatch.task.status actions are in the signaling-server allowlist (services/signaling-server/src/control-payload.ts lines 47-50), but the phone-to-computer reply after the signaling server redeploy was not checked here. The mobile code route is the Start on Desktop card in apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx, shown from apps/mobile/src/features/companion/components/DesktopInfoCard.tsx when connected.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open the side menu and tap Settings.",
+   "Tap Remote control, then tap Connections. If no computer is paired, tap \"Pair a computer\" and scan the QR code shown by AGI Desktop on the other computer.",
+   "With the computer connected, find the \"Start on Desktop\" card and type a short task in the box \"What should Desktop work on?\".",
+   "Tap Send (accessibility label \"Send task to Desktop\"). Look for the task under \"Recent Dispatch tasks\" and check whether the other computer starts working on it and replies. Compare with Expected: the user directs work on their own permitted computer from this phone."
+  ],
+  "where": "Settings > Remote control > Connections, then the \"Start on Desktop\" card on the Remote screen (open once a computer is connected)"
+ }
+}

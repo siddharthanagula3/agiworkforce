@@ -1,0 +1,381 @@
+{
+ "S54.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Plugins"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Discover"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Installed"
+   }
+  ],
+  "needs": "none",
+  "note": "The available-plugins part is not a list in the Discover tab; it points to agi marketplace browse. Plugin tab reads installed plugins only.",
+  "reachable": "yes",
+  "steps": [
+   "Start the app, sign in, and type /plugins then Enter.",
+   "Look for the title Plugins and the tabs Discover, Installed, Marketplaces, Errors. The overlay opens on Installed.",
+   "Press Left or Right to move to Discover. It shows text and commands only, not a list of plugin names.",
+   "On Installed, check that each installed plugin appears with a status dot under User or Project.",
+   "Compare with Expected: installed plugins are listed; the Discover tab does not list available plugins by name."
+  ],
+  "where": "Type /plugins in the chat (opens the Plugins overlay). CLI: agi plugin list"
+ },
+ "S54.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "No skills found."
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/skills_toggle.rs",
+    "text": "Skills"
+   }
+  ],
+  "needs": "none",
+  "note": "No customization area or menu was found in the code. Skills are separate slash commands, not a tab beside the Plugins overlay.",
+  "reachable": "yes",
+  "steps": [
+   "Type /skills and press Enter. Look for the list headed Skills with a count, or the message No skills found.",
+   "Type /skills-toggle and press Enter to open the overlay titled Skills.",
+   "Use the arrow keys to move, Space to toggle a skill, and Enter to save.",
+   "Compare with Expected: a Skills section sits beside plugins in the customization area."
+  ],
+  "where": "Type /skills in the chat (text list). Type /skills-toggle to open the Skills overlay"
+ },
+ "S54.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/connectors.rs",
+    "text": "Your account's connectors"
+   },
+   {
+    "file": "apps/cli/src/cloud/connectors.rs",
+    "text": "None connected yet."
+   }
+  ],
+  "needs": "a paid account (the code gates connectors to paid plans; a refusal message is shown otherwise)",
+  "note": "The connectors output is plain text, not a section in a customization screen.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, type /connectors and press Enter.",
+   "Look for the text Your account's connectors, then the list or None connected yet.",
+   "Run agi connectors in a terminal and compare the same heading.",
+   "Compare with Expected: a Connectors section is shown."
+  ],
+  "where": "Type /connectors in the chat. CLI: agi connectors"
+ },
+ "S54.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Add a publisher's marketplace to your account:"
+   }
+  ],
+  "needs": "a signed-in account and a marketplace that the account has added; external service",
+  "note": "The code has no built-in public catalogue. Browse shows only marketplaces added to the account, and the catalogue comes from the server. The owner decision on this item is open.",
+  "reachable": "yes",
+  "steps": [
+   "Add a marketplace first (see S54.07), or run agi marketplace sources to see what the account has.",
+   "Run agi marketplace browse and read the plugin list it prints.",
+   "Run agi marketplace get <plugin>@<marketplace> on a listed plugin to install it.",
+   "Compare with Expected: the user can browse a public marketplace and install from it."
+  ],
+  "where": "CLI: agi marketplace browse"
+ },
+ "S54.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Marketplaces"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Add a publisher's marketplace to your account:"
+   }
+  ],
+  "needs": "a public GitHub repository with a marketplace manifest, and a signed-in account",
+  "note": "The Discover tab says No marketplace yet? Add one from the Marketplaces tab, but that tab shows only the command text, with no add control.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi marketplace add owner/repo with a public GitHub repository that has a marketplace manifest (use --ref for a branch or tag if needed).",
+   "Run agi marketplace sources and check that the new marketplace is listed with its plugin count.",
+   "Run agi marketplace browse and check that its plugins are listed.",
+   "Run agi marketplace get <plugin>@<marketplace> and check that the plugin installs."
+  ],
+  "where": "CLI: agi marketplace add <github url>, then agi marketplace sources, agi marketplace browse, agi marketplace get <plugin>@<marketplace>. Hint text is on the Marketplaces tab of /plugins"
+ },
+ "S54.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Search the plugin directory: agi marketplace search <query>"
+   }
+  ],
+  "needs": "a signed-in account with marketplaces added; external service",
+  "note": "Search takes only a query. The only filter found in the code is choosing one marketplace in browse; no other filter flags were found.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi marketplace search with a word from a plugin name or description, such as a word you saw in agi marketplace browse.",
+   "Check that matching plugins are listed.",
+   "Run agi marketplace browse <marketplace id or name> to show only that marketplace's plugins.",
+   "Compare with Expected: the user can search and filter the catalogue."
+  ],
+  "where": "CLI: agi marketplace search <query>. Narrow by one marketplace with agi marketplace browse <marketplace>"
+ },
+ "S54.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/plugins/plugins.rs",
+    "text": "Publisher"
+   }
+  ],
+  "needs": "an installed plugin",
+  "note": "The marketplace show command does not print a publisher row; only agi plugin info does.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi plugin list and copy an installed plugin's name.",
+   "Run agi plugin info <name>.",
+   "Look for the Publisher row and the Signature row.",
+   "Compare with Expected: the publisher's details are shown (the row reads not stated when the manifest gives none)."
+  ],
+  "where": "CLI: agi plugin list, then agi plugin info <name>"
+ },
+ "S54.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/plugins/plugins.rs",
+    "text": "Skills"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "No skills found."
+   }
+  ],
+  "needs": "a plugin that includes skills; a plugin folder or git URL to install",
+  "note": "The Skills row shows only a count, not the names. Whether a plugin skill runs is not judged here.",
+  "reachable": "yes",
+  "steps": [
+   "Install a plugin that includes skills (see S54.21), then run agi plugin info <name>.",
+   "Look for the Skills row and its count.",
+   "Type /skills in the chat and look for the skill names from the plugin.",
+   "Compare with Expected: the plugin shows its skills and they are usable once installed."
+  ],
+  "where": "CLI: agi plugin info <name> (row Skills). Then type /skills in the chat"
+ },
+ "S54.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/plugins/plugins.rs",
+    "text": "MCP"
+   },
+   {
+    "file": "apps/cli/src/features/plugins/plugins.rs",
+    "text": "Connects"
+   }
+  ],
+  "needs": "a plugin that bundles a remote or local connection; an outside account for remote sign-in",
+  "note": "The info rows show the connections. No separate connected-status check for plugin connections was found.",
+  "reachable": "yes",
+  "steps": [
+   "Install a plugin that bundles connections, then run agi plugin info <name>.",
+   "Look for the MCP row (name and target) and the Connects row.",
+   "For a remote connection, run agi plugin login <name> (see S54.23) and check it signs in.",
+   "Compare with Expected: the plugin shows its connectors and they work once installed."
+  ],
+  "where": "CLI: agi plugin info <name> (rows MCP and Connects)"
+ },
+ "S54.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/plugins/plugins.rs",
+    "text": "Agents"
+   }
+  ],
+  "needs": "a plugin that includes agents",
+  "note": "The Agents row shows only a count; names appear in the agent picker.",
+  "reachable": "yes",
+  "steps": [
+   "Install a plugin that includes agents, then run agi plugin info <name>.",
+   "Look for the Agents row and its count.",
+   "Type /agents and press Enter to open the agent picker.",
+   "Compare with Expected: the plugin's agents appear and can be used."
+  ],
+  "where": "CLI: agi plugin info <name> (row Agents). Then type /agents in the chat"
+ },
+ "S54.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/plugins/plugins.rs",
+    "text": "Commands"
+   }
+  ],
+  "needs": "a plugin that includes commands",
+  "note": "The Commands row shows only a count. The code did not show where a tester reads the plugin's command names, so find them from the plugin's own files.",
+  "reachable": "yes",
+  "steps": [
+   "Install a plugin that includes commands, then run agi plugin info <name>.",
+   "Look for the Commands row and its count.",
+   "Type a slash command from the plugin in the chat and press Enter.",
+   "Compare with Expected: the plugin's commands run."
+  ],
+  "where": "CLI: agi plugin info <name> (row Commands). Then use a command from the plugin in the chat"
+ },
+ "S54.18": {
+  "labels": [
+   {
+    "file": "apps/cli/src/features/plugins/plugins.rs",
+    "text": "Hooks"
+   }
+  ],
+  "needs": "a plugin that declares hooks, installed from a path or git URL (not inside a project folder)",
+  "note": "Hooks from a project-local plugin are blocked with a stderr warning, so the plugin must be installed for the user, not in a project folder.",
+  "reachable": "yes",
+  "steps": [
+   "Install a plugin that declares hooks, then run agi plugin info <name>.",
+   "Look for the Hooks row, which reads runs commands on followed by the event names.",
+   "Type /hooks and press Enter to see hook settings.",
+   "Compare with Expected: the plugin's hooks are shown and run when installed."
+  ],
+  "where": "CLI: agi plugin info <name> (row Hooks). Then type /hooks in the chat"
+ },
+ "S54.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Installed to"
+   }
+  ],
+  "needs": "a plugin folder or a git URL",
+  "note": "Install is a CLI command only; the chat /plugins view has no install control.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi plugin install with a local plugin folder or a git URL.",
+   "Read the line that starts Installed to and the rows printed under it.",
+   "Run agi plugin list and check the plugin shows as enabled.",
+   "Compare with Expected: the user can install a plugin."
+  ],
+  "where": "CLI: agi plugin install <path or git url>. Marketplace plugins: agi marketplace get <plugin>@<marketplace>"
+ },
+ "S54.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Sign in to the remote connections an installed plugin bundles."
+   }
+  ],
+  "needs": "an installed, enabled plugin with a remote connection; an outside account to sign in to",
+  "note": "The command stops with an error if the plugin is turned off. The sign-in text is in the command's help, not in a screen.",
+  "reachable": "yes",
+  "steps": [
+   "Install a plugin that bundles a remote connection, and make sure it is enabled (see S54.24).",
+   "Run agi plugin login <name>.",
+   "Follow the sign-in step it shows for each remote connection.",
+   "Run agi plugin info <name> and check the MCP row, then compare with Expected."
+  ],
+  "where": "CLI: agi plugin login <name>"
+ },
+ "S54.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Turn an installed plugin off without removing it."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "enabled"
+   }
+  ],
+  "needs": "an installed plugin",
+  "note": "Enable and disable also work from the chat with /plugins enable or disable followed by the name.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi plugin list and note the plugin shows as enabled.",
+   "Run agi plugin disable <name> and read the message it prints.",
+   "Run agi plugin list and check the plugin shows as disabled, and that it is still listed.",
+   "Run agi plugin enable <name> and check it shows as enabled again."
+  ],
+  "where": "CLI: agi plugin disable <name> and agi plugin enable <name>. Chat: /plugins disable <name> and /plugins enable <name>"
+ },
+ "S54.25": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Update a plugin installed from git to its latest commit."
+   }
+  ],
+  "needs": "a plugin installed from a git URL and a newer commit in that repository",
+  "note": "Update works only for plugins installed from git. Plugins installed from a path have no update source.",
+  "reachable": "yes",
+  "steps": [
+   "Install a plugin from a git URL, then push a newer commit to that repository.",
+   "Run agi plugin update <name> and read the line it prints.",
+   "Run agi plugin info <name> and check the Version row.",
+   "Compare with Expected: the plugin moves to the newer version."
+  ],
+  "where": "CLI: agi plugin update <name> (plugins installed from git). All marketplace plugins: agi marketplace update"
+ },
+ "S54.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/installs.rs",
+    "text": "install it again with --ref <tag> to move it"
+   }
+  ],
+  "needs": "a git plugin repository with a tag and a newer commit",
+  "note": "The pin is set with the --ref flag on install; no separate pin command was found.",
+  "reachable": "yes",
+  "steps": [
+   "Install a git plugin with --ref set to a tag, for example agi plugin install <git url> --ref v1.0.0.",
+   "Run agi plugin update <name> and read the message.",
+   "Check that the message says the plugin is pinned to that tag.",
+   "Compare with Expected: the plugin stays on the pinned version."
+  ],
+  "where": "CLI: agi plugin install <git url> --ref <TAG_OR_BRANCH>, then agi plugin update <name>"
+ },
+ "S54.29": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Remove a plugin you installed."
+   }
+  ],
+  "needs": "an installed plugin you can afford to remove",
+  "note": "The remove command has no confirmation prompt in the code; it removes the plugin right away.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi plugin list and note the plugin name.",
+   "Run agi plugin remove <name> and read the line it prints.",
+   "Run agi plugin list and check the plugin is gone.",
+   "Compare with Expected: the user can uninstall the plugin."
+  ],
+  "where": "CLI: agi plugin remove <name>. Marketplace plugins: agi marketplace uninstall <name>. Chat: /plugins remove <name>"
+ },
+ "S54.33": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Errors"
+   },
+   {
+    "file": "apps/cli/src/features/plugins/plugins.rs",
+    "text": "plugin requires agiworkforce"
+   }
+  ],
+  "needs": "a plugin with a version range this CLI does not meet",
+  "note": "The check covers only the engines.agiworkforce version range. No check for the surface the plugin runs on was found, so the surface half of Expected is not in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Install a plugin whose manifest sets an engines.agiworkforce version range that this CLI version does not meet.",
+   "Type /plugins and press Right until the Errors tab, or type /plugins Errors.",
+   "Look for a line that reads plugin requires agiworkforce and the range, with this CLI's version.",
+   "Compare with Expected: the product warns that the plugin is not compatible."
+  ],
+  "where": "Chat: /plugins, then the Errors tab (or type /plugins Errors)"
+ }
+}

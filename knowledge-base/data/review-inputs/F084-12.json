@@ -1,0 +1,375 @@
+{
+ "feature": {
+  "id": "F084-12",
+  "aliases": [
+   "Experimental features",
+   "Preview features",
+   "Early access",
+   "Restore defaults",
+   "Reset settings",
+   "Reset preferences",
+   "S84.25",
+   "S84.26"
+  ],
+  "summary": "Neither a way to opt into experimental or preview features nor a reset-all-preferences action exists on any app. The only restore action is 'Restore defaults' in the Keyboard pane on web and Desktop, which resets shortcut switches and recorded keys only. The brief marks restore defaults as not applicable, which the code contradicts.",
+  "purpose": {
+   "what_it_does": "Would let a person join preview features and put all preferences back to defaults. Today only the shortcut reset exists.",
+   "why_it_exists": "Leading assistants let people try early features and reset settings after experiments. The brief's S84.25 and S84.26 record both as expected.",
+   "who_uses_it": "Early adopters wanting previews; anyone whose settings are in a confusing state.",
+   "problems_solved": [
+    "No way to return to a known state",
+    "No opt-in path for preview features"
+   ],
+   "use_cases": [
+    "A person undoes all shortcut changes with one press.",
+    "A future opt-in toggle for a preview feature [proposed].",
+    "A future reset of appearance and composer choices [proposed]."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web and Desktop: Settings, General, 'Keyboard shortcuts', 'View shortcuts', then 'Restore defaults' at the bottom of the Keyboard pane (apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx:330-340).",
+    "Experimental enrolment: not found on web, Desktop, mobile, VS Code or Chrome (searched settings code for 'experimental', 'early access', 'preview features')."
+   ],
+   "prerequisites": [
+    "None."
+   ],
+   "screens_and_controls": [
+    "Button 'Restore defaults' (disabled while nothing is changed) and a live summary of how many shortcuts are off or changed.",
+    "Confirmation 'Restore default shortcuts?' with text 'Every key combination you recorded goes back to its default and every shortcut turns back on. To use your own keys again you would record them again.' and button 'Restore defaults' (KeyboardShortcutsDialog.tsx:230-245)."
+   ],
+   "journey": [
+    "Open Settings, General, View shortcuts.",
+    "Change or switch off shortcuts.",
+    "Press Restore defaults.",
+    "Confirm if keys were recorded; if only switches were off, it resets without asking."
+   ],
+   "feedback_and_outputs": [
+    "Summary text clears; keys show defaults; the button becomes disabled."
+   ],
+   "settings": [
+    "disabledShortcutIds and shortcutBindings are the only values reset."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "restoreShortcutDefaults sets disabledShortcutIds and shortcutBindings to empty (apps/web/shared/stores/web-settings-store.ts:96, 158).",
+    "The button is disabled when nothing differs from defaults, and asks before discarding recorded keys (KeyboardShortcutsDialog.tsx:206-245, 337)."
+   ],
+   "incomplete": [
+    "The reset covers shortcuts only; it does not touch theme, text size, send key, sidebar items or notifications."
+   ],
+   "disconnected_or_disabled": [],
+   "not_available": [
+    "Experimental or preview enrolment on all apps.",
+    "Reset-all-preferences on all apps.",
+    "Any reset on CLI, VS Code, Chrome (they use host or config file editing)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The user can opt into experimental or preview features from settings.",
+     "source": "S84.25 (area brief); missing on every app"
+    },
+    {
+     "statement": "Settings offer a restore-defaults action that resets preferences.",
+     "source": "S84.26 (area brief); the brief says not applicable anywhere, but the code has a shortcut-only reset"
+    },
+    {
+     "statement": "An action a user cannot undo asks first and names the consequence; useConfirmAction is the surface.",
+     "source": "AGENTS.md section 9; used at KeyboardShortcutsDialog.tsx:230"
+    }
+   ],
+   "acceptance_criteria": [
+    "Restore defaults is disabled when shortcuts are at defaults.",
+    "After switching a shortcut off, Restore defaults is enabled and one press turns it back on without a dialog.",
+    "After recording keys, Restore defaults asks 'Restore default shortcuts?' before acting.",
+    "After confirming, recorded keys and switches are cleared and the summary text is empty.",
+    "Other preferences (send switch, theme, sidebar items) are unchanged by this button."
+   ],
+   "inferred": [
+    "A general reset would need to clear account-synced fields too, or the next sync would restore them [inferred from CloudSettingsSync hydration]."
+   ],
+   "proposed": [
+    "[proposed] Decide whether experimental opt-in is wanted; if so, add a section backed by feature flags and the account.",
+    "[proposed] Add a 'Reset settings' action in General with a confirmation listing what changes, covering the appearance namespace and device stores.",
+    "[proposed] Correct S84.26 from 'not applicable' to 'partial: shortcuts only'."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "KeyboardShortcutsPane (restore)",
+    "path": "apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx",
+    "role": "Restore defaults button and confirmation (lines 206-245, 330-340)."
+   },
+   {
+    "kind": "store",
+    "name": "useSettingsStore.restoreShortcutDefaults",
+    "path": "apps/web/shared/stores/web-settings-store.ts",
+    "role": "Clears shortcut switches and chords (line 158)."
+   },
+   {
+    "kind": "hook",
+    "name": "useConfirmAction",
+    "path": "packages/ui/ui/src",
+    "role": "Confirmation surface used by the dialog (exported from @agiworkforce/ui)."
+   },
+   {
+    "kind": "component",
+    "name": "WebSettingsModal",
+    "path": "apps/web/features/settings/components/WebSettingsModal.tsx",
+    "role": "Hosts the keyboard pane (line 297)."
+   },
+   {
+    "kind": "test",
+    "name": "KeyboardShortcutsPane test",
+    "path": "apps/web/features/chat/components/dialogs/__tests__/KeyboardShortcutsPane.test.tsx",
+    "role": "Pane behaviour."
+   },
+   {
+    "kind": "test",
+    "name": "use-keyboard-shortcuts test",
+    "path": "apps/web/features/chat/hooks/use-keyboard-shortcuts.test.ts",
+    "role": "Binding logic."
+   },
+   {
+    "kind": "config",
+    "name": "surface feature matrix",
+    "path": "docs/product/surface-feature-matrix.md",
+    "role": "Project document that tracks surface features (no experimental row read)."
+   },
+   {
+    "kind": "config",
+    "name": "area brief",
+    "path": "knowledge-base/data/area-briefs/084-general-and-appearance-settings.md",
+    "role": "States S84.25 and S84.26."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person presses Restore defaults.",
+     "runs_on": "device",
+     "evidence": "KeyboardShortcutsDialog.tsx:230"
+    },
+    {
+     "what_happens": "If recorded keys exist, a confirmation opens; on confirm the store clears switches and chords.",
+     "runs_on": "device",
+     "evidence": "KeyboardShortcutsDialog.tsx:231-244; web-settings-store.ts:158"
+    },
+    {
+     "what_happens": "The store persists the empty values to localStorage.",
+     "runs_on": "device",
+     "evidence": "web-settings-store.ts:216-219"
+    }
+   ],
+   "data": [
+    {
+     "what": "disabledShortcutIds and shortcutBindings",
+     "where_stored": "localStorage 'agiworkforce-web-settings'",
+     "synced": "No (not part of the synced appearance fields)",
+     "retained_or_deleted": "Emptied by the action; no trash or archive is involved because the values are preferences."
+    }
+   ],
+   "models_and_providers": "None."
+  },
+  "access_and_usage": {
+   "account": "Not required.",
+   "permissions": "none found in the code",
+   "subscription": "No plan limit was seen. An experimental opt-in, if added, might use plan or flag rules [inferred, unknown].",
+   "limits_and_metering": "none found in the code",
+   "flags": "none found for this feature.",
+   "model_compatibility": "Not model dependent.",
+   "provider_restrictions": "None.",
+   "local_mode": "Works fully on the device."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "At defaults",
+    "behaviour": "Button disabled.",
+    "evidence": "KeyboardShortcutsDialog.tsx:211, 337"
+   },
+   {
+    "state": "Only switches off",
+    "behaviour": "Resets immediately without a dialog.",
+    "evidence": "KeyboardShortcutsDialog.tsx:231-234"
+   },
+   {
+    "state": "Recorded keys present",
+    "behaviour": "Confirmation first; cancel keeps everything.",
+    "evidence": "KeyboardShortcutsDialog.tsx:235-244"
+   },
+   {
+    "state": "Older stored data",
+    "behaviour": "Missing keys read as empty.",
+    "evidence": "KeyboardShortcutsDialog.tsx:201-203"
+   },
+   {
+    "state": "Experimental enrolment, general reset",
+    "behaviour": "not handled in the code",
+    "evidence": "Searched web, mobile, desktop, extension and VS Code settings code; no match"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/chat/components/dialogs/__tests__/KeyboardShortcutsPane.test.tsx",
+     "covers": "Keyboard pane behaviour including restore."
+    },
+    {
+     "path": "apps/web/features/chat/hooks/use-keyboard-shortcuts.test.ts",
+     "covers": "Binding and disable logic."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Restore after switch-off",
+     "steps": [
+      "Switch one App shortcut off.",
+      "Press Restore defaults."
+     ],
+     "expected": "Shortcut on again; no dialog."
+    },
+    {
+     "name": "Restore after recording",
+     "steps": [
+      "Record a new chord for a rebindable shortcut.",
+      "Press Restore defaults.",
+      "Confirm."
+     ],
+     "expected": "Dialog 'Restore default shortcuts?' then default chord."
+    },
+    {
+     "name": "Other preferences untouched",
+     "steps": [
+      "Turn Send with Enter off.",
+      "Restore shortcut defaults."
+     ],
+     "expected": "Send with Enter still off."
+    },
+    {
+     "name": "No experimental control",
+     "steps": [
+      "Open each settings pane and search for 'experimental' or 'preview'."
+     ],
+     "expected": "No such control (known gap)."
+    }
+   ],
+   "diagnostics": [
+    "Browser localStorage key agiworkforce-web-settings, fields disabledShortcutIds and shortcutBindings."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No experimental or preview opt-in on any app.",
+    "affects": "All apps",
+    "evidence": "S84.25; search found nothing",
+    "work_needed": "Owner decision on whether to build it; then flags, entitlements and per-app UI."
+   },
+   {
+    "gap": "No general restore-defaults action; only shortcuts.",
+    "affects": "Web and Desktop (and others have nothing)",
+    "evidence": "web-settings-store.ts:158",
+    "work_needed": "Define the reset scope, include synced appearance fields, add a confirmation."
+   },
+   {
+    "gap": "The brief says restore defaults is not applicable, but a shortcut reset exists.",
+    "affects": "Brief accuracy",
+    "evidence": "KeyboardShortcutsDialog.tsx:330-340",
+    "work_needed": "Correct S84.26."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "file:apps/web/shared/stores/web-settings-store.ts",
+   "store:agiworkforce-web-settings",
+   "F084-07",
+   "SYS-shared-ui-and-design",
+   "SYS-subscriptions-entitlements-and-usage"
+  ],
+  "relationships": [
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "KeyboardShortcutsDialog.tsx:330-340"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:desktop",
+    "evidence": "Hosted web app inside Electron"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx",
+    "evidence": "Button and confirmation"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/shared/stores/web-settings-store.ts",
+    "evidence": "restoreShortcutDefaults"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "store:agiworkforce-web-settings",
+    "evidence": "web-settings-store.ts:216-219"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/chat/components/dialogs/__tests__/KeyboardShortcutsPane.test.tsx",
+    "evidence": "File exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/chat/hooks/use-keyboard-shortcuts.test.ts",
+    "evidence": "File exists"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F084-07",
+    "evidence": "Restore defaults is part of the same Keyboard pane"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-shared-ui-and-design",
+    "evidence": "useConfirmAction from the shared UI package"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "Not blocked today; an experimental opt-in could need entitlement rules (unknown)"
+   }
+  ],
+  "unknowns": [
+   "Whether the owner wants experimental enrolment at all.",
+   "Whether any feature flag service could back an opt-in (not searched beyond settings code).",
+   "How a general reset should treat account-synced fields.",
+   "No test was run here."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "6",
+   "claim": "The store persists the empty values to localStorage (web-settings-store.ts:216-219)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The file is only 214 lines, so 216-219 does not exist. Persistence is the zustand persist config at lines 209-212 (name 'agiworkforce-web-settings', createJSONStorage(localStorage)). It persists the whole store, with no partialize.",
+   "evidence": "web-settings-store.ts:209-212",
+   "correction": "The store persists the whole state, including the emptied shortcut values, to localStorage via persist (web-settings-store.ts:209-212)."
+  },
+  {
+   "section": "2/5",
+   "claim": "Restore defaults lives on Desktop too, via the same Settings, General, Keyboard pane (WebSettingsModal.tsx:297)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "WebSettingsModal.tsx:297 mounts KeyboardShortcutsPane for web (the Electron desktop shows hosted web, so this holds). However, the Tauri desktop source has its own separate reset, resetAllCustomKeybindings, wired in KeybindingsSettings.tsx:256 with a confirm, and the page does not mention it.",
+   "evidence": "apps/desktop/src/features/settings/KeybindingsSettings.tsx:156,256-264; apps/desktop/src/stores/settingsStore.ts:201",
+   "correction": "Add that the retained Tauri desktop code has its own keybinding reset (resetAllCustomKeybindings), separate from the web store."
+  }
+ ],
+ "missing_facts": [
+  "The retained Tauri desktop app has its own confirmed reset of custom keybindings (resetAllCustomKeybindings), separate from the web store: apps/desktop/src/features/settings/KeybindingsSettings.tsx:256-264, apps/desktop/src/stores/settingsStore.ts:201.",
+  "The web store persist config has no partialize, so the whole store (including customCommands) lives in one localStorage key and the shortcut reset does not clear it: apps/web/shared/stores/web-settings-store.ts:209-212.",
+  "The confirmation is created with destructive:false, so it is shown as non-destructive although recorded chords are discarded: KeyboardShortcutsDialog.tsx:~238."
+ ]
+}

@@ -96,6 +96,7 @@ const allowedRootDirs = new Set([
   'docs',
   'examples',
   'infrastructure',
+  'knowledge-base',
   'node_modules',
   'packages',
   'patches',

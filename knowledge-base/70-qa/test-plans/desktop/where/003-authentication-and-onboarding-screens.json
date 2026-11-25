@@ -1,0 +1,631 @@
+{
+ "S3.01": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/signInScreen.ts",
+    "text": "Continue in browser"
+   },
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Log in or sign up"
+   }
+  ],
+  "needs": "an AGI account and a browser on the Mac",
+  "note": "The Desktop sign-in is a browser handoff; the web sign-in form is the same email step.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Desktop app while signed out, so the sign-in screen with the line 'Sign in to' and the button Continue in browser shows.",
+   "Click Continue in browser.",
+   "In the browser that opens, sign in with your AGI account (email, or a provider).",
+   "Return to the Desktop app and wait for the handoff to finish.",
+   "Look for a signed-in app: the sign-in screen should be gone. Compare with Expected."
+  ],
+  "where": "Open AGI Desktop > Continue in browser (sign-in screen). On the web, /login > Log in or sign up"
+ },
+ "S3.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Log in or sign up"
+   },
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a new email address that has no AGI account",
+  "note": "No separate sign-up screen was found; the same email step handles new and existing accounts. The string Create account exists in packages/ui/i18n/locales/en/auth.json but I did not find where it is shown.",
+  "reachable": "yes",
+  "steps": [
+   "On the sign-in screen, find the field labelled Email address.",
+   "Type an email address that has no AGI account yet.",
+   "Click Continue.",
+   "Look for the next step (a code or password step) that a new account goes through. Compare with Expected."
+  ],
+  "where": "Log in or sign up (sign-in screen) > type a new email > Continue"
+ },
+ "S3.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/ConfirmEmailStep.tsx",
+    "text": "Confirm your email address"
+   }
+  ],
+  "needs": "a new email address you can read",
+  "note": "I did not trace which server state sends a new account to this step; the blocked-before-confirm check is not verified in code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign up with a new email address (see S3.02).",
+   "On the next screen, read the heading Confirm your email address.",
+   "Open the email inbox and find the message with the code.",
+   "Enter the code and confirm, then try to use the app before confirming to see that it is blocked.",
+   "Compare with Expected: the account is usable only after the email is confirmed."
+  ],
+  "where": "Log in or sign up > new email address > Continue > Confirm your email address"
+ },
+ "S3.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthCodeStep.tsx",
+    "text": "Verify this device"
+   },
+   {
+    "file": "apps/web/features/auth/AuthCodeStep.tsx",
+    "text": "Resend code"
+   }
+  ],
+  "needs": "an account whose email you can read",
+  "note": "The one-time-code autofill attribute was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Enter an email address of an existing account and click Continue.",
+   "On the Verify this device screen, check the inbox for the emailed code.",
+   "Type the code into the field labelled Code and click Continue.",
+   "Click Resend code and watch for the countdown text Resend code in ... seconds.",
+   "Compare with Expected: the code is accepted, and resend works after the countdown."
+  ],
+  "where": "Log in or sign up > email > Continue > Verify this device (code step)"
+ },
+ "S3.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthPasswordStep.tsx",
+    "text": "Forgot password?"
+   }
+  ],
+  "needs": "an account with a password and an inbox you can read",
+  "note": "The wording of the message shown after the click was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Enter the email of an account that has a password, then click Continue.",
+   "On the password screen, click Forgot password?.",
+   "Check what message appears and whether a reset email arrives.",
+   "Compare with Expected: a reset code or link is sent by email."
+  ],
+  "where": "Log in or sign up > email > Continue > Forgot password?"
+ },
+ "S3.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthPasswordStep.tsx",
+    "text": "Forgot password?"
+   },
+   {
+    "file": "apps/web/features/auth/AuthNewPasswordStep.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "an account with a password and an inbox you can read",
+  "note": "The heading of the new password screen was not found; the labels above come from the step file.",
+  "reachable": "yes",
+  "steps": [
+   "Start a reset as in S3.06 and open the reset email.",
+   "Enter the code on the reset screen and click Continue.",
+   "On the new password screen, type a new password and click Continue.",
+   "Compare with Expected: you are signed in with the new password."
+  ],
+  "where": "Log in or sign up > email > Continue > Forgot password? > emailed code > Continue (new password step)"
+ },
+ "S3.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthProviderButtons.tsx",
+    "text": "Continue with {{provider}}"
+   }
+  ],
+  "needs": "an outside account (Google or GitHub)",
+  "note": "Which providers appear depends on configuration in apps/web/features/auth/authProviderConfig.ts, which I did not check.",
+  "reachable": "yes",
+  "steps": [
+   "On the sign-in screen, look under the email field for buttons that start with Continue with.",
+   "Click Continue with Google (or Continue with GitHub).",
+   "Complete the provider's sign-in in the window that opens.",
+   "Compare with Expected: the app signs you in and returns you to it."
+  ],
+  "where": "Log in or sign up > Continue with Google (or Continue with GitHub)"
+ },
+ "S3.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Log in or sign up"
+   },
+   {
+    "file": "apps/desktop/electron/signInScreen.ts",
+    "text": "Continue in browser"
+   }
+  ],
+  "needs": "an account in an organization that uses single sign-on",
+  "note": "No button is named for SSO. The redirect starts from the Continue step when the server reports an enterprise connection (apps/web/features/auth/IdentityAuthAdapter.tsx around line 393).",
+  "reachable": "yes",
+  "steps": [
+   "Enter the work email of an SSO-enabled organization on the Log in or sign up screen.",
+   "Click Continue.",
+   "Expect to be sent to your organization's sign-in page in the browser; complete it.",
+   "Compare with Expected: you land back in the app signed in."
+  ],
+  "where": "Log in or sign up > work email > Continue (web). On AGI Desktop: Continue in browser, then sign in with your organization's single sign-on"
+ },
+ "S3.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Log in or sign up"
+   },
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a work email of an organization with single sign-on, and a personal email",
+  "note": "The domain match itself is decided on the server through the sign-in factors; the client only follows the enterprise result. I did not trace the server domain lookup.",
+  "reachable": "yes",
+  "steps": [
+   "On the Log in or sign up screen, type a work email address of an organization that has its own sign-in.",
+   "Click Continue.",
+   "Compare with Expected: you are routed to that organization's sign-in page instead of a password screen.",
+   "Try a personal address on the same screen and compare: it should show the normal password or code step."
+  ],
+  "where": "Log in or sign up > type a work email > Continue"
+ },
+ "S3.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/PasskeysPanel.tsx",
+    "text": "Add a passkey"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Security"
+   }
+  ],
+  "needs": "a signed-in account and a Mac or device that supports passkeys",
+  "note": "The same panel is used on the web settings screen as well as in the Desktop app.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then open Settings and click Security.",
+   "Scroll to the Passkeys section.",
+   "Click Add a passkey and complete the system passkey prompt.",
+   "Look for the new passkey in the list, with its own rename and remove controls.",
+   "Compare with Expected: the passkey is registered and listed."
+  ],
+  "where": "Settings > Security > Passkeys > Add a passkey"
+ },
+ "S3.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthEmailStep.tsx",
+    "text": "Sign in with a passkey or security key"
+   }
+  ],
+  "needs": "an account with a registered passkey and a passkey-capable device",
+  "note": "The button only appears when passkey sign-in is configured and the browser supports passkeys (apps/web/features/auth/authProviderConfig.ts and AuthEmailStep.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Sign out, then open the sign-in screen.",
+   "Type the email of the account that has a passkey, or leave it blank if the button is shown without it.",
+   "Click Sign in with a passkey or security key.",
+   "Pick the passkey in the system prompt.",
+   "Compare with Expected: you are signed in without a password or code."
+  ],
+  "where": "Log in or sign up > Sign in with a passkey or security key"
+ },
+ "S3.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Set up authenticator app"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Enable two-factor"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Security"
+   }
+  ],
+  "needs": "a signed-in account and an authenticator app on a phone",
+  "note": "The screen can say Authenticator apps are temporarily unavailable; the exact QR and setup-key wording was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Security, and find the Authenticator app block.",
+   "Click Set up authenticator app.",
+   "Add the shown key or QR code to an authenticator app on your phone, then type the six-digit code.",
+   "Click Enable two-factor to confirm.",
+   "Sign out and sign in again: a second-factor step should appear. Compare with Expected."
+  ],
+  "where": "Settings > Security > Authenticator app > Set up authenticator app"
+ },
+ "S3.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthSecondFactorStep.tsx",
+    "text": "Confirm it is you"
+   },
+   {
+    "file": "apps/web/features/auth/AuthSecondFactorStep.tsx",
+    "text": "Use a backup code"
+   }
+  ],
+  "needs": "an account with two-factor on and its authenticator app",
+  "note": "Which factor is asked first depends on the account; the other alternatives are text, email and authenticator codes in the same file.",
+  "reachable": "yes",
+  "steps": [
+   "With two-factor on (S3.13), sign out and sign in with the email and password.",
+   "Read the Confirm it is you screen and the factor it asks for.",
+   "Click Use a backup code to see the alternative, then go back and use the authenticator code.",
+   "Compare with Expected: the session starts only after the second factor."
+  ],
+  "where": "Log in or sign up > email > Continue > password (or code) > Confirm it is you"
+ },
+ "S3.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Copy codes"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "I have saved these backup codes somewhere safe"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+    "text": "Done"
+   }
+  ],
+  "needs": "an account where two-factor is being set up, and an authenticator app",
+  "note": "The path for regenerating codes later was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Finish the two-factor setup in S3.13 by entering a valid code.",
+   "Read the Backup codes list that appears.",
+   "Click Copy codes, Download codes or Print codes, and check each result.",
+   "Tick I have saved these backup codes somewhere safe and click Done.",
+   "Compare with Expected: the codes are shown once and cannot be read again."
+  ],
+  "where": "Settings > Security > Authenticator app > Set up authenticator app (codes appear after the code is accepted)"
+ },
+ "S3.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/auth/AuthPasswordStep.tsx",
+    "text": "Can\u2019t reach this email?"
+   },
+   {
+    "file": "apps/web/features/auth/AuthSecondFactorStep.tsx",
+    "text": "Lost the device with your codes?"
+   }
+  ],
+  "needs": "an account you can no longer fully sign in to",
+  "note": "The recovery page at /recover is the same form. The request is handled as a support ticket, and the final submit result was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "On the password screen, click Can\u2019t reach this email?.",
+   "Choose what you lost from the list (password, email access, or two-factor device and backup codes).",
+   "Fill in the text box to describe what happened and submit.",
+   "Compare with Expected: you see a confirmation that the request was sent."
+  ],
+  "where": "Log in or sign up > email > Continue > Enter your password > Can\u2019t reach this email? (or Lost the device with your codes? on the Confirm it is you step)"
+ },
+ "S3.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/SignInMethodsPanel.tsx",
+    "text": "Sign-in methods"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/SignInMethodsPanel.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/SignInMethodsPanel.tsx",
+    "text": "Disconnect"
+   }
+  ],
+  "needs": "an outside account (Google or GitHub) to link",
+  "note": "Rows for sign-in methods also show a Remove button for identities; I did not trace which one unlinks.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open Settings, and click Security.",
+   "Find the Sign-in methods block.",
+   "Click Connect on a provider such as Google, and finish the outside sign-in.",
+   "Check that the row now shows the account and a Disconnect button.",
+   "Click Disconnect and confirm, then compare with Expected."
+  ],
+  "where": "Settings > Security > Sign-in methods > Connect"
+ },
+ "S3.18": {
+  "labels": [],
+  "needs": "an existing account and a second email address",
+  "note": "Searched apps/web/features/auth, apps/web/app/login and apps/web/app/signup for already exists, already registered, already linked, no account, not registered, sign in instead and sign up instead; no matching copy was found. The cited lines (AuthEmailStep.tsx:80, IdentityAuthAdapter.tsx:301) hold no such message.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S3.19": {
+  "labels": [
+   {
+    "file": "apps/web/app/signup/TermsGate.tsx",
+    "text": "I agree to the"
+   },
+   {
+    "file": "apps/web/app/login/complete/TermsReviewSignOut.tsx",
+    "text": "Sign out"
+   }
+  ],
+  "needs": "a new email for sign-up; a re-prompt needs a Terms version change, which you cannot cause from the UI",
+  "note": "The re-prompt on a Terms change is enforced on the server (apps/web/lib/server/terms.ts) and cannot be triggered from the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Sign up with a new email (S3.02) and reach the sign-up terms gate.",
+   "Read the line I agree to the Terms of Service and Privacy Policy.",
+   "Check that the continue button stays disabled until the box is ticked.",
+   "Tick the box and continue.",
+   "For a re-prompt, sign in to an account whose terms need review: the Sign out button on the review screen appears. Compare with Expected."
+  ],
+  "where": "Log in or sign up > new email > Continue (sign-up gate on /signup shows the I agree to the checkbox)"
+ },
+ "S3.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "Preferred name"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a new account (first run)",
+  "note": "The save target of the name was not traced; the Settings > General check is inferred from the settings navigation keywords.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a new account so the Welcome setup opens.",
+   "Type your name in the Preferred name field.",
+   "Click Continue, then pick a role and a first use (S3.23).",
+   "Open Settings > General and check that the name shows up.",
+   "Compare with Expected: the name is saved to the account."
+  ],
+  "where": "Sign in as a new account > Welcome screen (/welcome) > Preferred name"
+ },
+ "S3.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What best describes your work?"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What do you want to do first?"
+   },
+   {
+    "file": "apps/web/features/onboarding/lib/use-cases.ts",
+    "text": "Write and debug code"
+   }
+  ],
+  "needs": "a new account (first run)",
+  "note": "How the chosen role and use shape replies was not traced past the saved preferences.",
+  "reachable": "yes",
+  "steps": [
+   "On the Welcome screen, type a name and open the What best describes your work? list.",
+   "Pick one role, then click Continue.",
+   "On What do you want to do first?, pick one option such as Write and debug code.",
+   "Read the starter prompts shown for that option, then click Finish.",
+   "Compare with Expected: the first chat reflects the chosen use."
+  ],
+  "where": "Sign in as a new account > Welcome screen (/welcome) > What best describes your work? > Continue > What do you want to do first?"
+ },
+ "S3.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Personalization"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Response style"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Welcome screen asks only for name, role and first use; personalization style is set in Settings > Personalization, not in onboarding.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Personalization.",
+   "Set Response style, Response length and Technical level.",
+   "Send a question in a new chat.",
+   "Compare the reply with the chosen style and length."
+  ],
+  "where": "Settings > Personalization > Response style"
+ },
+ "S3.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "Import memory from other AI providers"
+   },
+   {
+    "file": "apps/web/features/settings/sections/MemorySection.tsx",
+    "text": "Start import"
+   },
+   {
+    "file": "apps/web/features/settings/components/ImportMemoryDialog.tsx",
+    "text": "Copy prompt"
+   }
+  ],
+  "needs": "an account on another assistant to copy memories from",
+  "note": "MemorySection is placed under Personalization was not traced line by line; the path follows the settings screen mapping in WebSettingsModal.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, click Personalization, and find the row Import memory from other AI providers.",
+   "Click the import button for that row, then pick a source (ChatGPT, Claude, Gemini, Copilot or Other).",
+   "Click Copy prompt and paste the prompt into the other assistant; then paste or upload its answer.",
+   "Review the preview list, select items, and click Start import.",
+   "Compare with Expected: the chosen memories appear in your saved memories."
+  ],
+  "where": "Settings > Personalization > Import memory from other AI providers > Start import"
+ },
+ "S3.27": {
+  "labels": [],
+  "needs": "a new account",
+  "note": "Searched apps/web for recommend (onboarding, connectors, settings, chat); no recommended-app list or guided connector flow was found. WebSettingsModal.tsx lines 309 and 337 only load the Connectors panel through the adapter, with no recommendations.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S3.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Computer use"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Allowed apps"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Manage"
+   }
+  ],
+  "needs": "the AGI Desktop app on a Mac",
+  "note": "No Screen Recording guidance text was found; the macOS Accessibility prompt is opened from apps/desktop/electron/runtime/systemPermissions.ts.",
+  "reachable": "yes",
+  "steps": [
+   "In the Desktop app, open Settings and click Computer use.",
+   "Read the hint Let AGI see your screen and use the mouse and keyboard in apps you allow.",
+   "Look at the Control block with the Any app setting.",
+   "Click Manage next to Allowed apps, add an app, and check the list.",
+   "When a macOS permission is needed, the Accessibility prompt opens. Compare with Expected: the grants are recorded in the list."
+  ],
+  "where": "Settings > Computer use (AGI Desktop app only) > Allowed apps > Manage"
+ },
+ "S3.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPairingSection.tsx",
+    "text": "Chrome"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPairingSection.tsx",
+    "text": "Unpair"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPairingSection.tsx",
+    "text": "Paired and answering"
+   }
+  ],
+  "needs": "Chrome with the AGI extension and the AGI Desktop app on a Mac",
+  "note": "The Pair button text on the Desktop side was not found; pairing starts from the Chrome side panel, and the code dialog is opened by Desktop.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Capabilities, then find the Chrome block.",
+   "If it says nothing has asked to pair yet, install the extension in Chrome.",
+   "In Chrome, open the Extension side panel, choose Connect to Desktop, and type the code the app shows in its dialog.",
+   "Check that the block reads Paired and answering.",
+   "Click Unpair and confirm Unpair this browser?, then compare with Expected."
+  ],
+  "where": "Settings > Capabilities > Chrome"
+ },
+ "S3.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Remote Control"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Pair a phone"
+   },
+   {
+    "file": "packages/contracts/types/src/pairing.ts",
+    "text": "Add device"
+   }
+  ],
+  "needs": "the AGI desktop app on a paid plan, a phone with AGI Mobile signed in to the same account, phone camera for the QR code",
+  "note": "The section returns nothing outside the desktop host and shows a paid-plan notice on Free; the owner memory says Remote Control is hidden in v1, and I did not find a v1 hide flag in this section. Account binding was not traced past the dispatcher (apps/desktop/electron/runtime/dispatcher.ts:2659).",
+  "reachable": "yes",
+  "steps": [
+   "In the AGI desktop app, open Settings and choose Capabilities.",
+   "Scroll to the Remote Control section (the section is hidden in a browser and on a Free plan).",
+   "Click Pair a phone. A pairing QR code and a short pairing code appear.",
+   "On the phone, open AGI Mobile, go to AGI Code, choose Add device, and scan the QR code (or type the pairing code).",
+   "Look at the section: it should show the phone as connected (Connected to <phone name>) with a Disconnect phone button, and the pairing should be tied to the same signed-in account. Compare with Expected."
+  ],
+  "where": "Settings > Capabilities > Remote Control > Pair a phone (desktop app only, paid plan)"
+ },
+ "S3.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Get notified when the response is ready."
+   },
+   {
+    "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "text": "Enable"
+   },
+   {
+    "file": "apps/web/features/notifications/components/WebPushToggle.tsx",
+    "text": "Browser notifications"
+   }
+  ],
+  "needs": "none (a request long enough that the answer is still generating; the banner does not show again once the browser permission is decided or the banner was dismissed)",
+  "note": "The banner shows only while browser permission is still 'default' and the banner was not resolved before (stored in localStorage), so a tester who already answered once will not see it again; the banner's position in the chat layout was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and start a new chat.",
+   "Send a request that takes a while (for example a long answer or an agent work task).",
+   "While the response is still generating, look for the banner 'Get notified when the response is ready.' under the top bar of the chat.",
+   "Click Enable to get the browser permission prompt, or click the X labelled 'Dismiss notification prompt' to hide it.",
+   "Open Settings > Notifications and find Browser notifications to turn it on or off. Compare with Expected: the offer is optional and can be declined and changed later."
+  ],
+  "where": "Chat > long-running answer > banner 'Get notified when the response is ready.' > Enable (or the X to dismiss). To change later: Settings > Notifications > Browser notifications"
+ },
+ "S3.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "What should we call you?"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/StarterPrompts.tsx",
+    "text": "Start with one of these"
+   },
+   {
+    "file": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "text": "Skip for now"
+   }
+  ],
+  "needs": "a brand-new account that has never finished onboarding",
+  "note": "The wizard is the /welcome page (apps/web/app/welcome/page.tsx); the code that sends a new account to /welcome after sign-in was not found by grep, so the entry path is unconfirmed. Items S3.33 and S3.34 do not exist in the plan file and were skipped.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a brand-new account that has not finished onboarding.",
+   "On the screen 'What should we call you?', type a name in Preferred name and click Continue.",
+   "On 'What do you want to do first?', read the line 'We will suggest a few prompts to get you started.' and the prompts under 'Start with one of these'.",
+   "Click one prompt. The app opens a chat with that prompt placed in the message box (it is filled in, not sent).",
+   "Look at the chat: it should show the starter prompt ready to send, leading into a first conversation. Compare with Expected. Clicking Skip for now instead opens the chat without a prompt."
+  ],
+  "where": "Sign in with a new account > welcome screen 'What should we call you?' > Continue > 'What do you want to do first?' > a prompt under 'Start with one of these' (or Skip for now)"
+ }
+}

@@ -1,0 +1,51 @@
+{
+ "S32.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download artifact"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Download"
+   }
+  ],
+  "needs": "an HTML artifact in a chat (a web page made by Claude); a phone or simulator with a share sheet",
+  "note": "The HTML export is the artifact source exactly as written (artifactExportOptions returns one 'source' option with extension html), and the label 'HTML file' is built from a template, not a literal string. For document and Markdown artifacts the Download sheet offers Markdown, PDF, Word and Plain text, with no HTML choice.",
+  "reachable": "yes",
+  "steps": [
+   "In a chat, ask Claude to make a single-page web page so an HTML artifact appears as a card.",
+   "Tap the artifact card to open the full-screen artifact view.",
+   "Tap the Download artifact icon (down-arrow, top bar).",
+   "Look at the share sheet that opens. It should offer one file ending in .html (the code names it 'HTML file', built from the file extension). Compare with Expected: a standalone HTML file."
+  ],
+  "where": "Open an HTML artifact from the chat (tap its card to open the full-screen view), then tap the Download artifact icon (down-arrow) in the top bar. The app shares the file directly; there is no choice sheet for an HTML artifact."
+ },
+ "S32.34": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Show changes"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactVersionHistorySheet.tsx",
+    "text": "Version history"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+    "text": "Restore"
+   }
+  ],
+  "needs": "an artifact with 2 or more versions (make one by editing it); no paid plan is shown in the code for this feature",
+  "note": "Show changes only appears when a previous version exists and the artifact is not a generated file. The More artifact actions menu also has Review changes (apps/mobile/src/features/chat/components/ArtifactChangesReview.tsx), which is a second compare path. The version button and Restore labels are built from templates in code, so the tester sees 'Version N of M' and 'v2/2'-style text. Whether Restore saves a new version was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Make a second version: open an artifact and use More artifact actions > Edit source (or Ask for changes), save a change so the version bar shows v2/2.",
+   "Tap Show changes under the version bar and compare the changed lines with the previous version.",
+   "Tap the version button (Version N of M) to open the Version history sheet.",
+   "Tap Restore on version 1 in that sheet, or go back to version 1 with the previous arrow and tap Restore under the version bar.",
+   "Look at the artifact text. It should match version 1 again. Compare with Expected: an earlier version is restored."
+  ],
+  "where": "Open an artifact that has 2 or more versions (from a chat card or Library > Artifacts filter). Tap Show changes under the version bar to compare with the previous version. Tap the version button (Version N of M) to open Version history, then tap Restore on an older version. Restore is also offered under the version bar when viewing an older version."
+ }
+}

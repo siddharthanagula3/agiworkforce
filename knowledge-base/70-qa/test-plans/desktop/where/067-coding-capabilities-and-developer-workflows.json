@@ -1,0 +1,752 @@
+{
+ "S67.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Explore the project"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Start a coding task"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Add a folder"
+   }
+  ],
+  "needs": "Desktop app with a folder on this computer added",
+  "note": "The Explore the project button sends a fixed prompt that asks for the project's purpose and main files.",
+  "reachable": "yes",
+  "steps": [
+   "Click Add a folder and choose a project folder on this computer.",
+   "Click New session in that folder.",
+   "In the Start a coding task area, click Explore the project.",
+   "Read the reply. It should name the main folders, entry points and how they connect, as Expected says."
+  ],
+  "where": "Code > On this device > Add a folder, then New session in that folder > Start a coding task > Explore the project"
+ },
+ "S67.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Send"
+   }
+  ],
+  "needs": "Desktop app with a local folder session",
+  "note": "No separate control; this is a free-form question to the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Click the Continue this session box and type: Where is <function or name> implemented? Give the file and line.",
+   "Click Send.",
+   "Check that the reply names the defining file and line."
+  ],
+  "where": "Code > On this device > open a session > Continue this session (composer)"
+ },
+ "S67.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Send"
+   }
+  ],
+  "needs": "Desktop app with a local folder session",
+  "note": "No separate control; this is a free-form question to the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Type in the Continue this session box: Where is <symbol> used across the repository?",
+   "Click Send.",
+   "Check that the reply lists references in several files."
+  ],
+  "where": "Code > On this device > open a session > Continue this session (composer)"
+ },
+ "S67.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Send"
+   }
+  ],
+  "needs": "Desktop app with a local folder session",
+  "note": "No separate control; this is a free-form question to the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Type in the Continue this session box: Trace how <button or action> flows from the UI to the code it changes.",
+   "Click Send.",
+   "Check that the reply walks from the entry point to the final effect, with file names."
+  ],
+  "where": "Code > On this device > open a session > Continue this session (composer)"
+ },
+ "S67.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Send"
+   }
+  ],
+  "needs": "Desktop app with a local folder session",
+  "note": "No separate control; this is a free-form question to the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Type any question about the project in the Continue this session box.",
+   "Click Send.",
+   "Check that the answer is based on the project's files."
+  ],
+  "where": "Code > On this device > open a session > Continue this session (composer)"
+ },
+ "S67.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Review changes"
+   }
+  ],
+  "needs": "Desktop app with a local folder session; a writable test folder",
+  "note": "Ask mode asks before each edit, so use Auto to see edits without prompts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Set Permissions to Auto. The shortcut is Cmd+Shift+M on a Mac.",
+   "Type a feature request in the Continue this session box and click Send.",
+   "Click Review changes and check that new or edited files appear."
+  ],
+  "where": "Code > On this device > open a session > Permissions (set to Auto) > Continue this session (composer)"
+ },
+ "S67.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Review changes"
+   }
+  ],
+  "needs": "Desktop app with a local folder session; a test folder with a known bug",
+  "note": "No separate control; the fix is made through the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Set Permissions to Auto.",
+   "Type a bug description and the steps to reproduce it in the Continue this session box, then click Send.",
+   "Click Review changes and check that the fix touches the file that causes the bug."
+  ],
+  "where": "Code > On this device > open a session > Permissions (set to Auto) > Continue this session (composer)"
+ },
+ "S67.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Run tests"
+   }
+  ],
+  "needs": "Desktop app with a local folder session",
+  "note": "No separate control; the refactor is requested through the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Set Permissions to Auto.",
+   "Type: Refactor <module> into smaller parts without changing behaviour. Click Send.",
+   "Click Review changes and run Run tests to check behaviour is unchanged."
+  ],
+  "where": "Code > On this device > open a session > Permissions (set to Auto) > Continue this session (composer)"
+ },
+ "S67.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Review changes"
+   }
+  ],
+  "needs": "Desktop app with a local folder session",
+  "note": "No separate control; tests are requested through the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Set Permissions to Auto.",
+   "Type: Write tests for <function>. Click Send.",
+   "Click Review changes and check that a new test file or new test cases appear."
+  ],
+  "where": "Code > On this device > open a session > Permissions (set to Auto) > Continue this session (composer)"
+ },
+ "S67.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Run tests"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Test output"
+   }
+  ],
+  "needs": "Desktop app with a local folder session; a folder with a test script",
+  "note": "If no test command exists, the message says No test command found here.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for a folder that has a test command.",
+   "Click the Run tests button in the session header.",
+   "Watch the status line: Running <command>.",
+   "Check the result: <command> passed., or failed with exit code, and read Test output."
+  ],
+  "where": "Code > On this device > open a session > Run tests (header button)"
+ },
+ "S67.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Test output"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   }
+  ],
+  "needs": "Desktop app; a folder with a failing test",
+  "note": "No separate control; the interpretation is requested through the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Run tests on a folder where a test fails.",
+   "Open Test output and read the failure.",
+   "Type in Continue this session: Explain why these tests fail and fix the cause. Click Send.",
+   "Check that the reply names the failing test and cause, and that Review changes shows any fix."
+  ],
+  "where": "Code > On this device > open a session > Run tests (header button) > Continue this session (composer)"
+ },
+ "S67.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Send"
+   }
+  ],
+  "needs": "Desktop app with a local folder session; a folder with a type checker",
+  "note": "No dedicated type-check button; the check is requested through the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for a TypeScript folder.",
+   "Type in Continue this session: Run the project's type checker and list the errors. Click Send.",
+   "Check that the reply reports the checker's errors with file names, or states there are none."
+  ],
+  "where": "Code > On this device > open a session > Continue this session (composer)"
+ },
+ "S67.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Send"
+   }
+  ],
+  "needs": "Desktop app with a local folder session; a folder with a linter",
+  "note": "No dedicated lint button; the check is requested through the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Type in Continue this session: Run the project's linter and list the findings. Click Send.",
+   "Check that the reply reports the lint output with file names."
+  ],
+  "where": "Code > On this device > open a session > Continue this session (composer)"
+ },
+ "S67.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Terminal"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "New terminal"
+   }
+  ],
+  "needs": "Desktop app with a local folder session; a folder with a build command",
+  "note": "No dedicated build button; the build runs as a typed terminal command.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session for the folder.",
+   "Click the Terminal panel button in the session header.",
+   "Click New terminal and type the project's build command, then press Return.",
+   "Check that the terminal ends with the build's output and exit status."
+  ],
+  "where": "Code > On this device > open a session > Terminal panel > New terminal"
+ },
+ "S67.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Terminal"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "New terminal"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   }
+  ],
+  "needs": "Desktop app with a local folder session; a folder with a dev server command",
+  "note": "The keep-running behaviour is partly visible in the close prompt text; the agent's own use of the server is not shown in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session and click the Terminal panel button.",
+   "Click New terminal and type the project's dev server command, then press Return.",
+   "Ask the agent in Continue this session for a small edit and click Send, while the server keeps running.",
+   "Check that the server stays up. Closing its tab should ask: Close this terminal? and say it is still running here."
+  ],
+  "where": "Code > On this device > open a session > Terminal panel > New terminal"
+ },
+ "S67.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Browser"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Type a URL"
+   }
+  ],
+  "needs": "Desktop app with a local folder session; a running local web app for the URL",
+  "note": "The page is shown in the Browser pane; the agent's own inspection steps are not shown in the pane.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session and click the Browser button in the header.",
+   "Click Web address, type a local URL such as localhost:3000, and press Return.",
+   "Use Back, Forward and Reload to check the pages load.",
+   "Ask the agent in Continue this session to check the page, and read the reply."
+  ],
+  "where": "Code > On this device > open a session > Browser (header button)"
+ },
+ "S67.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Browser"
+   }
+  ],
+  "needs": "a paired Chrome browser for the agent step",
+  "note": "No console panel found in apps/web/features/code/components/LocalBrowserPanel.tsx. The console step exists as device_browser_console in packages/contracts/local-runtime/src/device-steps.ts:289 for the paired Chrome browser, and the user is asked before it runs. Not confirmed as a visible control.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Browser"
+   }
+  ],
+  "needs": "a paired Chrome browser for the agent step",
+  "note": "The network step exists as device_browser_network in packages/contracts/local-runtime/src/device-steps.ts:294 for the paired Chrome browser. No network panel found in LocalBrowserPanel.tsx.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Review changes"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   }
+  ],
+  "needs": "Desktop app with a local folder session that has uncommitted changes",
+  "note": "The /review command's description, Review the changes in this session for bugs, is in apps/web/features/code/code-surface.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Make a change in the folder, then open a local session.",
+   "Click Review changes in the header and check the changed files.",
+   "Type /review in Continue this session and click Send.",
+   "Check that the findings name file and line, as Expected says."
+  ],
+  "where": "Code > On this device > open a session > Continue this session (composer) > type /review"
+ },
+ "S67.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
+    "text": "Review pull requests"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Connectors"
+   }
+  ],
+  "needs": "A GitHub account with the AGI GitHub App installed on a repository, and a pull request",
+  "note": "The GitHub card name is taken from the connector data and was not checked on screen. The review is posted by the GitHub webhook route at apps/web/app/api/github/webhook/route.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Connectors.",
+   "Find the GitHub connector and turn on Review pull requests.",
+   "Open a pull request on that repository and wait for it to open.",
+   "Check that AGI posts a review as a comment on the pull request."
+  ],
+  "where": "Settings > Connectors > GitHub > Review pull requests"
+ },
+ "S67.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Check the changes in this session for security problems"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Cloud sessions"
+   }
+  ],
+  "needs": "A paid plan with Code, and a cloud session with a repository",
+  "note": "The /security-review command is in the cloud composer. Not confirmed for the local composer.",
+  "reachable": "yes",
+  "steps": [
+   "Click Code in the sidebar and open a cloud session that has changes.",
+   "In the composer, type /security-review and pick it from the list.",
+   "Click Send.",
+   "Check that the reply lists security problems with their location."
+  ],
+  "where": "Code > Cloud sessions > open a session > Continue (composer) > type /security-review"
+ },
+ "S67.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Review changes"
+   }
+  ],
+  "needs": "A session that has run /review or /security-review",
+  "note": "No separate findings view was found; findings appear in the agent's reply.",
+  "reachable": "yes",
+  "steps": [
+   "After S67.20 or S67.22 finishes, open the same session.",
+   "Read the reply in the transcript.",
+   "Check that each finding has a plain explanation and a file and line."
+  ],
+  "where": "Code > open the session after a review or scan > read the reply in the transcript"
+ },
+ "S67.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Reads and plans. Changes nothing."
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Approve and continue"
+   }
+  ],
+  "needs": "Desktop app with a local folder session",
+  "note": "The Plan mode description is in LOCAL_AGENT_MODE_HINTS in apps/web/features/code/local-code.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session and set Permissions to Plan.",
+   "Type in Continue this session: Propose a fix for <issue>, do not change any files. Click Send.",
+   "Read the proposed change in the reply. Check Review changes shows no edits.",
+   "Set Permissions to Ask, ask again, and check the Approval required card with Approve and continue appears before any edit."
+  ],
+  "where": "Code > On this device > open a session > Permissions (set to Plan) > Continue this session (composer)"
+ },
+ "S67.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Stage file"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Revert file"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Review changes"
+   }
+  ],
+  "needs": "Desktop app with a local folder session that has several changed files",
+  "note": "Hunk-level Stage and Revert also exist. The cloud Changes panel has Include in the commit checkboxes in apps/web/features/code/code-surface.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session with several changed files and click Review changes.",
+   "Click Stage file on one file only.",
+   "Check the status says Staged 1 change. and that other files are not staged.",
+   "Click Revert file on another file, confirm Revert these changes?, and check only that file changes back."
+  ],
+  "where": "Code > On this device > open a session > Review changes > Stage file or Revert file"
+ },
+ "S67.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Continue this session"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Review changes"
+   }
+  ],
+  "needs": "Desktop app with a local folder session",
+  "note": "No dedicated documentation button; the request is made through the agent.",
+  "reachable": "yes",
+  "steps": [
+   "Open a local session with Permissions set to Auto.",
+   "Type in Continue this session: Write or update the README section for <module> from the code. Click Send.",
+   "Click Review changes and open the README or doc comment changes.",
+   "Check the new text matches the code."
+  ],
+  "where": "Code > On this device > open a session > Continue this session (composer)"
+ },
+ "S67.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Add a folder"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "New session in"
+   }
+  ],
+  "needs": "the desktop app and a git repository folder on this Mac",
+  "note": "There is no migration button; the agent does it from a chat request, so the tester checks the agent's output, not a control.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the desktop app and click Code in the sidebar.",
+   "If no folder is listed, click Add a folder and pick a git repository folder on this Mac.",
+   "Click New session in [folder name] under that folder.",
+   "Type a migration task, for example: Rename every use of the old config key to the new key, and send.",
+   "Look at the reply and the Changes pane: the agent names the files it changed, and those files now show the new name."
+  ],
+  "where": "Code > Add a folder (if none is open) > New session in [folder name] > type the migration task and send"
+ },
+ "S67.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Code"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "New session in"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "the desktop app, a folder on this Mac with a package manifest, and network access for the package registry",
+  "note": "There is no upgrade button; this depends on the agent running the install in the folder, so the tester checks its output.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the desktop app, click Code and open a session in a folder that has a package manifest (for example package.json).",
+   "Type an upgrade task, for example: Upgrade one outdated dependency to its latest version and fix any code that breaks, and send.",
+   "Wait for the agent to finish, then open the Changes pane.",
+   "Compare: the manifest and the code files the agent changed are listed, and the agent reports the new version it installed."
+  ],
+  "where": "Code > Add a folder (if none is open) > New session in [folder name] > type the upgrade task and send"
+ },
+ "S67.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Stages and reverts changes. Run git commit in your terminal to commit."
+   }
+  ],
+  "needs": "the desktop app and a git repository folder on this Mac",
+  "note": "The agent commits with its git_commit tool. The Commit message and Commit and push form is on the cloud Code page, not in a local folder session.",
+  "reachable": "yes",
+  "steps": [
+   "Click Code, then New session in [folder name].",
+   "Type a small change request, for example: Add one line to README.md, and send. Wait for the change.",
+   "Type: Commit these changes with the message Add README note, and send.",
+   "If a commit hook runs, a prompt asks you to allow it. Answer it.",
+   "Compare: the agent reports the commit. Open Changes: a line reads Stages and reverts changes. Run git commit in your terminal to commit. when you commit by hand."
+  ],
+  "where": "Code > New session in [folder name] > type a commit request in the message box and send"
+ },
+ "S67.30": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Create branch and open pull request"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "the desktop app and a git repository folder on this Mac",
+  "note": "The agent creates the branch with git_branch_create, which does not switch to it. The button Create branch and open pull request shows only when the folder is not on a branch (LocalPullRequest.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Click Code, then New session in [folder name] on a folder that is a git repository.",
+   "Type: Create a branch named qa-branch-test for this work, and send.",
+   "Compare: the agent reports the new branch name.",
+   "Open Changes and check the branch name shown in the session group in the sidebar, or ask the agent: Which branch are we on?"
+  ],
+  "where": "Code > New session in [folder name] > type a branch request in the message box and send"
+ },
+ "S67.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Push and open a pull request"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Open a pull request on GitHub"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a GitHub account connected to AGI, and a git folder with a GitHub remote; without the AGI GitHub App on that repository, the button opens the GitHub compare page instead",
+  "note": "The pull request block is inside the Changes pane (LocalChangesPanel.tsx); the Create branch and open pull request button appears instead when the folder is on no branch.",
+  "reachable": "yes",
+  "steps": [
+   "Click Code and open a session in a git folder that is on a branch other than the default branch and has a GitHub remote.",
+   "Make a change with the agent so there is something to push.",
+   "Click Changes in the session header.",
+   "Click Push and open a pull request below the file list.",
+   "Compare: a Pull request # link appears with a checks status. Clicking it opens the pull request on GitHub."
+  ],
+  "where": "Code > [session in a folder] > Changes > Push and open a pull request"
+ },
+ "S67.34": {
+  "labels": [],
+  "needs": "none",
+  "note": "Code line says partial: the switch-on is an E2B sandbox gate (apps/web/lib/e2b/gate.ts). I searched apps/web for issue_comment, app_mention and mention triggers and found no UI path that starts coding from a GitHub issue or team mention.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S67.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Remember for later sessions"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Save to memory"
+   }
+  ],
+  "needs": "a folder on this computer, and memory turned on for the account (the Memory button is hidden otherwise and in remote SSH sessions)",
+  "note": "The button shows only when runtimeModels.features.memory is true (apps/web/features/code/components/LocalSessionPanel.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Click Code and open a session in a folder.",
+   "Click the Memory button in the session header (brain icon, tooltip Memory).",
+   "Type a repository fact, for example: Tests run with the npm test script. Choose Project memory and click Save to memory.",
+   "Compare: the line Saved to appears with a file path.",
+   "Open a new session in the same folder and ask: How do we run the tests? The answer should use the saved fact."
+  ],
+  "where": "Code > [session in a folder] > Memory button (brain icon, tooltip Memory) > What to remember > Save to memory"
+ },
+ "S67.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/compaction.rs",
+    "text": "AGENTS.md"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "/memory shows what this session loads"
+   }
+  ],
+  "needs": "a folder on this computer with an AGENTS.md or CLAUDE.md file",
+  "note": "The instruction files are loaded by the CLI loader (apps/cli/src/compaction.rs load_instructions); the desktop app path was not confirmed in the cited dispatcher lines.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Create AGENTS.md in a test folder with one rule, for example: Always answer in one word.",
+   "Click Code and open a new session in that folder.",
+   "Ask a question such as: What is the capital of France?",
+   "Compare: the reply follows the rule from AGENTS.md. In the terminal CLI, /memory shows what the session loads."
+  ],
+  "where": "No control. Seen in a new session in a folder that has an AGENTS.md or CLAUDE.md file"
+ },
+ "S67.39": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Skills and plugins"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Trust this folder's skills"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Skills"
+   }
+  ],
+  "needs": "the desktop app, a folder open in a local session, and a folder or account that has at least one skill or plugin",
+  "note": "The button shows in every local session header (LocalSessionPanel.tsx line 1067); the list is empty when no skill or plugin is installed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Code and open a session in a folder that has a skill or plugin.",
+   "Click the Skills and plugins button in the session header (sparkle icon).",
+   "If a project skill is listed and not trusted, read the note and click Trust this folder's skills.",
+   "Turn one skill's switch off, then on. Each row shows the name and its scope, under Skills or Plugins.",
+   "Compare: a switched-off skill is not used when you ask for it, and a failed change shows That change could not be saved."
+  ],
+  "where": "Code > [session in a folder] > Skills and plugins button (sparkle icon, tooltip Skills and plugins) > turn a switch on or off"
+ }
+}

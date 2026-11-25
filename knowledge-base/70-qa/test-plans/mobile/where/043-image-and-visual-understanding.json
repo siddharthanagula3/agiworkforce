@@ -1,0 +1,314 @@
+{
+ "S43.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account, a photo file",
+  "note": "In Local mode the app only reads text from the photo on the device (chatExecutionStore: 'cannot inspect the image pixels directly'), so test in Cloud. The owner's live check of the upload scanner (UPLOAD_SCAN_WEBHOOK_URL) is still pending.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make sure the mode control shows Cloud selected.",
+   "Tap Add to chat (the + button beside the message box).",
+   "Tap Photos and pick one photo.",
+   "Tap Message input, type 'What is in this photo?' and tap Send message.",
+   "Check that the reply describes the photo, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > Photos"
+ },
+ "S43.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account, two photo files",
+  "note": "The number of photos allowed per message depends on the plan (photoSelectionLimitForPlan); the 'up to 4 photos' cap in the sheet applies to image creation, not chat. Owner's live check of the upload scanner is still pending.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Photos.",
+   "Select two photos in the picker (it allows several, in order).",
+   "Type 'Compare these two images: what is different?' in Message input and tap Send message.",
+   "Check that the reply compares both photos, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > Photos"
+ },
+ "S43.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Paste image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account, a screenshot",
+  "note": "'Paste image' is hidden unless the clipboard has an image. Captured screenshots can also be attached with Photos.",
+  "reachable": "yes",
+  "steps": [
+   "Take a screenshot on the device and copy it to the clipboard.",
+   "Tap Add to chat, then Paste image (this row only shows when the clipboard holds an image).",
+   "Type 'What does this screenshot show?' in Message input and tap Send message.",
+   "Check that the reply explains the screenshot, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > Paste image (or Photos for a saved screenshot)"
+ },
+ "S43.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ModeToggle.tsx",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a signed-in account, a scanned PDF or a document photo",
+  "note": "The File row appears only when the app is in Cloud mode. The PDF is recognised by mime type in AttachmentPreview.tsx; I did not confirm the file picker's accepted types.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure Cloud is selected, then tap Add to chat and tap File.",
+   "Pick a scanned PDF or a photo of a document.",
+   "Type 'Read this document and explain it' in Message input and tap Send message.",
+   "Check that the reply reads and explains the document, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > File (Cloud mode only) or Photos"
+ },
+ "S43.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account, a chart image file",
+  "note": "No chart-specific control exists; this is a normal photo attachment. Owner's live check of the upload scanner is still pending.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Photos, and pick a chart image.",
+   "Type 'What trends does this chart show? Give the main values.' in Message input and tap Send message.",
+   "Check that the reply names the data and the trend, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > Photos"
+ },
+ "S43.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account, a diagram image file",
+  "note": "No diagram-specific control exists; this is a normal photo attachment. Owner's live check of the upload scanner is still pending.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Photos, and pick a diagram image.",
+   "Type 'Explain the structure of this diagram.' in Message input and tap Send message.",
+   "Check that the reply describes the parts and how they connect, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > Photos"
+ },
+ "S43.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account, a photo of handwriting",
+  "note": "No handwriting-specific control exists. On-device (Local) mode reads only printed text, so use Cloud. Owner's live check is still pending.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Photos, and pick a photo of handwritten notes.",
+   "Type 'Transcribe these notes.' in Message input and tap Send message.",
+   "Check that the reply gives the handwritten text, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > Photos"
+ },
+ "S43.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/native/ios/AGIAppIntents/ScanIntent.swift",
+    "text": "Scan with AGI"
+   },
+   {
+    "file": "apps/mobile/app/(app)/scan.tsx",
+    "text": "Scan Text"
+   },
+   {
+    "file": "apps/mobile/app/(app)/scan.tsx",
+    "text": "Copy text"
+   }
+  ],
+  "needs": "an iPhone with AGI installed, a page with printed text",
+  "note": "No in-app button opens the Scan Text screen; the route is reached only from the scan intent (apps/mobile/app/_layout.tsx). The drawer has a scan entry hidden as FULL_SCREEN. The Copy text pill shows only when text was found. The mobile chat also reads text from attached images on-device in Local mode.",
+  "reachable": "unsure",
+  "steps": [
+   "On an iPhone, run the Shortcuts action or Siri phrase Scan with AGI.",
+   "On Scan Text, take a photo of a page with printed text.",
+   "Tap Copy text and check that the pill changes to Copied.",
+   "Paste into a note and check that the text matches Expected."
+  ],
+  "where": "Siri or Shortcuts (iPhone): Scan with AGI; then the Scan Text screen > Copy text"
+ },
+ "S43.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account, an image with several countable objects",
+  "note": "No counting control exists; the count depends on the model's answer. Owner's live check of the upload scanner is still pending.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Photos, and pick an image with several of the same object (for example apples).",
+   "Type 'How many apples are in this picture?' in Message input and tap Send message.",
+   "Check that the reply gives a count, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > Photos"
+ },
+ "S43.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Photos"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account, two scene photos",
+  "note": "No scene-comparison control exists; this is the same as S43.02 with a comparison prompt. Owner's live check of the upload scanner is still pending.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Photos, and select two different scene photos (selection keeps the order you tap).",
+   "Type 'Describe the differences between the first and second photo.' in Message input and tap Send message.",
+   "Check that the reply names the differences between the two scenes, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > Photos"
+ },
+ "S43.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Camera"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a signed-in account, a device or error to photograph",
+  "note": "The Camera row appears only when the camera capability is allowed. No troubleshooting-specific control exists. Owner's live check of the upload scanner is still pending.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Camera, and take a photo of the device or error screen (or choose one with Photos).",
+   "Type 'My router shows this light. What should I check?' in Message input and tap Send message.",
+   "Check that the reply gives troubleshooting steps, as Expected says."
+  ],
+  "where": "Chat screen > Add to chat > Camera (or Photos)"
+ },
+ "S43.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Attach from Library"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Change this image"
+   },
+   {
+    "file": "apps/mobile/src/features/image/components/ImageChangeSheet.tsx",
+    "text": "Change the image"
+   }
+  ],
+  "needs": "a signed-in account, an image to use as reference, an image-capable model",
+  "note": "'Change this image' shows only in Cloud mode for signed-in users on a model that edits images. The reference logic is in apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts (resolveReferenceImage); the quoted line from the audit is gone, but the feature is still there. I did not check how tapping a generated image opens it full screen.",
+  "reachable": "yes",
+  "steps": [
+   "Tap Add to chat, then Create image (the chat switches to image generation).",
+   "Tap Attach from Library or Photos and pick an image; up to 4 photos can be attached, and the first is edited.",
+   "Type 'Make the sky sunset orange' in Message input and tap Send message.",
+   "Check that the new image is based on the chosen reference, as Expected says.",
+   "Optional: tap a generated image in the chat, tap Change this image, type in Describe the change, then tap Change the image."
+  ],
+  "where": "Chat screen > Add to chat > Create image > Attach from Library (or Photos); or open a generated image > Change this image"
+ }
+}

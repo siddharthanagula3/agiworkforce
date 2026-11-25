@@ -1,0 +1,269 @@
+{
+ "S65.01": {
+  "labels": [
+   {
+    "file": "src/side_panel.ts",
+    "text": "Computer Use"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow browser control on"
+   },
+   {
+    "file": "src/features/computer-use/browserControlConsent.ts",
+    "text": "This grants full DevTools-Protocol control"
+   }
+  ],
+  "needs": "a signed-in account and an ordinary website open",
+  "note": "Setup is one consent card, not a multi-step wizard; the code does not show a separate guided flow.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI in the side panel and open an ordinary website (not a Chrome page or the Web Store).",
+   "Click the \"Computer Use\" tab at the top of the side panel.",
+   "Read the card: its headline is \"This grants full DevTools-Protocol control\" and its title is \"Let AGI act on <site>\".",
+   "Click \"Allow browser control on <site>\" and accept Chrome's site-access prompt.",
+   "Compare with Expected: the card should close and the line \"Works on <site>\" should appear under the task box."
+  ],
+  "where": "Computer Use tab > setup card, after opening an ordinary website: the button \"Allow browser control on <site>\" (also under Extension settings > Permissions > Grant full browser control)"
+ },
+ "S65.07": {
+  "labels": [
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Start"
+   },
+   {
+    "file": "src/side_panel.ts",
+    "text": "Computer Use"
+   }
+  ],
+  "needs": "a signed-in account and an ordinary website open",
+  "note": "The code shows screenshot steps as images but does not confirm whether the step list starts open or closed.",
+  "reachable": "yes",
+  "steps": [
+   "Open an ordinary website and sign in to AGI.",
+   "Click the \"Computer Use\" tab, approve the site if asked, type a short task and click \"Start\".",
+   "Click \"Assistant steps\" to open the step list if it is closed.",
+   "Watch the steps appear while AGI works.",
+   "Compare with Expected: screenshot steps should show a small picture of the page AGI sees at that moment."
+  ],
+  "where": "Computer Use tab > Assistant steps (screenshot entries appear as the task runs)"
+ },
+ "S65.08": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Take over"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Stop"
+   }
+  ],
+  "needs": "a signed-in account and an approved ordinary website",
+  "note": "The pointer and glow are injected into the page by the run overlay; they appear only while a run is active.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a task on an approved ordinary website from the Computer Use tab.",
+   "Watch the page while AGI clicks or types.",
+   "Compare with Expected: an arrow pointer should move to the place AGI acts, and the page should show a dock with the buttons \"Stop\" and \"Take over\" at the bottom."
+  ],
+  "where": "On the web page itself during a run: a coloured arrow pointer moves to each click target and a coloured glow frames the page"
+ },
+ "S65.18": {
+  "labels": [
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   }
+  ],
+  "needs": "a signed-in account, an approved ordinary website and a second tab",
+  "note": "The code is marked partial: the run keeps going after a tab switch, but the final live check for background screenshots and input was not confirmed.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a task on an approved ordinary website from the Computer Use tab.",
+   "Switch to a different tab in the same window while the task runs.",
+   "Return to the Computer Use tab after a few seconds.",
+   "Compare with Expected: Assistant steps should keep growing and the run should not show as cancelled."
+  ],
+  "where": "Computer Use tab > Assistant steps keep updating while another tab is in front"
+ },
+ "S65.19": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "You started using the page, so AGI stopped acting on it."
+   }
+  ],
+  "needs": "a signed-in account and an approved ordinary website",
+  "note": "The code hands the page to the person on a real click or key press only when AGI is not in the middle of an action, so the tester should try between steps.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a task on an approved ordinary website from the Computer Use tab.",
+   "While AGI is still acting, click or type on the task page yourself.",
+   "Compare with Expected: AGI should stop acting on the page and the notice above should appear in the side panel."
+  ],
+  "where": "Computer Use tab shows the notice \"You started using the page, so AGI stopped acting on it.\" when the person uses the task page"
+ },
+ "S65.20": {
+  "labels": [
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Stop"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Stopping\u2026"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "You stopped the run."
+   }
+  ],
+  "needs": "a signed-in account and an approved ordinary website",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a task on an approved ordinary website from the Computer Use tab.",
+   "While the task runs, click \"Stop\" in the Computer Use tab.",
+   "Watch the button change to \"Stopping\u2026\" and then the run end.",
+   "Compare with Expected: the run should stop at once and the log should say \"You stopped the run.\""
+  ],
+  "where": "Computer Use tab > Stop (also the \"Stop\" button in the dock on the web page)"
+ },
+ "S65.23": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Ask first"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Approve action:"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow for this task"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Skip"
+   }
+  ],
+  "needs": "a signed-in account, an approved ordinary website and a site with a form",
+  "note": "Some sensitive steps are refused outright rather than offered for review (for example a payment), so the tester may see a refusal message instead of a card.",
+  "reachable": "yes",
+  "steps": [
+   "Click the \"Computer Use\" tab and open the menu \"How should AGI act in your browser?\" and choose \"Ask first\".",
+   "Start a task on an approved ordinary website that reaches a form or button that changes something.",
+   "When the card \"Approve action:\" appears, read the description before choosing.",
+   "Compare with Expected: AGI should wait for \"Allow\" or \"Skip\" before it acts."
+  ],
+  "where": "Computer Use tab > \"How should AGI act in your browser?\" menu set to \"Ask first\", then a card titled \"Approve action: <tool>\" with \"Allow\", \"Allow for this task\" and \"Skip\""
+ },
+ "S65.24": {
+  "labels": [
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Sign in required"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Take over"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Continue"
+   }
+  ],
+  "needs": "a site that requires sign-in and an outside account (Google) if the site uses one",
+  "note": "The Continue button stays hidden until the run pauses for a hand-over.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task on an approved site that asks for sign-in (use the test account the team gives you).",
+   "When AGI pauses for sign-in, read the reason in the side panel and sign in on the page yourself.",
+   "Click \"Continue\" in the Computer Use tab to hand the page back.",
+   "Compare with Expected: AGI should carry on with the task from the signed-in page."
+  ],
+  "where": "Computer Use tab > the \"Sign in required\" chip, then the \"Take over\" button; after signing in, click \"Continue\""
+ },
+ "S65.25": {
+  "labels": [
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Assistant steps"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Completed"
+   },
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "Not verified"
+   }
+  ],
+  "needs": "a signed-in account and an approved ordinary website",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start a short task on an approved ordinary website from the Computer Use tab.",
+   "Open \"Assistant steps\" when the run has finished.",
+   "Click an action line to expand its detail.",
+   "Compare with Expected: each action should have its own line that says what was done and whether it was verified."
+  ],
+  "where": "Computer Use tab > Assistant steps (each action line starts with \"Completed\", \"Skipped\", \"Not verified\" or \"Result\")"
+ },
+ "S65.26": {
+  "labels": [
+   {
+    "file": "src/features/side-panel/computerUsePanel.ts",
+    "text": "AGI cannot act on this page. Open an ordinary website."
+   },
+   {
+    "file": "src/side_panel.ts",
+    "text": "Chrome does not let extensions read this page at all."
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The same idea also appears for chat page attachments, with a different sentence in src/side_panel.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and make the active tab a Chrome page such as the Chrome Web Store or chrome://extensions.",
+   "Click the \"Computer Use\" tab.",
+   "Read the line under the task box.",
+   "Compare with Expected: the line should say AGI cannot act on this page and tell the person to open an ordinary website."
+  ],
+  "where": "Computer Use tab > the line under the task box: \"AGI cannot act on this page. Open an ordinary website.\""
+ },
+ "S65.28": {
+  "labels": [
+   {
+    "file": "_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "src/options.ts",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "a signed-in account and an approved ordinary website",
+  "note": "The run-stop message is \"Access to this site was withdrawn, so the run was stopped.\" in src/features/side-panel/computerUsePanel.ts; the removal path revokes browser control too.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task on an approved ordinary website so a run is active.",
+   "Click \"More\" in the side panel, then \"Extension settings\", and find \"Permissions\".",
+   "Click the \u00d7 next to the site in the approved sites list.",
+   "Return to the side panel and watch the run.",
+   "Compare with Expected: the run should stop and the message should say access was withdrawn and to approve the site again in the Computer use tab."
+  ],
+  "where": "More > Extension settings > Permissions > the \u00d7 button next to the site (titled \"Remove <site>\"); then back in the Computer Use tab"
+ }
+}

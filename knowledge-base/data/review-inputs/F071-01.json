@@ -1,0 +1,556 @@
+{
+ "feature": {
+  "id": "F071-01",
+  "aliases": [
+   "Drawer",
+   "Side panel",
+   "Sidebar",
+   "Navigation drawer",
+   "Native navigation",
+   "Tablet layout",
+   "Foldable adaptation",
+   "Landscape adaptation",
+   "Orientation lock",
+   "S71.01",
+   "S71.25",
+   "S71.26",
+   "S71.27"
+  ],
+  "summary": "How the AGI Mobile app moves between chats, lists and settings. Phones get a slide-out drawer plus stack pages with back gestures. Windows 1000 points wide or more get a permanent side panel. Camera, scan and voice pages hide the drawer. Phones stay in portrait. Tablets may rotate. Mobile only.",
+  "purpose": {
+   "what_it_does": "Gives the Mobile app its frame. A drawer holds the Local/Cloud mode switch, search, new chat, destinations (projects, library, images, schedules and others), recent chats, settings. Stack pages open on top. The layout changes with the window width, and the screen orientation is locked for phones.",
+   "why_it_exists": "The brief asks for native patterns: a swipeable drawer plus stack routes with back gestures (S71.01), a wider tablet layout that adapts to split view (S71.25), foldable adaptation (S71.26) and landscape adaptation (S71.27). (doc: knowledge-base/data/area-briefs/071-mobile-application.md)",
+   "who_uses_it": "Every person who uses AGI Mobile on a phone or tablet, in Local mode or Cloud mode.",
+   "problems_solved": [
+    "Reach chats and tools with one thumb on a phone.",
+    "Use the room on a tablet instead of a stretched phone layout.",
+    "Stop the drawer swipe from fighting the Back swipe on settings pages or the voice screen.",
+    "Keep the camera and voice pages full screen."
+   ],
+   "use_cases": [
+    "Swipe from the left edge on a phone, then tap a recent chat to open it.",
+    "Open Settings and swipe from the left edge to go Back.",
+    "Use a large iPad window where the drawer stays open beside the chat.",
+    "Watch a video full screen in landscape on a phone, then return to portrait."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Mobile: the whole app shell. The menu control is the round button with accessibility label 'Open navigation drawer' (apps/mobile/src/shared/components/DrawerButton.tsx:70-95).",
+    "Mobile drawer rows: Search, 'New chat', destination rows, Recents, 'See all chats', Settings (keys drawer.newChat, search, drawer.recents, drawer.seeAllChats, settings) (apps/mobile/src/features/drawer/components/DrawerContent.tsx:631-912).",
+    "Web, Desktop, CLI, VS Code, Chrome: not part of this feature (brief gives a status for the mobile app only)."
+   ],
+   "prerequisites": [
+    "None for Local mode. The drawer lists only rows allowed in the current mode (isShownInMode) and by feature flags (apps/mobile/src/features/drawer/components/DrawerContent.tsx:563-573).",
+    "Some rows need Cloud mode, a signed-in account, or a plan capability (Images, AGI Work tasks) (DrawerContent.tsx:337-345, 563-573)."
+   ],
+   "screens_and_controls": [
+    "Drawer (overlay on narrow windows, permanent panel on wide ones) with a Local/Cloud mode switch, Search, New chat, a 'More' fold, Projects, Recents list with long-press actions, 'See all chats', Settings and (only where native purchases exist) an Upgrade row (DrawerContent.tsx:323-420, 631-912).",
+    "Menu button with an unread-notification pip; on a permanent sidebar it becomes a blank slot and shows only a pip link 'Open notifications, N unread' (DrawerButton.tsx:50-95).",
+    "Settings stack: Back by edge swipe or back control.",
+    "Camera and scan pages: full window, no drawer.",
+    "Voice page: always dark, drawer swipe off."
+   ],
+   "journey": [
+    "Open the app. On a phone the chat shows with the drawer closed.",
+    "Swipe from the left edge (40 points on iOS, 64 on Android, drag of at least 60 on iOS or 96 on Android) or tap the menu button.",
+    "Tap a chat, a destination or Settings. The drawer closes and the page opens.",
+    "In Settings, swipe from the left edge or tap Back to return one page.",
+    "On a window 1000 points wide or more, the drawer is already open at 280 points wide and the menu button is gone.",
+    "Rotate an iPhone or an Android phone: the screen stays portrait, except while a video or a presentation viewer is open."
+   ],
+   "feedback_and_outputs": [
+    "The drawer slides over the page with a scrim (apps/mobile/app/(app)/_layout.tsx:55-70).",
+    "The active chat row is highlighted and unread chats show a dot (DrawerContent.tsx:500-560).",
+    "Unread count shows on the menu button and is read out in its label (DrawerButton.tsx:77-84)."
+   ],
+   "settings": [
+    "Chat list arrangement: 'In one list' or 'By project' (drawer.inOneList, drawer.byProject) stored in the settings store (DrawerContent.tsx:358-380).",
+    "The 'More' fold and the folded Projects section remember their state (DrawerContent.tsx:352-357)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Drawer type is 'front' (overlay) on narrow windows and 'permanent' when the window is 1000 points wide or more (280 drawer + 720 content) (apps/mobile/src/shared/hooks/useResponsiveLayout.ts:3-9, 24-47; apps/mobile/src/features/shell/drawerGestures.ts:23-45).",
+    "The draft's 768 and 1024 are not the drawer switch. 768 sets the 'tablet' size class and 1024 (largest side of the screen) sets isTablet (apps/mobile/src/shared/hooks/useTabletLayout.ts:5-6, 40-50).",
+    "Split view is detected as a window narrower than the screen by at least 8 points on a tablet-size screen (useTabletLayout.ts:9, 51).",
+    "Settings pages turn the drawer swipe off so the edge swipe means Back (apps/mobile/app/(app)/_layout.tsx:20-22, 122).",
+    "Camera and scan are drawerType 'front' even where a sidebar is permanent. The voice route also turns swipe off (_layout.tsx:23-28, 130-134).",
+    "A leftover open state is closed when the window grows to the permanent width (_layout.tsx:30-41).",
+    "Phones are locked to portrait at app start by lockPhonePortrait (apps/mobile/app/_layout.tsx:122, 129; apps/mobile/src/shared/hooks/useLandscapeWhileOpen.ts:23-25). A phone is any non-iPad iOS device or an Android device whose smaller side is under 600 dp (useLandscapeWhileOpen.ts:11-16).",
+    "Only the video player and the presentation deck viewer free rotation while open (apps/mobile/src/features/chat/components/VideoPlayerModal.tsx:47; apps/mobile/src/features/chat/components/artifact-viewers/presentation/PresentationDeckView.tsx:161).",
+    "iPad lists all four orientations and multitasking is on (supportsTablet true, requireFullScreen false) (apps/mobile/app.config.js:156-186). A native Android plugin lets screens with smallest width 600 dp or more rotate and re-decides when the size changes (apps/mobile/native/android/withAGITabletOrientation.cjs:14-34).",
+    "Message list and composer keep a reading column up to 720 points wide on large windows (apps/mobile/src/shared/layout/contentColumn.ts:3-25; apps/mobile/src/features/chat/components/MessageList.tsx:367-370)."
+   ],
+   "incomplete": [
+    "Landscape on phones: the brief wants the chat re-laid out in landscape (S71.27) but the code locks phones to portrait. Only two viewers rotate. (apps/mobile/app.config.js:158; useLandscapeWhileOpen.ts:23-52)",
+    "Foldables: only window-size changes are handled, through the Android orientation plugin and the width-based layout. No hinge or fold event code was found. (apps/mobile/native/android/withAGITabletOrientation.cjs; search for fold/hinge in apps/mobile returned only a test case name)"
+   ],
+   "disconnected_or_disabled": [
+    "The Upgrade row in the drawer appears only when native purchases are available. Billing is off in the feature flags, so it is hidden in the current build. (DrawerContent.tsx:337-345; apps/mobile/lib/v1FeatureFlags.ts:6)",
+    "Companion pages are registered as drawer screens but FEATURES.companion is false. (apps/mobile/lib/v1FeatureFlags.ts:16; _layout.tsx:110-114)"
+   ],
+   "not_available": [
+    "Hinge-aware layout on any app.",
+    "Web, Desktop, CLI, VS Code and Chrome: not applicable to this feature."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The phone app navigates with native patterns: a swipeable drawer plus stack routes with back gestures.",
+     "source": "S71.01 Should (doc: knowledge-base/data/area-briefs/071-mobile-application.md)"
+    },
+    {
+     "statement": "On tablets the app uses a wider layout (persistent drawer, multi-column grids) and adapts to split view.",
+     "source": "S71.25 Should (doc: knowledge-base/data/area-briefs/071-mobile-application.md)"
+    },
+    {
+     "statement": "On foldables the layout adapts when the device folds or unfolds, ideally around the hinge. The brief status is not applicable anywhere.",
+     "source": "S71.26 (doc: knowledge-base/data/area-briefs/071-mobile-application.md)"
+    },
+    {
+     "statement": "Rotating the phone to landscape re-lays out the chat usefully.",
+     "source": "S71.27 Should (doc: knowledge-base/data/area-briefs/071-mobile-application.md)"
+    },
+    {
+     "statement": "The design contract names breakpoints: compact phone, phone, tablet, narrow desktop, desktop, wide desktop.",
+     "source": "docs/product/experience-contract.md:164 (doc: docs/product/experience-contract.md)"
+    }
+   ],
+   "acceptance_criteria": [
+    "On a phone, a swipe from the left edge opens the drawer and a tap on a recent chat opens it and closes the drawer.",
+    "On Settings pages the edge swipe goes Back and does not open the drawer.",
+    "With a window 1000 points wide or more the drawer is permanent and the menu button is not shown. Narrowing the window below 1000 closes any stale open state and the overlay drawer works.",
+    "Opening camera, scan or voice shows no drawer. Voice does not react to an edge swipe.",
+    "An iPhone and a small Android phone stay in portrait when turned; an iPad and an Android tablet rotate.",
+    "Opening a video or a presentation on a phone allows landscape and closing it returns to portrait."
+   ],
+   "inferred": [
+    "The brief status 'done' for S71.27 conflicts with the portrait lock, so the status is either stale or means tablets only. [inferred]",
+    "A tablet in portrait between 768 and 999 points gets the overlay drawer, not a permanent one. [inferred from useResponsiveLayout.ts:24-47]"
+   ],
+   "proposed": [
+    "[proposed] Decide and record whether phone landscape is a product requirement. If yes, unlock rotation for the chat and re-lay out the composer. If no, change S71.27 to match the code.",
+    "[proposed] Add a posture or hinge signal for foldables only if a target device needs it."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "screen",
+    "name": "App layout with drawer",
+    "path": "apps/mobile/app/(app)/_layout.tsx",
+    "role": "Declares the drawer, gesture options and which screens hide the drawer or turn the swipe off."
+   },
+   {
+    "kind": "component",
+    "name": "DrawerContent",
+    "path": "apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "role": "Drawer body: mode switch, search, new chat, destinations, projects, recents."
+   },
+   {
+    "kind": "hook",
+    "name": "useTabletLayout / getTabletLayout",
+    "path": "apps/mobile/src/shared/hooks/useTabletLayout.ts",
+    "role": "Size class, orientation, isTablet, isSplitView from window and screen sizes."
+   },
+   {
+    "kind": "hook",
+    "name": "useResponsiveLayout / getResponsiveLayout",
+    "path": "apps/mobile/src/shared/hooks/useResponsiveLayout.ts",
+    "role": "Permanent-drawer threshold, drawer width, grid columns."
+   },
+   {
+    "kind": "other",
+    "name": "drawerGestureOptions",
+    "path": "apps/mobile/src/features/shell/drawerGestures.ts",
+    "role": "Edge width, swipe distance and drawer type per platform and layout."
+   },
+   {
+    "kind": "hook",
+    "name": "useDrawerDismiss, useDrawerScrollMemory",
+    "path": "apps/mobile/src/features/shell/useDrawerDismiss.ts",
+    "role": "Closes the overlay on back or tap away and remembers drawer scroll."
+   },
+   {
+    "kind": "component",
+    "name": "DrawerButton",
+    "path": "apps/mobile/src/shared/components/DrawerButton.tsx",
+    "role": "Menu button with unread pip; becomes a blank slot beside a permanent sidebar."
+   },
+   {
+    "kind": "other",
+    "name": "openNearestDrawer",
+    "path": "apps/mobile/src/navigation/openNearestDrawer.ts",
+    "role": "Walks up navigators to the nearest drawer and opens it."
+   },
+   {
+    "kind": "hook",
+    "name": "useGoBack",
+    "path": "apps/mobile/src/shared/hooks/useGoBack.ts",
+    "role": "Back with a fallback route when no history exists."
+   },
+   {
+    "kind": "hook",
+    "name": "useLandscapeWhileOpen / lockPhonePortrait",
+    "path": "apps/mobile/src/shared/hooks/useLandscapeWhileOpen.ts",
+    "role": "Portrait lock for phones, with temporary release for viewers."
+   },
+   {
+    "kind": "config",
+    "name": "Expo app config",
+    "path": "apps/mobile/app.config.js",
+    "role": "orientation portrait, iPad orientations, supportsTablet, screen-orientation plugin, tablet orientation plugin."
+   },
+   {
+    "kind": "integration",
+    "name": "Android tablet orientation plugin",
+    "path": "apps/mobile/native/android/withAGITabletOrientation.cjs",
+    "role": "Patches MainActivity to rotate on screens 600 dp or wider and lock portrait otherwise."
+   },
+   {
+    "kind": "other",
+    "name": "contentColumn",
+    "path": "apps/mobile/src/shared/layout/contentColumn.ts",
+    "role": "Reading, form and grid column widths for large windows."
+   },
+   {
+    "kind": "component",
+    "name": "MessageList",
+    "path": "apps/mobile/src/features/chat/components/MessageList.tsx",
+    "role": "Applies the reading column to the thread on wide windows."
+   },
+   {
+    "kind": "config",
+    "name": "v1 feature flags",
+    "path": "apps/mobile/lib/v1FeatureFlags.ts",
+    "role": "Switches that hide drawer rows and screens (companion, billing, schedules, cloud tasks)."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The app reads window and screen size and chooses overlay or permanent drawer.",
+     "runs_on": "device",
+     "evidence": "apps/mobile/src/shared/hooks/useTabletLayout.ts:24-51, 70-80"
+    },
+    {
+     "what_happens": "A swipe or a tap on the menu opens the drawer; a row tap calls router.navigate and closes the drawer.",
+     "runs_on": "device",
+     "evidence": "apps/mobile/src/features/drawer/components/DrawerContent.tsx:411-418"
+    },
+    {
+     "what_happens": "At start the root layout locks a phone to portrait through expo-screen-orientation.",
+     "runs_on": "device",
+     "evidence": "apps/mobile/app/_layout.tsx:129; apps/mobile/src/shared/hooks/useLandscapeWhileOpen.ts:18-25"
+    },
+    {
+     "what_happens": "Drawer rows read conversations and projects from device stores; Cloud rows come from the Cloud message store that a sync loop fills.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/mobile/src/features/drawer/components/DrawerContent.tsx:481-496 (source chosen by app mode); sync itself is outside this feature (see SYS-sync-and-continuity)"
+    }
+   ],
+   "data": [
+    {
+     "what": "Chat list arrangement, More fold and projects fold choices",
+     "where_stored": "settings store on the device",
+     "synced": "unknown (not traced)",
+     "retained_or_deleted": "kept until app data is cleared; not traced further"
+    },
+    {
+     "what": "Recent chats shown in the drawer",
+     "where_stored": "local chat store (Local) or Cloud chat store (Cloud)",
+     "synced": "Cloud rows come from the server; Local rows stay on the device",
+     "retained_or_deleted": "owned by the chat features, not this one"
+    }
+   ],
+   "models_and_providers": "None. Navigation does not call a model or provider. The drawer filters conversations by their execution mode so Local and Cloud lists stay separate (DrawerContent.tsx:481-490)."
+  },
+  "access_and_usage": {
+   "account": "No account is needed to use the shell in Local mode. Cloud destinations and the Cloud mode switch need a signed-in account (DrawerContent.tsx:337-345).",
+   "permissions": "None for navigation.",
+   "subscription": "Images and AGI Work task rows depend on the plan capability documents (DrawerContent.tsx:337-345, 563-568). Drawer itself has no plan rule.",
+   "limits_and_metering": "none found in the code",
+   "flags": "FEATURES.schedules, research, cloudTasks and billing change which rows show (DrawerContent.tsx:563-568; apps/mobile/lib/v1FeatureFlags.ts).",
+   "model_compatibility": "none found in the code",
+   "provider_restrictions": "none found in the code",
+   "local_mode": "The shell works fully in Local mode with no sign-in. Rows that are Cloud-only are hidden by isShownInMode (DrawerContent.tsx:568)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Window narrows from permanent width",
+    "behaviour": "A drawer state left open is closed so it does not return open.",
+    "evidence": "apps/mobile/app/(app)/_layout.tsx:30-41; test:apps/mobile/__tests__/FullScreenRouteDrawer.test.tsx"
+   },
+   {
+    "state": "Android system back gesture at the left edge",
+    "behaviour": "Drawer band is widened by 24 points and needs a longer drag (96) so both gestures work.",
+    "evidence": "apps/mobile/src/features/shell/drawerGestures.ts:4-12"
+   },
+   {
+    "state": "No history on a screen opened by a link",
+    "behaviour": "useGoBack navigates to a fallback route.",
+    "evidence": "apps/mobile/src/shared/hooks/useGoBack.ts:8-16"
+   },
+   {
+    "state": "Android hardware back with the overlay drawer open",
+    "behaviour": "useDrawerDismiss closes the drawer. Detail not traced.",
+    "evidence": "apps/mobile/src/features/drawer/components/DrawerContent.tsx:409"
+   },
+   {
+    "state": "Large text or screen reader",
+    "behaviour": "Rows are 44 points high with button roles and selected state; unread count is read in the menu label.",
+    "evidence": "DrawerContent.tsx:500-525; DrawerButton.tsx:77-84"
+   },
+   {
+    "state": "Foldable fold or unfold on Android",
+    "behaviour": "Orientation is re-decided from the smallest width; no hinge logic.",
+    "evidence": "apps/mobile/native/android/withAGITabletOrientation.cjs; test:apps/mobile/__tests__/tablet-orientation-plugin.test.ts"
+   },
+   {
+    "state": "Loading, offline, error, retry",
+    "behaviour": "not handled in the code for the shell itself; chat and sync features own those.",
+    "evidence": "searched DrawerContent.tsx and _layout.tsx"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/mobile/src/shared/hooks/__tests__/useTabletLayout.test.ts",
+     "covers": "Size class resolution, readable column width, content width minus drawer, window-versus-screen reading, a full-width small tablet is not split view, including a foldable cover-screen case."
+    },
+    {
+     "path": "apps/mobile/src/features/shell/__tests__/drawerGestures.test.ts",
+     "covers": "Edge returned to content when drawer is permanent; Android swipe band past system back; iOS band; open state read from history."
+    },
+    {
+     "path": "apps/mobile/__tests__/FullScreenRouteDrawer.test.tsx",
+     "covers": "Open drawer state closes when the window grows past the permanent-sidebar width; nothing happens when already closed."
+    },
+    {
+     "path": "apps/mobile/__tests__/voice-route-drawer-swipe.test.ts",
+     "covers": "No edge swipe on the dark voice screen; edge swipe kept on chat routes."
+    },
+    {
+     "path": "apps/mobile/__tests__/RootLayoutPortraitLock.test.tsx",
+     "covers": "A phone is held in portrait as the app module loads."
+    },
+    {
+     "path": "apps/mobile/__tests__/LandscapeWhileOpen.test.tsx",
+     "covers": "iPhone portrait with release while a viewer is open; iPad free to turn; Android phone vs tablet by smaller side."
+    },
+    {
+     "path": "apps/mobile/__tests__/tablet-orientation-plugin.test.ts",
+     "covers": "Android plugin: phones stay portrait, large screens rotate, size change re-decides."
+    },
+    {
+     "path": "apps/mobile/__tests__/ipad-multitasking-config.test.ts",
+     "covers": "supportsTablet and requireFullScreen false; portrait setting."
+    },
+    {
+     "path": "apps/mobile/__tests__/SettingsBackNavigation.test.tsx",
+     "covers": "Settings pages pop back to their caller or fall back only without history."
+    },
+    {
+     "path": "apps/mobile/__tests__/DrawerContent.test.tsx",
+     "covers": "Drawer content rows and behaviour (titles not read in detail)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Phone drawer swipe",
+     "steps": [
+      "Open a chat on a phone.",
+      "Swipe from the left edge.",
+      "Tap a recent chat."
+     ],
+     "expected": "Drawer opens over the chat, the chosen chat opens and the drawer closes."
+    },
+    {
+     "name": "Settings back swipe",
+     "steps": [
+      "Open Settings, then a sub-page.",
+      "Swipe from the left edge."
+     ],
+     "expected": "The sub-page goes back one level; the drawer does not open."
+    },
+    {
+     "name": "Permanent sidebar",
+     "steps": [
+      "On an iPad, use a window 1000 points or wider.",
+      "Narrow the window with Split View below 1000 points."
+     ],
+     "expected": "Sidebar stays open when wide, becomes an overlay drawer with a menu button when narrow, with no stale open state."
+    },
+    {
+     "name": "Full-screen pages",
+     "steps": [
+      "Open the camera screen and the voice screen on a tablet with a permanent sidebar."
+     ],
+     "expected": "No sidebar shows; voice ignores edge swipes."
+    },
+    {
+     "name": "Orientation",
+     "steps": [
+      "Turn an iPhone to landscape in a chat.",
+      "Open a video and turn again.",
+      "Repeat on an iPad."
+     ],
+     "expected": "Phone stays portrait in chat, may turn in the video viewer and returns to portrait after closing. iPad turns freely."
+    }
+   ],
+   "diagnostics": [
+    "Warnings from the console with prefix '[RootLayout]' for startup problems.",
+    "Check Dimensions values with the layout tests when a window picks the wrong drawer type.",
+    "Orientation: check expo-screen-orientation lock call (lockPhone swallows errors silently, useLandscapeWhileOpen.ts:19-21)."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Phones cannot use landscape in chat although the brief wants landscape adaptation.",
+    "affects": "Mobile phones (iOS and Android).",
+    "evidence": "apps/mobile/app.config.js:158; apps/mobile/src/shared/hooks/useLandscapeWhileOpen.ts:23-25; S71.27",
+    "work_needed": "Product decision, then unlock rotation for chat and verify composer and thread layout, or correct the brief."
+   },
+   {
+    "gap": "No hinge or fold-state handling.",
+    "affects": "Foldable devices on Android.",
+    "evidence": "No code found by search; test case name only in useTabletLayout.test.ts",
+    "work_needed": "Only if foldables are a target: add a window-info signal and layout rules."
+   },
+   {
+    "gap": "Brief names 768 and 1024 as the tablet switch, but the permanent drawer starts at 1000 points.",
+    "affects": "Tablets 768-999 points wide (portrait iPad, small Android tablet).",
+    "evidence": "apps/mobile/src/shared/hooks/useResponsiveLayout.ts:3-9, 24-47",
+    "work_needed": "Decide if portrait tablets should get a permanent drawer; align the brief or the threshold."
+   }
+  ],
+  "depends_on": [
+   "surface:mobile",
+   "mode:local",
+   "mode:cloud",
+   "file:apps/mobile/app/(app)/_layout.tsx",
+   "file:apps/mobile/src/shared/hooks/useTabletLayout.ts",
+   "file:apps/mobile/src/shared/hooks/useResponsiveLayout.ts",
+   "file:apps/mobile/src/features/shell/drawerGestures.ts",
+   "file:apps/mobile/lib/v1FeatureFlags.ts",
+   "SYS-shared-ui-and-design",
+   "SYS-sync-and-continuity"
+  ],
+  "relationships": [
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "Brief gives mobile 'done' and every other app n/a (doc: knowledge-base/data/area-briefs/071-mobile-application.md)"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/app/(app)/_layout.tsx",
+    "evidence": "apps/mobile/app/(app)/_layout.tsx:44-100"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/features/drawer/components/DrawerContent.tsx",
+    "evidence": "DrawerContent.tsx:323"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/shared/hooks/useTabletLayout.ts",
+    "evidence": "useTabletLayout.ts:24-51"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/mobile/app.config.js",
+    "evidence": "app.config.js:156-186, 465, 480"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/mobile/lib/v1FeatureFlags.ts",
+    "evidence": "DrawerContent.tsx:563-568 reads FEATURES"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-shared-ui-and-design",
+    "evidence": "Drawer, content columns and theme tokens come from the shared mobile UI layer"
+   },
+   {
+    "rel": "depends_on",
+    "to": "mode:local",
+    "evidence": "Drawer filters rows and chats by app mode (DrawerContent.tsx:481-490, 568)"
+   },
+   {
+    "rel": "depends_on",
+    "to": "mode:cloud",
+    "evidence": "Cloud rows and the Cloud switch need a signed-in account (DrawerContent.tsx:337-345)"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/src/shared/hooks/__tests__/useTabletLayout.test.ts",
+    "evidence": "file exists with layout tests"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/src/features/shell/__tests__/drawerGestures.test.ts",
+    "evidence": "file exists with gesture tests"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "Images and AGI Work rows wait for capability documents (DrawerContent.tsx:337-345)"
+   }
+  ],
+  "unknowns": [
+   "Whether drawer settings (list arrangement, folds) sync across devices; not traced.",
+   "Exact behaviour of Android hardware back with the drawer open (useDrawerDismiss not read in detail).",
+   "Whether the widget-setup route and widget plugin work; outside this feature.",
+   "Brief status 'done' for S71.27 against the portrait lock: which is intended is not recorded."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "768 sets the 'tablet' size class and 1024 (largest screen side) sets isTablet",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "768 sets sizeClass 'tablet' from window width, but 1024 also sets sizeClass 'regular' from window width. isTablet uses the largest screen side >= 1024. Split view is window width <= screen width - 8 on a tablet screen.",
+   "evidence": "apps/mobile/src/shared/hooks/useTabletLayout.ts:5-6,40-50",
+   "correction": "768 gives size class 'tablet' and window width 1024 or more gives 'regular'. isTablet is true when the screen's larger side is 1024 or more."
+  },
+  {
+   "section": "3",
+   "claim": "The Upgrade row appears only when native purchases are available; billing is off in the feature flags so it is hidden (DrawerContent.tsx:337-345; v1FeatureFlags.ts:6)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "showUpgrade is gated by NATIVE_PURCHASES_AVAILABLE (read from storePurchases.json), Cloud mode, a signed-in Clerk user and a free plan tier. It does not read FEATURES.billing. The cited lines 337-345 are the AGI Work gate; showUpgrade is at 396-402.",
+   "evidence": "apps/mobile/src/features/drawer/components/DrawerContent.tsx:396-402,910-915; apps/mobile/src/features/billing/nativePurchaseAvailability.ts:3; apps/mobile/lib/v1FeatureFlags.ts:6",
+   "correction": "The Upgrade row shows only in Cloud mode, signed in, on a free plan, and when storePurchases.json sets nativePurchases true. FEATURES.billing is not part of that check, and the page does not say what the JSON value is."
+  },
+  {
+   "section": "7",
+   "claim": "Feature flags: FEATURES.schedules, research, cloudTasks and billing change which rows show (DrawerContent.tsx:563-568)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The row filter uses schedules, research and cloudTasks (plus showImages and showAgiWork). billing is not used there. Also FEATURES.projects gates the project list at line 452.",
+   "evidence": "apps/mobile/src/features/drawer/components/DrawerContent.tsx:563-571,452",
+   "correction": "FEATURES.schedules, research and cloudTasks (and projects for the projects section) change which rows show. billing does not; the Upgrade row follows NATIVE_PURCHASES_AVAILABLE."
+  },
+  {
+   "section": "7",
+   "claim": "Account: Cloud destinations and the Cloud mode switch need a signed-in account (DrawerContent.tsx:337-345)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Lines 337-345 only gate the AGI Work row (Cloud mode, plan capability, granted canUseAgiWork). The Images row needs Cloud mode plus a Clerk sign-in (347-349). The mode switch uses cloudUnlocked from useAppModeSwitch (333, 637); the page did not read that hook, so the sign-in claim for the switch is not shown by the cited lines.",
+   "evidence": "apps/mobile/src/features/drawer/components/DrawerContent.tsx:333,337-349,637",
+   "correction": "The Images row needs Cloud mode and a signed-in account. The AGI Work row needs Cloud mode, the plan and the granted capability. Whether the Cloud switch needs sign-in is decided by cloudUnlocked in useAppModeSwitch, which the page does not trace."
+  },
+  {
+   "section": "6",
+   "claim": "Drawer rows read conversations from device stores; Cloud rows come from the Cloud message store a sync loop fills; list filtered by execution mode",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "In Cloud mode the list is the cloud conversation store (cloudConversations), in Local mode the local store, then filtered by executionModeForConversation === appMode. The cited lines are 446-455, not 481-496 (that range is the pinned/recent slicing). Code comment says the local store holds a stale mirror for Cloud rows. Recents are capped by DRAWER_RECENT_LIMIT.",
+   "evidence": "apps/mobile/src/features/drawer/components/DrawerContent.tsx:446-455,481-493",
+   "correction": "Cited lines should be 446-455. The source store is chosen by mode and then filtered by execution mode; recents are capped by DRAWER_RECENT_LIMIT (the page does not say so)."
+  }
+ ],
+ "missing_facts": [
+  "The Upgrade row also needs a free plan tier, Cloud mode and a signed-in Clerk user, and its on/off switch is storePurchases.json nativePurchases (apps/mobile/src/features/billing/nativePurchaseAvailability.ts:3; DrawerContent.tsx:396-402), not FEATURES.billing.",
+  "The drawer shows only DRAWER_RECENT_LIMIT recent chats (pinned first) and at most 6 projects in Cloud mode (apps/mobile/src/features/drawer/components/DrawerContent.tsx:446-470, 481-493). The page's Limits row says none found.",
+  "Camera and scan keep the swipe-open overlay drawer on phones; only voice disables the swipe (apps/mobile/app/(app)/_layout.tsx:25-28). The page's 'Camera, scan and voice pages hide the drawer' overstates this."
+ ]
+}

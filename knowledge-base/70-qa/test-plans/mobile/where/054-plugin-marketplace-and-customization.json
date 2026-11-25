@@ -1,0 +1,54 @@
+{
+ "S54.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Customize"
+   },
+   {
+    "file": "apps/mobile/src/features/customize/CustomizeScreen.tsx",
+    "text": "Skills"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account (without sign-in the Cloud rows show the tag Sign in)",
+  "note": "The Skills card is shown only when FEATURES.skills is true in apps/mobile/lib/v1FeatureFlags.ts (currently true). The Customize row itself is also hidden when that flag is off. The moved evidence in DrawerContent.tsx was not used because the drawer has no Customize or Skills entry.",
+  "reachable": "yes",
+  "steps": [
+   "Open the bottom bar item labelled Settings.",
+   "Under the section headed Cloud, tap Customize.",
+   "On the Customize screen, look for the card titled Skills, placed directly below the card titled Plugins.",
+   "Tap Skills and confirm the Skills screen opens. Compare with Expected: the Skills card sits beside Plugins in the customization area."
+  ],
+  "where": "Settings > Cloud > Customize > Skills"
+ },
+ "S54.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/customize/CustomizeScreen.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Customize"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account (without sign-in the Cloud rows show the tag Sign in)",
+  "note": "A second route also exists: Settings > Cloud > Connectors (a row in apps/mobile/src/features/settings/index.tsx) opens the same Connectors screen through /(app)/settings/cloud-connectors.",
+  "reachable": "yes",
+  "steps": [
+   "Open the bottom bar item labelled Settings.",
+   "Under the section headed Cloud, tap Customize.",
+   "On the Customize screen, look for the card titled Connectors, below the Skills card.",
+   "Tap Connectors and confirm the Connectors screen opens. Compare with Expected: a Connectors section sits in the customization area."
+  ],
+  "where": "Settings > Cloud > Customize > Connectors"
+ }
+}

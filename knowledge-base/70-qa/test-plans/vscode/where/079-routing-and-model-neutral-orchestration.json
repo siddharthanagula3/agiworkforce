@@ -1,0 +1,342 @@
+{
+ "S79.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Auto"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "a signed-in AGI account (Auto is greyed out when signed out)",
+  "note": "The app does not show which model answered a request on these screens, so the tester can only check that Auto is selected and the answer arrives.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat in the AGI VS Code panel and read the model pill.",
+   "Confirm the pill says Auto and that Auto is the first row under Recommended when you click it.",
+   "Type a short question and send it.",
+   "Check that the answer arrives and the pill still says Auto, with no model picked by you. Compare with Expected: Auto picks a model for each request."
+  ],
+  "where": "Model pill (the word Auto under the chat box) > Recommended > Auto"
+ },
+ "S79.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "On this device"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Select Model"
+   }
+  ],
+  "needs": "a signed-in AGI account; a local model in Ollama or LM Studio for the On this device group (optional)",
+  "note": "I confirmed the pill and the Code: Select Model command; I did not confirm the label of each cloud provider group.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model pill above the chat box.",
+   "Choose a named model from the list (for example one under On this device if a local model is running, or another listed model).",
+   "Send a short message.",
+   "Check that the pill now shows the model you chose, and that the answer comes back. Compare with Expected: the request runs on the model you picked."
+  ],
+  "where": "Model pill > click a named model (not Auto); or Command Palette > Code: Select Model"
+ },
+ "S79.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "text": "Default model"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Projects"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Use Project in This Chat"
+   }
+  ],
+  "needs": "a signed-in account with at least one project",
+  "note": "The code offers the default model as a choice when the project is used; I did not confirm that every new chat in the project starts on it without that step.",
+  "reachable": "yes",
+  "steps": [
+   "Run Code: Show Projects from the Command Palette.",
+   "Open a project with Code: Open Project.",
+   "Click Default model in the project list and pick a model (or No default model to clear it).",
+   "Run Code: Use Project in This Chat and start a new chat; compare the model pill with Expected. If the pill differs, a message offers Choose the model."
+  ],
+  "where": "Command Palette > Code: Show Projects > open a project > Default model"
+ },
+ "S79.04": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Best"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "a signed-in AGI account on a plan that includes the Best profile",
+  "note": "Expected says premium for coding and reasoning, but the row is called Best and its description reads The most capable model your plan includes, for harder work. The task-type choice is inner and not shown.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model pill.",
+   "Under Recommended, choose Auto \u00b7 Best.",
+   "Send a coding or reasoning question.",
+   "Check that the pill keeps Auto \u00b7 Best and the answer arrives. Compare with Expected: a task-specific profile is applied."
+  ],
+  "where": "Model pill > Recommended > Auto \u00b7 Best"
+ },
+ "S79.05": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Instant"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The row is called Instant, and its description reads Answers fastest, on the quickest models your plan includes.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model pill.",
+   "Under Recommended, choose Auto \u00b7 Instant.",
+   "Send a short question.",
+   "Check that the pill keeps Auto \u00b7 Instant and the answer comes back quickly. Compare with Expected: the fastest eligible route is used."
+  ],
+  "where": "Model pill > Recommended > Auto \u00b7 Instant"
+ },
+ "S79.06": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Best"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "a signed-in AGI account on a plan that includes the Best profile",
+  "note": "The Best row is the same row as S79.04; the code has one quality profile for both.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model pill.",
+   "Under Recommended, choose Auto \u00b7 Best.",
+   "Send a harder question.",
+   "Check that the pill keeps Auto \u00b7 Best and the answer arrives. Compare with Expected: the most capable eligible route is used."
+  ],
+  "where": "Model pill > Recommended > Auto \u00b7 Best"
+ },
+ "S79.07": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/routing-profile-choice.ts",
+    "text": "Economy"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "Recommended"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The row is called Economy, and its description reads The lowest-cost model that can handle the task.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model pill.",
+   "Under Recommended, choose Auto \u00b7 Economy.",
+   "Send a simple question.",
+   "Check that the pill keeps Auto \u00b7 Economy and the answer arrives. Compare with Expected: the cheapest eligible route is used."
+  ],
+  "where": "Model pill > Recommended > Auto \u00b7 Economy"
+ },
+ "S79.08": {
+  "labels": [],
+  "needs": "a local model running in Ollama or LM Studio (for the nearest control)",
+  "note": "No privacy-first profile is in the Auto rows (only Auto, Instant, Best, Economy). The nearest visible controls are the On this device group in the model pill and the trust-boundary warning in Code: Select Model. Searched the model-picker folder and the routing profile list for privacy.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S79.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "Intent classification runs in the chat state code for each message when Auto is selected, with no control or label of its own.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Inner routing step; its effect is only seen through which model Auto uses"
+ },
+ "S79.10": {
+  "labels": [],
+  "needs": "none",
+  "note": "Tool needs are classified per request with no control of their own; the Browse the web toggle is a separate manual control.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Inner routing step; its effect is only seen through the answer"
+ },
+ "S79.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Add context"
+   }
+  ],
+  "needs": "an image file and a signed-in AGI account",
+  "note": "The exact label of the plus control was not confirmed; the menu is labelled Add context.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the plus control in the chat box and choose an image under Add context.",
+   "Send a question about the image.",
+   "Check that the answer describes the image instead of saying it cannot see one. Compare with Expected: the request is sent to a model that accepts images."
+  ],
+  "where": "Seen when an image is attached in the chat box: the answer should describe the image"
+ },
+ "S79.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "Complexity is classified per request with no visible label; the effort setting is a separate control.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Inner classification; no screen shows the complexity level"
+ },
+ "S79.13": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Browse the web"
+   }
+  ],
+  "needs": "none",
+  "note": "The code detects fresh-information requests without a control. The Browse the web toggle is manual and is not the automatic detection Expected describes.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Inner detection; the manual control is Browse the web in the plus menu"
+ },
+ "S79.14": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/model-picker/reachability.ts",
+    "text": "Needs setup on this machine"
+   }
+  ],
+  "needs": "a signed-out or no-plan account",
+  "note": "The pill list greys rows; the lock icon appears in the Code: Select Model list.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign out, or use an account with no plan, then open the model pill.",
+   "Look for greyed Auto rows and any Needs setup on this machine section.",
+   "Open Command Palette > Code: Select Model and check that unavailable rows show a lock.",
+   "Compare with Expected: unavailable models are not offered as choices that fail."
+  ],
+  "where": "Model pill list: greyed rows and the Needs setup on this machine section"
+ },
+ "S79.15": {
+  "labels": [],
+  "needs": "none",
+  "note": "Route ranking by health, cost and cache is server and runtime logic with no visible control.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Inner provider-route choice; no screen shows the chosen route"
+ },
+ "S79.16": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/core/commandSetup.ts",
+    "text": "Switch anyway"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Switch model"
+   }
+  ],
+  "needs": "a signed-in account; a route that fails (for example a spent free allowance) to see the card",
+  "note": "The code keeps the chosen model; I did not confirm an end-to-end failure that keeps the same model.",
+  "reachable": "yes",
+  "steps": [
+   "Pick a named model in the model pill.",
+   "Send a message.",
+   "If the turn fails, read the failure card; it offers Switch model, and the chat does not switch by itself.",
+   "If you pick a model that would lose something, read the Switch to <model>? prompt and its Switch anyway button. Compare with Expected: the chosen model is not replaced silently."
+  ],
+  "where": "Model pill > click a named model (not Auto), then send a message that fails"
+ },
+ "S79.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Switch model"
+   }
+  ],
+  "needs": "a Free account with a spent allowance",
+  "note": "Budget-aware choice of route is inner logic; only the resulting failure card is visible.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Use up the free allowance on a Free account, or hit a plan limit.",
+   "Send a message.",
+   "Read the failure card and check that it offers Switch model or names a reset time. Compare with Expected: routing accounts for the remaining budget."
+  ],
+  "where": "Seen only when the free allowance or plan limit is spent: the failure card offers Switch model"
+ },
+ "S79.20": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Continue with {model}"
+   }
+  ],
+  "needs": "a route that fails (for example a provider with no credit)",
+  "note": "Health-based demotion is inner; the visible part is the card and its offer.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Cause a route failure, for example a provider with no credit.",
+   "Read the failure card.",
+   "Click Continue with <model> if it is shown, and check the turn is sent again on another model. Compare with Expected: failed calls fall back to a healthy alternative."
+  ],
+  "where": "Seen on a failed turn: the failure card offers Continue with <model> and Switch model"
+ },
+ "S79.21": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Switch model"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Continue with {model}"
+   }
+  ],
+  "needs": "a route failure, for example a spent free allowance",
+  "note": "Switch model opens the model list rather than switching in one click; the one-click path is Continue with <model>, shown only when the failure names an alternative.",
+  "reachable": "yes",
+  "steps": [
+   "Cause a route failure, for example a spent free allowance.",
+   "Read the red failure card.",
+   "Click Switch model and check that the model list opens. If the card instead shows Continue with <model>, click it and check the turn is resent on that model. Compare with Expected: a one-click switch is offered."
+  ],
+  "where": "Chat failure card > Switch model (opens the model list)"
+ },
+ "S79.30": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Auto"
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The fallback itself is inner logic in the routing code; the visible part is that the default is Auto.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a new chat and do not change the model pill.",
+   "Check the pill reads Auto.",
+   "Send a plain message and check an answer arrives. Compare with Expected: an unclear request falls back to a safe default."
+  ],
+  "where": "Model pill shows Auto as the default"
+ }
+}

@@ -1,0 +1,4 @@
+{
+ "prefer_page_reading_when_existence_differs": true,
+ "note": "Set after the spot-check of 2026-11-24. When the ledger and the feature page disagree on whether a feature exists on an app, the page's reading is shown as the status if this is true; the ledger's otherwise. When both say it exists and differ only on built versus partly built, the ledger's value is kept and the page's note is shown beside it."
+}

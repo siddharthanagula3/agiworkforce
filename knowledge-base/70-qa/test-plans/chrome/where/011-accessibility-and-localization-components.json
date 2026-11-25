@@ -1,0 +1,354 @@
+{
+ "S11.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send message"
+   }
+  ],
+  "needs": "a Mac with VoiceOver",
+  "note": "Names are set in code for many controls (aria-label in apps/extension/src/side_panel.ts); the code audit did not check every control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver (Command+F5).",
+   "Move VoiceOver focus to the Recent chats button at the top right of the side panel, then to the Send message button beside the message box.",
+   "Listen: each control should speak a name that says what it does.",
+   "Compare with Expected."
+  ],
+  "where": "Chat screen, any button or box; seen with VoiceOver"
+ },
+ "S11.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a Mac with VoiceOver",
+  "note": "The Chat panel's top heading is a visually hidden h1 (apps/extension/src/side_panel.ts). The Schedules heading on the options page is an h2 at the same level as the Shortcuts section heading (apps/extension/src/features/options/shortcuts-section.ts), so it is not nested under it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver (Command+F5).",
+   "Press VO+U, then choose Headings.",
+   "Check that the list has a top heading for the Chat panel and a heading called Recent chats.",
+   "Compare with Expected."
+  ],
+  "where": "Chat screen and Recent chats; seen in the VoiceOver headings list"
+ },
+ "S11.03": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   }
+  ],
+  "needs": "none",
+  "note": "Arrow-key handling was confirmed for the More menu (apps/extension/src/features/side-panel/menu.ts); the model menu keyboard behaviour was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Click an empty part of the side panel, then press Tab over and over; focus should reach the top buttons, the Chat and Computer Use tabs and the message box.",
+   "Press Return on the More button, press Down and Up arrow keys, then press Escape.",
+   "Press Return on the Recent chats button, press Tab through the sheet, then press Escape.",
+   "Compare with Expected: all controls reachable, arrows move through the menu, Escape closes."
+  ],
+  "where": "Side panel: Tab key from the top of the panel, then the More menu and Recent chats"
+ },
+ "S11.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Chat"
+   }
+  ],
+  "needs": "none",
+  "note": "Focus ring CSS is in apps/extension/src/side_panel.ts (button:focus-visible rule); the exact look was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Press Tab repeatedly from the top of the side panel.",
+   "Watch the focused control; it should show a clear outline or ring.",
+   "Check the message box placeholder and the buttons beside it.",
+   "Compare with Expected."
+  ],
+  "where": "Side panel: Tab key from the top of the panel, starting near the message box"
+ },
+ "S11.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Close recent chats"
+   }
+  ],
+  "needs": "none",
+  "note": "Focus move, Tab wrap and Escape are all in apps/extension/src/side_panel.ts around the recents sheet code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Recent chats button (clock icon).",
+   "Check that focus moves into the sheet: the search box or the Close recent chats button should be focused.",
+   "Press Tab repeatedly; focus should stay inside the sheet and wrap around.",
+   "Press Escape; the sheet should close. Compare with Expected."
+  ],
+  "where": "Side panel > Recent chats (clock icon at top right)"
+ },
+ "S11.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Close recent chats"
+   }
+  ],
+  "needs": "none",
+  "note": "Code closes Recent chats and calls focus on the clock button (apps/extension/src/side_panel.ts). Focus restoration for the More menu was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Note which button you pressed: the clock icon labelled Recent chats.",
+   "Open Recent chats, then close it with Escape or the Close recent chats button.",
+   "Check that focus returns to the clock icon (it should show a focus ring).",
+   "Compare with Expected."
+  ],
+  "where": "Side panel > Recent chats (clock icon at top right)"
+ },
+ "S11.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Send message"
+   }
+  ],
+  "needs": "an account that can get a reply",
+  "note": "Code marks the message log as a polite live region (apps/extension/src/side_panel.ts); the exact spoken wording is not in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on VoiceOver (Command+F5).",
+   "Click the message box, type a short question and press Return.",
+   "When the reply finishes, listen for a short spoken update while VoiceOver focus stays on the box.",
+   "Compare with Expected: a short announcement, focus not moved."
+  ],
+  "where": "Chat: type in the message box and press Return"
+ },
+ "S11.08": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "an account that can get a reply",
+  "note": "The code audit did not confirm the chunking rule; the live region is in apps/extension/src/side_panel.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on VoiceOver (Command+F5).",
+   "Click the message box, type a question that needs a long answer, and press Return.",
+   "Listen while the answer streams: it should not speak each word, and it should not repeat text.",
+   "Compare with Expected."
+  ],
+  "where": "Chat: type in the message box and press Return"
+ },
+ "S11.09": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Your approval is required before this tool can run."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Decline"
+   }
+  ],
+  "needs": "a task that needs tool approval",
+  "note": "Status and alert roles are in apps/extension/src/features/side-panel/bubbles.ts. Which task triggers approval is not in the code audit.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task that makes the agent use a tool which needs approval (the tool depends on the task).",
+   "When the card says Your approval is required before this tool can run., check that VoiceOver announces it.",
+   "Tab to the Approve and Decline buttons; both should have clear names.",
+   "Press Approve, then check that the card shows a recorded status. Compare with Expected."
+  ],
+  "where": "Chat: an approval card inside a reply when a tool needs approval"
+ },
+ "S11.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Copy response"
+   }
+  ],
+  "needs": "a Mac with a touch screen to test touch; the keyboard check works on any Mac",
+  "note": "The always-visible rule is for hover: none devices (apps/extension/src/side_panel.ts). A Mac has no touch screen, so touch could not be tested; the keyboard focus rule is the closest check.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for a reply.",
+   "Move the pointer over the reply; the Copy response button should appear.",
+   "Press Tab until the Copy response button is focused; it should show now without hovering.",
+   "Compare with Expected."
+  ],
+  "where": "Chat: any reply; the Copy response button"
+ },
+ "S11.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "The code audit found no location; no in-app text-size control was found in the app code and the rule was not checked in code.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Raise the text size in the browser or OS settings.",
+   "Open the side panel and read a chat reply, the Recent chats list and the model menu.",
+   "Check that no text is cut off. Compare with Expected."
+  ],
+  "where": "Side panel text, after the browser or OS text size is raised"
+ },
+ "S11.13": {
+  "labels": [],
+  "needs": "none",
+  "note": "The code audit found no location, so the reflow rule was not confirmed in code.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the side panel in Chrome.",
+   "Press Command+Plus in Chrome until the zoom reads 400%.",
+   "Check that the layout becomes one column with no horizontal scrollbar.",
+   "Compare with Expected."
+  ],
+  "where": "Side panel at 400% browser zoom"
+ },
+ "S11.14": {
+  "labels": [],
+  "needs": "none",
+  "note": "The rule is in apps/extension/src/side_panel.ts and apps/extension/src/tokens.ts (agi-loading-mark). The macOS path was not checked in the repository.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on Reduce motion in macOS System Settings > Accessibility > Display (this path is an OS setting, not in the repository).",
+   "Open the side panel and send a message.",
+   "Watch the typing dots and loading mark: they should stop or barely move.",
+   "Compare with Expected."
+  ],
+  "where": "Side panel: typing dots, spinners and loading marks while a reply is pending"
+ },
+ "S11.21": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a Japanese, Chinese or Korean input method on the Mac",
+  "note": "The Enter check uses isImeComposingKey in apps/extension/src/side_panel.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Switch the Mac input method to Japanese (the input method is an OS setting).",
+   "Click the message box and type a word such as konnichiwa, then press Return to confirm the conversion.",
+   "Check that the message is not sent and the converted text stays in the box.",
+   "Press Return again and check that the message is sent. Compare with Expected."
+  ],
+  "where": "Chat: message box with a Japanese, Chinese or Korean input method"
+ },
+ "S11.22": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a Mac set to a non-English locale",
+  "note": "Formatting uses the browser locale through Intl with no fixed locale (apps/extension/src/side_panel.ts). Only apps/extension/_locales/en exists, so words stay English. Which rows show dates was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Set the Mac language and region to a non-English locale (an OS setting).",
+   "Click Recent chats and read the dates and times on the rows.",
+   "Compare the date and number formats with Expected.",
+   "Note that the labels stay in English because only the English catalog exists."
+  ],
+  "where": "Side panel > Recent chats (dates and times on chat rows)"
+ },
+ "S11.24": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Attach tabs"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "$COUNT$ tabs attached"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   }
+  ],
+  "needs": "two Chrome tabs open",
+  "note": "The tab-picking step after Attach tabs was not traced in code; the plural keys are in messages.json (spTabsAttached_one and _other).",
+  "reachable": "yes",
+  "steps": [
+   "Have one Chrome tab open besides the side panel, click Add attachment, then Attach tabs, and attach it.",
+   "Read the chip text: it should say 1 tab attached.",
+   "Attach a second tab the same way; the chip should now say 2 tabs attached.",
+   "Compare with Expected: singular and plural forms are correct."
+  ],
+  "where": "Chat > Add attachment > Attach tabs; then the attached-tabs chip above the message box"
+ },
+ "S11.25": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Microphone access is blocked. Allow the microphone for AGI in Chrome site settings, then try again."
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Voice input"
+   }
+  ],
+  "needs": "a microphone, and Chrome site settings access to block it",
+  "note": "Messages come from describeVoiceError in apps/extension/src/features/side-panel/voice.ts. The app has only the English catalog, and no other language was found in apps/extension/_locales.",
+  "reachable": "yes",
+  "steps": [
+   "In Chrome site settings, block the microphone for the extension.",
+   "Click Voice input in the message box.",
+   "Read the message that appears; it should say the microphone is blocked.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > Voice input (microphone button)"
+ },
+ "S11.27": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Available models"
+   }
+  ],
+  "needs": "a narrow side panel",
+  "note": "The menu is built in apps/extension/src/side_panel.ts around the spModelsMenuLabel use; the exact long label that appears depends on the models available to the account.",
+  "reachable": "yes",
+  "steps": [
+   "Drag the side panel to its narrowest width.",
+   "Open the Available models menu from the model button.",
+   "Look for long model names and effort labels: they should wrap or cut off cleanly without covering other controls.",
+   "Compare with Expected."
+  ],
+  "where": "Chat > the model button under the message box (menu labelled Available models)"
+ }
+}

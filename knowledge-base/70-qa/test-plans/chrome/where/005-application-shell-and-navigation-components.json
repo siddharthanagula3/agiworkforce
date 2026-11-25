@@ -1,0 +1,384 @@
+{
+ "S5.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   }
+  ],
+  "needs": "a signed-in account; the title row needs at least one message",
+  "note": "The title row is hidden when signed out and for temporary chats.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel and sign in to a Managed Cloud account.",
+   "Send one message in the chat box.",
+   "Look at the top: the header shows the model button, Recent chats, New chat and More.",
+   "Look just below the header for the chat title row. Compare with Expected: the header shows where you are and the main actions."
+  ],
+  "where": "Side panel header: New chat, Recent chats and More buttons at the top; after the first message, the chat title shows in a row below the header"
+ },
+ "S5.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Search commands and chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Go to"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   }
+  ],
+  "needs": "none",
+  "note": "The Chat / Computer Use tab bar is hidden in the chat view. No Projects, Code or Work mode was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click inside the side panel.",
+   "Press Cmd+K on Mac (Ctrl+K on Windows).",
+   "Type Computer Use and pick it under Go to.",
+   "Look for the two tabs Chat and Computer Use at the top, with Computer Use active."
+  ],
+  "where": "Ctrl+K (Cmd+K on Mac) > type Computer Use > pick Computer Use under Go to"
+ },
+ "S5.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Search recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a signed-in account or saved chats on this device",
+  "note": "The search covers chats only. The Cmd+K palette also searches chats.",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon in the header (Recent chats).",
+   "Click the box labelled Search recent chats.",
+   "Type part of a chat title.",
+   "Look that only matching chats stay in the list."
+  ],
+  "where": "Recent chats (clock icon in the header) > Search recent chats box"
+ },
+ "S5.08": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   }
+  ],
+  "needs": "none",
+  "note": "New chat is also in the Cmd+K palette.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that already has messages.",
+   "Click the New chat button in the header.",
+   "Look for an empty chat with no messages and no title row."
+  ],
+  "where": "Header > New chat button (icon at the top right of the side panel)"
+ },
+ "S5.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "some saved chats",
+  "note": "The list holds chats only. No recent projects or tasks section was found here.",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon (Recent chats).",
+   "Look for the list of recent chats with dates.",
+   "Click one chat row.",
+   "Look that the chat opens in the chat view. Compare with Expected: recent items open on selection."
+  ],
+  "where": "Recent chats (clock icon in the header) > list of chat rows"
+ },
+ "S5.13": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open chat: $TITLE$, $AGE$"
+   }
+  ],
+  "needs": "two or more saved chats",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon (Recent chats).",
+   "Look at a row: the title and the date.",
+   "Look for the open chat: its row has a stronger background and is marked as the current page.",
+   "Click another row's title and look that its chat opens."
+  ],
+  "where": "Recent chats (clock icon in the header) > a chat row"
+ },
+ "S5.14": {
+  "labels": [],
+  "needs": "a signed-in account with a project",
+  "note": "No project rows were found in the side panel navigation. Projects appear only in the @ mention menu under Projects and as a Project name chip. I searched apps/extension/src/side_panel.ts for project rows and Projects navigation.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S5.15": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Tasks"
+   }
+  ],
+  "needs": "a signed-in account that has background tasks",
+  "note": "Open takes you to the chat in the web app, not inside the side panel.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI account.",
+   "Click the More button (\u22ee) at the top right.",
+   "Click Tasks.",
+   "Look for task rows with a title, a state and a time, and an Open button. Compare with Expected: tasks are shown apart from chats."
+  ],
+  "where": "More (\u22ee) > Tasks"
+ },
+ "S5.17": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cross-device.ts",
+    "text": "Running"
+   }
+  ],
+  "needs": "a signed-in account with a running task",
+  "note": "Recent chat rows have no running mark; the only one found is the state text in Tasks.",
+  "reachable": "yes",
+  "steps": [
+   "Start a background task that is still running.",
+   "Click More (\u22ee) > Tasks.",
+   "Look for the state text Running under that task."
+  ],
+  "where": "More (\u22ee) > Tasks > the state text under a task"
+ },
+ "S5.18": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cross-device.ts",
+    "text": "Waiting for input"
+   },
+   {
+    "file": "packages/contracts/types/src/cross-device.ts",
+    "text": "Waiting for approval"
+   }
+  ],
+  "needs": "a signed-in account and a task that needs input or approval",
+  "note": "Recent chat rows have no waiting mark; the only one found is the state text in Tasks.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task that asks for your input or approval.",
+   "Click More (\u22ee) > Tasks.",
+   "Look for Waiting for input or Waiting for approval under that task."
+  ],
+  "where": "More (\u22ee) > Tasks > the state text under a task"
+ },
+ "S5.20": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More actions for $TITLE$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Move to project"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Delete chat"
+   }
+  ],
+  "needs": "a saved chat",
+  "note": "Which items appear depends on whether the chat is saved to the account. Archive and Delete ask to confirm first.",
+  "reachable": "yes",
+  "steps": [
+   "Click the clock icon (Recent chats).",
+   "Click the \u22ef button at the right of a chat row.",
+   "Look for Pin, Rename, Move to project, Share, Archive and Delete chat.",
+   "Click Rename and look for the edit box."
+  ],
+  "where": "Recent chats (clock icon) > More actions (\u22ef) on a chat row"
+ },
+ "S5.26": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Search commands and chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Go to"
+   }
+  ],
+  "needs": "none; the Chats list needs a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click inside the side panel.",
+   "Press Cmd+K (Ctrl+K on Windows).",
+   "Look for the Commands box with the placeholder Search commands and chats.",
+   "Type New or a chat name and look for matching Go to items and Chats."
+  ],
+  "where": "Cmd+K on Mac (Ctrl+K on Windows) with the side panel focused"
+ },
+ "S5.27": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Options"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "The list shows only Chrome commands. The Cmd+K palette shortcut is not listed. The More > Shortcuts item opens saved prompts, not this list.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More button (\u22ee).",
+   "Click Extension settings. The Options page opens in a new tab.",
+   "Click Options in the left list.",
+   "Scroll to Keyboard shortcuts. Look for Open side panel and Send page screenshot to Desktop, each with a shortcut and a Configure button."
+  ],
+  "where": "More (\u22ee) > Extension settings > Options page: Options > Keyboard shortcuts"
+ },
+ "S5.29": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "More"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Log out"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "a signed-in account; Usage is not shown on the Free plan",
+  "note": "The account block is hidden when signed out.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an AGI account.",
+   "Click the More button (\u22ee) at the top right.",
+   "Look at the top of the menu: your name or email and plan name.",
+   "Look for Settings, Usage, Tasks, Memory, Upgrade plan and Log out."
+  ],
+  "where": "More (\u22ee) > account block at the top of the menu"
+ },
+ "S5.30": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Help"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Help center"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Contact support"
+   }
+  ],
+  "needs": "none",
+  "note": "No feedback entry was found in the Help menu or Help section.",
+  "reachable": "yes",
+  "steps": [
+   "Click the More button (\u22ee).",
+   "Click Help. The Options page opens on its Help section.",
+   "Look for Help center, Documentation and Contact support."
+  ],
+  "where": "More (\u22ee) > Help"
+ },
+ "S5.31": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upgrade plan"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upgrade"
+   }
+  ],
+  "needs": "a signed-in account on a plan that has a higher tier",
+  "note": "Upgrade plan shows only when a higher tier exists. The plan file says the quota upgrade button leads to web billing behind a waitlist gate; I did not check that path.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to an account on a plan with a higher tier.",
+   "Click the More button (\u22ee).",
+   "Look for Upgrade plan and click it.",
+   "Look that a web plans page opens in a new tab."
+  ],
+  "where": "More (\u22ee) > Upgrade plan"
+ },
+ "S5.32": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Desktop tools are optional and currently disconnected."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Reconnect"
+   }
+  ],
+  "needs": "the AGI desktop app not running",
+  "note": "The notice covers desktop tools only. No general cloud connection indicator was found.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the AGI desktop app is not running.",
+   "Open the side panel.",
+   "Look above the chat box for the notice text and the Reconnect button.",
+   "Click Reconnect and look for a change in the notice."
+  ],
+  "where": "Above the chat box: notice Desktop tools are optional and currently disconnected. > Reconnect"
+ },
+ "S5.35": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a narrow side panel; Chrome side panels cannot reach phone width",
+  "note": "No slide-in drawer was found in the code. Recent chats is a full overlay opened from a header button, with focus returned on close.",
+  "reachable": "yes",
+  "steps": [
+   "Drag the Chrome side panel to its narrowest width.",
+   "Click the clock icon (Recent chats).",
+   "Look for the list filling the panel with a Close button.",
+   "Click Close and look that focus returns to the clock icon."
+  ],
+  "where": "Header > Recent chats (clock icon); the list opens as a full overlay over the panel"
+ }
+}

@@ -1,0 +1,540 @@
+{
+ "S6.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   }
+  ],
+  "needs": "none",
+  "note": "The per-token naming is inner code; only the Theme switch is a visible control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click Account menu at the bottom of the sidebar, then Settings.",
+   "Click Appearance in the Settings list, then Light under Theme.",
+   "Look at the page background, sidebar and panels.",
+   "Click Dark under Theme and compare the backgrounds again with Expected."
+  ],
+  "where": "Settings > Appearance > Theme (effect seen on page and panel backgrounds)"
+ },
+ "S6.02": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "Surface token names are inner; the visible check is the contrast between menu/dialog and page.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the Account menu button at the bottom of the sidebar.",
+   "Compare the menu panel with the page behind it.",
+   "Click Settings to open the Settings dialog and compare its surface with the page.",
+   "Switch Theme between Light and Dark and check the raised surfaces still stand out from the page."
+  ],
+  "where": "Account menu > Settings (raised surface is seen on the account menu and dialogs)"
+ },
+ "S6.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "Text tokens are defined in CSS; I did not open a specific screen that shows only muted text.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the sidebar and read the conversation titles.",
+   "Compare primary text with muted text such as hints in Settings > Appearance.",
+   "Switch Theme between Light and Dark and check both stay readable."
+  ],
+  "where": "Effect seen on any text, for example the sidebar conversation titles and the chat replies"
+ },
+ "S6.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   }
+  ],
+  "needs": "none",
+  "note": "Subtle and strong rule tokens are inner CSS names; the check is visual.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click Settings from the Account menu, then Appearance.",
+   "Look at the borders around the Theme buttons.",
+   "Switch between Light and Dark and compare the border strength.",
+   "Compare with the border on the selected Theme button."
+  ],
+  "where": "Settings > Appearance (borders around the Theme buttons and the Motion buttons)"
+ },
+ "S6.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Accent colour"
+   },
+   {
+    "file": "apps/web/shared/stores/web-settings-store.ts",
+    "text": "AGI amber"
+   }
+  ],
+  "needs": "none",
+  "note": "Contrast on each accent is not verified by this step; only the visible change is.",
+  "reachable": "yes",
+  "steps": [
+   "Click Account menu, then Settings, then Appearance.",
+   "Click each colour swatch under Accent colour.",
+   "Check the selected swatch shows a ring and a check mark.",
+   "Look at buttons and selected controls: their fill changes with the accent, and text on them stays readable."
+  ],
+  "where": "Settings > Appearance > Accent colour"
+ },
+ "S6.06": {
+  "labels": [],
+  "needs": "none",
+  "note": "I did not locate one specific screen that shows all four status colours.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Trigger a status message in the app, for example a failed or completed action.",
+   "Read its text and compare the contrast with the background in Light and in Dark theme."
+  ],
+  "where": "Effect seen on success, warning, error and info messages in the app"
+ },
+ "S6.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Chat font"
+   }
+  ],
+  "needs": "none",
+  "note": "Only message text changes font; the sans UI font is not switchable by this control.",
+  "reachable": "yes",
+  "steps": [
+   "Click Account menu, then Settings, then Appearance.",
+   "Choose Serif under Chat font (options are Default, Sans, Serif, Dyslexic friendly).",
+   "Send a message and read the reply text.",
+   "Compare the reply text with the font before the change, and check code in the reply stays monospace."
+  ],
+  "where": "Settings > Appearance > Chat font"
+ },
+ "S6.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Appearance"
+   }
+  ],
+  "needs": "none",
+  "note": "The Appearance page h1 is hidden on wide screens (md:hidden), so the title may be seen only at phone width.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings, then Appearance.",
+   "Compare the size and weight of the page title and section titles.",
+   "Open another Settings section and check its headings use the same sizes."
+  ],
+  "where": "Headings on the Settings and chat pages (effect seen on the Appearance page title and section titles)"
+ },
+ "S6.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Chat text size"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether the OS large-text setting is also respected is not verified here.",
+  "reachable": "yes",
+  "steps": [
+   "Click Account menu, then Settings, then Appearance.",
+   "Choose Large under Chat text size.",
+   "Open or send a chat and read a reply.",
+   "Choose Small, read the reply again, and compare the size with Default and Large."
+  ],
+  "where": "Settings > Appearance > Chat text size"
+ },
+ "S6.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "System follows your device setting."
+   }
+  ],
+  "needs": "none",
+  "note": "The 12px floor and AA contrast are inner rules; the visible check is the hint text.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings, then Appearance.",
+   "Read the hint text under Contrast, for example System follows your device setting.",
+   "Compare the hint text size and contrast with the row labels above it."
+  ],
+  "where": "Settings > Appearance (small hint text under rows such as Contrast and Motion)"
+ },
+ "S6.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Code theme"
+   }
+  ],
+  "needs": "none",
+  "note": "The monospace family and size are inner CSS values; the visible check is code against body text.",
+  "reachable": "yes",
+  "steps": [
+   "Click Account menu, then Settings, then Appearance.",
+   "Look at Code theme and pick a different theme if you want to compare.",
+   "Ask the chat for a short code snippet and read the code block.",
+   "Compare the code font with the reply text font, and change Chat font to Serif to check code stays monospace."
+  ],
+  "where": "Settings > Appearance > Code theme (code is shown in a chat reply)"
+ },
+ "S6.12": {
+  "labels": [],
+  "needs": "none",
+  "note": "Line-height rules are inner CSS; the check is visual.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a reply with a heading and three or four lines of text.",
+   "Compare the spacing between the lines of one paragraph.",
+   "Compare the line spacing of the heading with the text under it."
+  ],
+  "where": "Effect seen in multi-line chat replies and headings"
+ },
+ "S6.13": {
+  "labels": [],
+  "needs": "none",
+  "note": "The paragraph gap rule is inner CSS.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for an answer with three separate paragraphs.",
+   "Measure the gap between paragraphs and compare the gaps."
+  ],
+  "where": "Effect seen in chat replies with several paragraphs"
+ },
+ "S6.14": {
+  "labels": [],
+  "needs": "none",
+  "note": "List indentation is an inner CSS rule.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a list with nested sub-items.",
+   "Compare the indent of the first level with the indent of the nested level."
+  ],
+  "where": "Effect seen in chat replies with bulleted or numbered lists"
+ },
+ "S6.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Wrap long code lines"
+   }
+  ],
+  "needs": "none",
+  "note": "The padding value is inner CSS; the visible check is the space around code text.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a code snippet and look at the space inside the code block edges.",
+   "Open Settings, then Appearance, and turn Wrap long code lines on.",
+   "Ask for a code line that is long and compare how it wraps inside the block padding."
+  ],
+  "where": "Effect seen inside code blocks in chat replies, and Settings > Appearance > Wrap long code lines"
+ },
+ "S6.16": {
+  "labels": [],
+  "needs": "none",
+  "note": "Table padding is an inner CSS rule; I did not confirm a data table outside chat.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask the chat for a table with three columns and three rows.",
+   "Compare the space around the text in each cell.",
+   "Check cells in every row use the same padding."
+  ],
+  "where": "Effect seen in tables in chat replies"
+ },
+ "S6.17": {
+  "labels": [],
+  "needs": "none",
+  "note": "The turn spacing value is inner CSS.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send two messages in one chat.",
+   "Measure the gap between the first reply and the next user message.",
+   "Compare that gap with the gap between the next user message and its reply."
+  ],
+  "where": "Effect seen between two chat turns in one conversation"
+ },
+ "S6.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Copy message"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Good response"
+   }
+  ],
+  "needs": "a Free account",
+  "note": "Whether the toolbar always shows or only on hover at phone width was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for the reply.",
+   "Move the pointer over the reply, or tap it on a phone.",
+   "Look at the gap between the reply text and the toolbar below it.",
+   "Compare that gap with the spacing used by other replies."
+  ],
+  "where": "Chat reply > hover the reply (action toolbar with Copy message, Good response, Bad response, Regenerate response)"
+ },
+ "S6.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "Composer padding is an inner CSS rule; I did not confirm exact visible label text for the composer.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click New chat.",
+   "Look at the space between the box edge and the text, and between the box edge and its buttons.",
+   "Type a long line and compare the padding with the empty box."
+  ],
+  "where": "Effect seen in the message box at the bottom of a new chat"
+ },
+ "S6.20": {
+  "labels": [],
+  "needs": "none",
+  "note": "Gutter values are inner CSS; the check is the visible margin.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings, then Appearance.",
+   "Resize the browser window to a wide width and note the left and right margin.",
+   "Narrow the window to phone width and check the margin gets smaller in steps, not jumps."
+  ],
+  "where": "Effect seen at the left and right edges of chat and Settings pages when the window width changes"
+ },
+ "S6.21": {
+  "labels": [],
+  "needs": "a few conversations in the account",
+  "note": "The row height is inner CSS; I did not verify the exact row height.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the sidebar with several conversations listed.",
+   "Measure the height of each row.",
+   "Compare the rows: each should be the same height."
+  ],
+  "where": "Effect seen in the sidebar conversation list"
+ },
+ "S6.22": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "I did not identify the second menu to compare; only the Account menu was checked.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Account menu button at the bottom of the sidebar.",
+   "Read the menu items, such as Settings.",
+   "Measure or compare the row height and padding of each item.",
+   "Open another dropdown menu in the app and compare item heights."
+  ],
+  "where": "Account menu > Settings (menu items are in the Account menu list)"
+ },
+ "S6.23": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/v3.json",
+    "text": "Settings"
+   }
+  ],
+  "needs": "none",
+  "note": "I did not locate a second dialog to compare against.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Account menu button, then Settings.",
+   "Measure the inner padding around the title and the content.",
+   "Open a confirmation or sheet dialog from another place in the app and compare its padding."
+  ],
+  "where": "Account menu > Settings (the Settings dialog) and any confirmation dialog"
+ },
+ "S6.24": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "General"
+   }
+  ],
+  "needs": "none",
+  "note": "The form-field spacing rule is inner CSS; the General section was the form I located.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click Account menu, then Settings, then General.",
+   "Measure the gap between a field label and its control.",
+   "Measure the gap between two fields.",
+   "Compare the gaps across rows."
+  ],
+  "where": "Settings > General (label-to-input spacing and field-to-field spacing)"
+ },
+ "S6.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "The icon grid and stroke are inner code values.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the Account menu.",
+   "Compare the icon size and stroke weight of Settings with other menu icons.",
+   "Open the sidebar and compare its icons with the menu icons."
+  ],
+  "where": "Effect seen on icons in the sidebar and the Account menu"
+ },
+ "S6.26": {
+  "labels": [],
+  "needs": "none",
+  "note": "Button sizes (default, xs, sm, lg, icon) are defined in packages/ui/ui/src/primitives/Button.tsx and there is no in-app density setting. Nothing for the tester to switch.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control; button sizes are set in code and seen on any button"
+ },
+ "S6.27": {
+  "labels": [],
+  "needs": "none",
+  "note": "Radius values come from the design tokens and Button.tsx; there is no setting for them.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open any menu or dialog in the app.",
+   "Compare the corner rounding of its panel and buttons with the page around it, then compare with Expected."
+  ],
+  "where": "No control; corner radii show on buttons, cards and menus"
+ },
+ "S6.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "Shadow scale is set in design tokens and primitives such as Dialog.tsx; no in-app control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open any menu or dialog in the app.",
+   "Look at the edge and shadow of the raised panel against the page, then compare with Expected."
+  ],
+  "where": "No control; shadows show on open menus and dialogs"
+ },
+ "S6.29": {
+  "labels": [],
+  "needs": "none",
+  "note": "The z-index ladder is in the design tokens and Dialog.tsx; a tester can only see its effect in stacking.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a menu, then open a dialog from the app.",
+   "Check the dialog sits above the menu and the page, and that the menu does not show through, then compare with Expected."
+  ],
+  "where": "No control; stacking order shows when a dialog opens over other layers"
+ },
+ "S6.30": {
+  "labels": [],
+  "needs": "none",
+  "note": "Durations are set in the design tokens and Sheet.tsx; there is no in-app setting for them.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a menu or dialog, then close it.",
+   "Watch the timing and easing of the open and close, then compare with Expected."
+  ],
+  "where": "No control; durations and easing show when menus, dialogs and sheets open and close"
+ },
+ "S6.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Motion"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Reduced"
+   }
+  ],
+  "needs": "none",
+  "note": "The in-app Reduced option sets a page attribute; the OS reduce-motion setting is changed outside the app and the 'System' choice follows it. The 'Settings' menu entry was not confirmed in the account footer file.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the account menu and choose Appearance.",
+   "Under Motion, click Reduced.",
+   "Open a chat and send a message, then watch the reply and any loading animation.",
+   "Compare what moves with Expected: looping or travelling animation should stop or become gentle. Set Motion back to System afterwards."
+  ],
+  "where": "Settings > Appearance > Motion > Reduced"
+ },
+ "S6.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Theme"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Light"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Dark"
+   }
+  ],
+  "needs": "none",
+  "note": "Code blocks also have their own 'Code theme' setting in the same section, so the tester should check code blocks against that setting as well.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Under Theme, click Light and look at the whole page, including a code block in a reply.",
+   "Click Dark and look again, then click System.",
+   "Compare with Expected: each choice should change the whole surface, including code."
+  ],
+  "where": "Settings > Appearance > Theme > Light, Dark or System"
+ },
+ "S6.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Contrast"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "High"
+   }
+  ],
+  "needs": "none",
+  "note": "System follows the device's own contrast setting, which lives outside the app and was not tested from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Set Contrast to High.",
+   "Look at text, borders and dividers on the chat page and in a menu.",
+   "Press Tab to move focus across buttons and compare the focus ring with Expected. Set Contrast back to System afterwards."
+  ],
+  "where": "Settings > Appearance > Contrast > High"
+ },
+ "S6.34": {
+  "labels": [],
+  "needs": "none",
+  "note": "States are styled in packages/ui/ui/src/primitives/Button.tsx; there is no separate control for them.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Move the pointer over a Theme button, then press Tab to focus one.",
+   "Click and hold a button to see its pressed look, then compare the states with Expected."
+  ],
+  "where": "No control; hover, focus, press and disabled looks show on any button"
+ },
+ "S6.35": {
+  "labels": [],
+  "needs": "none",
+  "note": "Icons are set in apps/web/app/manifest.ts and the sidebar wordmark in apps/web/shared/components/agi/SidebarWordmark.tsx; the visible wording of the wordmark was not read.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "After signing in, look at the top of the sidebar for the brand mark.",
+   "Compare the mark and the app icon with Expected."
+  ],
+  "where": "Sidebar top row (brand mark) and the browser tab or installed app icon"
+ }
+}

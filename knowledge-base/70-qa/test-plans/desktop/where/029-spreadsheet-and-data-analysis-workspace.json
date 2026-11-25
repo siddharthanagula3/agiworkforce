@@ -1,0 +1,187 @@
+{
+ "S29.17": {
+  "labels": [],
+  "needs": "none",
+  "note": "No insert-chart button, menu or dialog found. Charts are built by the assistant only when asked for an .xlsx workbook: managed-workbook-builder and managed-office-file-service take a per-sheet chart (bar, line, pie) from the sheet's own cells. Searched 'Insert chart', 'Add chart', 'Chart type' and 'chart' in the chat and artifact files.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S29.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/presentation/PresentationWorkspace.tsx",
+    "text": "Edit chart data"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/presentation/ChartDataEditor.tsx",
+    "text": "Chart type"
+   }
+  ],
+  "needs": "a request to the assistant for a slide deck with a chart",
+  "note": "The selector exists only in the slide-deck chart editor, not for charts in a spreadsheet or the chart artifact. Options are Bar, Line and Pie.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a slide deck that contains a chart, and wait for the deck to appear in the artifact panel.",
+   "Click the button labelled Edit chart data (appears only when the deck has a chart).",
+   "Open the Chart type select and choose Line, then Pie, then Bar.",
+   "Look at whether the chart preview changes to the chosen type, and compare with Expected."
+  ],
+  "where": "Artifact panel for a slide deck with a chart > Edit chart data > Chart type"
+ },
+ "S29.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/presentation/PresentationWorkspace.tsx",
+    "text": "Edit chart data"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/presentation/ChartDataEditor.tsx",
+    "text": "Chart data"
+   }
+  ],
+  "needs": "a request to the assistant for a slide deck with a chart",
+  "note": "The editor shows a table of data rows, not a cell range such as B2:B5; the spreadsheet workbook charts have no range editor.",
+  "reachable": "yes",
+  "steps": [
+   "Open a slide deck that contains a chart, as in S29.18.",
+   "Click Edit chart data.",
+   "Read the table of rows and columns (the first column is the label column, then one column per series).",
+   "Change a value, add or remove a row, and click the apply control; then compare the chart with Expected."
+  ],
+  "where": "Artifact panel for a slide deck with a chart > Edit chart data"
+ },
+ "S29.27": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ChatInput.tsx",
+    "text": "Add attachment"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+    "text": "Run code"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/CodeExecutionOutput.tsx",
+    "text": "Code execution"
+   }
+  ],
+  "needs": "a model and plan that allow code execution; a data file to upload is useful",
+  "note": "There is no separate Python analysis panel. Output appears as an expandable Code execution block (stdout, stderr, images); the code itself is not shown there as far as the code reveals. The Python Sandbox text in packages/ui/i18n/locales/en/v3.json is a card label, not a panel.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a model that supports code execution.",
+   "Click the + button labelled Add attachment next to the chat box.",
+   "Turn on the Run code item (it is greyed out when the model or plan does not allow it).",
+   "Send a request that analyses data, then look for the Code execution block under the reply, expand it, and compare its stdout, stderr and images with Expected."
+  ],
+  "where": "Add attachment (+ button in the chat box) > Run code"
+ },
+ "S29.28": {
+  "labels": [],
+  "needs": "a request to the assistant that returns a spreadsheet artifact",
+  "note": "The sortable table is the spreadsheet artifact (SpreadsheetArtifact.tsx, aria-sort on column headers). The markdown table has no sorting. The headings have no visible sort words.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a table or spreadsheet of results, and wait for it to open in the artifact panel.",
+   "Click a column heading once to sort ascending, again to sort descending, and a third time to clear the sort.",
+   "Watch the rows reorder and the heading's sort state change.",
+   "Compare with Expected."
+  ],
+  "where": "Artifact panel for a spreadsheet > click a column heading"
+ },
+ "S29.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download generated file"
+   }
+  ],
+  "needs": "a request to the assistant that produces an .xlsx file",
+  "note": "The menu item appears only when the artifact has a generated file manifest; the original evidence line moved in the code. No button builds an .xlsx from a sheet on demand.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a spreadsheet (.xlsx) and wait for it to appear in the artifact panel.",
+   "Click the Download button (title Download) in the artifact header.",
+   "Click Download generated file in the menu, if it is listed.",
+   "Open the downloaded file in a spreadsheet app and compare with Expected."
+  ],
+  "where": "Artifact panel for a spreadsheet > Download (button) > Download generated file"
+ },
+ "S29.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as CSV"
+   }
+  ],
+  "needs": "a request to the assistant for a table or spreadsheet",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a spreadsheet, table or CSV artifact in the artifact panel.",
+   "Click the Download button (title Download) in the artifact header.",
+   "Click Download as CSV.",
+   "Open the file that downloads, and compare its rows and columns with the artifact."
+  ],
+  "where": "Artifact panel for a spreadsheet > Download (button) > Download as CSV"
+ },
+ "S29.36": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx",
+    "text": "PNG"
+   }
+  ],
+  "needs": "a request to the assistant for a chart",
+  "note": "Chart export is PNG only, with an accessible name Download <chart name> as PNG; no SVG or CSV export for charts was found.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a chart, and wait for it to draw in the chat.",
+   "Click the button with the Download icon and the text PNG in the chart's header.",
+   "Open the downloaded PNG file.",
+   "Compare the picture with the chart on screen."
+  ],
+  "where": "Chart artifact in the chat > PNG (button in the chart header)"
+ },
+ "S29.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as Word (.docx)"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   }
+  ],
+  "needs": "a request to the assistant for a report",
+  "note": "No control turns an analysis into a report. Word and PDF are offered as downloads of a document artifact only. The line 'Writing report' is a progress label for research, not an export.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a written report based on an analysis, and wait for the document artifact to open.",
+   "Click the Download button (title Download) in the artifact header.",
+   "Click Download as Word (.docx), then open the file; repeat with Download as PDF.",
+   "Compare the formatted file with the artifact text and with Expected."
+  ],
+  "where": "Artifact panel for a document > Download (button) > Download as Word (.docx)"
+ },
+ "S29.39": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "text": "Download as PDF"
+   }
+  ],
+  "needs": "a request to the assistant for a slide deck",
+  "note": "No pptx download item was found in the menus. Decks export only as PDF; a .pptx arrives only as a generated file through Download generated file, if the assistant made one. PptxFilePreview.tsx shows pptx files but does not download them.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the assistant for a slide deck based on an analysis, and wait for the deck to open in the artifact panel.",
+   "Click the Download button (title Download) in the artifact header.",
+   "Click Download as PDF and open the file.",
+   "Compare with Expected, which asks for a .pptx slide deck."
+  ],
+  "where": "Artifact panel for a slide deck > Download (button) > Download as PDF"
+ }
+}

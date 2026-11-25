@@ -1,0 +1,130 @@
+{
+ "S37.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Browse and create the projects in your AGI account."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "No projects in your AGI account."
+   }
+  ],
+  "needs": "a signed-in AGI account (a Free account is fine if it has at least one project; create one with S37.02 first otherwise)",
+  "note": "The CLI calls notebooks 'projects'; there is no 'notebook' word in apps/cli. The Code line's cited lines (lib.rs:3673, cloud/mod.rs:442) are the projects list and create-project code, which exist.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI account with agi login.",
+   "Type agi projects list in a terminal and press Enter.",
+   "Copy one project name from the list, then type agi projects show <that name>.",
+   "Compare with Expected: a list of the account's projects appears, and show opens one with its description, instructions, knowledge files and conversation count. If the account has none, the line No projects in your AGI account. appears."
+  ],
+  "where": "agi projects list (then agi projects show <project>)"
+ },
+ "S37.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Create a project in the account."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Created '{}' in your account ({})."
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The CLI word is 'project', not 'notebook'; the create command also takes an optional --description. The Created line is a format string in lib.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the AGI account with agi login.",
+   "Type agi projects create \"QA Notebook 37\" and press Enter.",
+   "Read the line that starts with Created ' and gives the id in brackets.",
+   "Type agi projects list and check that QA Notebook 37 is in the list. Compare with Expected: the project is saved to the account."
+  ],
+  "where": "agi projects create <name>"
+ },
+ "S37.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Rename a project or change its description or instructions."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Updated project {}."
+   }
+  ],
+  "needs": "a signed-in AGI account",
+  "note": "The CLI calls the title 'name'. Edit fails with 'Nothing to change' if no flag is passed, and the create step needs a name.",
+  "reachable": "yes",
+  "steps": [
+   "Create a test project with agi projects create \"QA Title 37\" --description \"first description\".",
+   "Type agi projects edit \"QA Title 37\" --name \"QA Renamed 37\" --description \"second description\".",
+   "Look for the line Updated project followed by the project reference.",
+   "Type agi projects show \"QA Renamed 37\" and check that the name and description show the new values. Compare with Expected: the title and description were set and then changed."
+  ],
+  "where": "agi projects edit <project> --name <new name> --description <text>"
+ },
+ "S37.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Rename a project or change its description or instructions."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Link this directory to an account project by id or name."
+   }
+  ],
+  "needs": "a signed-in AGI account; the chat only uses instructions on a signed-in (Managed) turn, not in Local mode",
+  "note": "The code applies project instructions only when the privacy mode is Managed (apps/cli/src/cloud/mod.rs:963 returns empty otherwise), and only to chats in a linked folder, not to every chat in the account. The reply-style check is the tester's judgment, not a code guarantee.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi projects edit \"QA Notebook 37\" --instructions \"Answer in one short sentence.\".",
+   "Type agi projects show \"QA Notebook 37\" and check that the instructions show the new text.",
+   "In a folder, type agi projects link \"QA Notebook 37\" and check the line that says the folder is linked to the project.",
+   "Type agi in that folder and send a question. Compare with Expected: the reply follows the instructions in every chat from this folder."
+  ],
+  "where": "agi projects edit <project> --instructions <text>, then agi projects link <project> in a folder, then agi"
+ },
+ "S37.37": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Link this directory to an account project by id or name."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "is linked to the account project"
+   }
+  ],
+  "needs": "a signed-in AGI account and a small text file to add as knowledge",
+  "note": "There is no separate 'hand off' command in apps/cli. Linking a folder is the way a project's context enters the chat; the handoff notice text is in apps/cli/src/agent/chat.rs:889, and the Code line's chat.rs:992 quote is no longer in the file. The 'main chat' wording is not a CLI term.",
+  "reachable": "yes",
+  "steps": [
+   "In a folder, type agi projects link \"QA Notebook 37\" and press Enter.",
+   "Check the line that says the folder is linked to the account project.",
+   "Add a knowledge file with agi projects add-file \"QA Notebook 37\" <a text file>.",
+   "Type agi in that folder and ask a question whose answer is only in that file. Compare with Expected: the reply uses the file. If the project knowledge could not be filed, the line This turn runs without your project's knowledge files appears."
+  ],
+  "where": "agi projects link <project> in a folder, then agi"
+ },
+ "S37.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Browse and create the projects in your AGI account."
+   }
+  ],
+  "needs": "a second device or terminal signed in to the same AGI account",
+  "note": "The CLI has no notebook sync: the 'Sync' command (apps/cli/src/lib.rs, 'Sync dotfiles and settings across devices.') covers only dotfiles and settings. Account projects are refreshed from the account on each list. Cross-app sync to other apps (web, desktop, mobile) is outside apps/cli and was not checked.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On a first machine, sign in with agi login and create a project with agi projects create \"QA Sync 37\".",
+   "On a second machine, sign in to the same account with agi login.",
+   "On the second machine, type agi projects list.",
+   "Compare with Expected: the project created on the first machine appears in the list. Notebook sources and notes are not separately listed in the CLI."
+  ],
+  "where": "agi projects list on a second signed-in machine"
+ }
+}

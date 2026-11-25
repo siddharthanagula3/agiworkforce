@@ -1,0 +1,476 @@
+{
+ "feature": {
+  "id": "F027-04",
+  "aliases": [
+   "Formatting toolbar",
+   "Text style",
+   "Heading controls",
+   "Bold, italic, links",
+   "Lists and checklists",
+   "Quote and code block",
+   "Callouts (not built)",
+   "S27.04",
+   "S27.05",
+   "S27.06",
+   "S27.07",
+   "S27.10",
+   "S27.11"
+  ],
+  "summary": "In the web visual editor, a toolbar sets text style (normal, heading 1 to 6, code block) and applies bold, italic, strikethrough, inline code, links, lists, checklists, quotes and code blocks. Underline, alignment, spacing, indentation and callouts do not exist. Math shows in the reader view only.",
+  "purpose": {
+   "what_it_does": "Lets the person style text and insert blocks in a document, and renders code and math in the reader view.",
+   "why_it_exists": "Documents need structure and emphasis, and people expect buttons instead of Markdown marks.",
+   "who_uses_it": "Web users editing documents; readers of documents on all apps that render Markdown.",
+   "problems_solved": [
+    "Making a heading or list without typing marks.",
+    "Safe links that cannot run scripts."
+   ],
+   "use_cases": [
+    "Turn a line into Heading 2.",
+    "Make a checklist for a task list.",
+    "Add a link to a source.",
+    "Insert a code block."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: the toolbar named 'Formatting' above the visual editor (DocumentFormattingToolbar.tsx:117-122).",
+    "Web source mode: keyboard shortcuts Cmd or Ctrl plus B, I and K wrap the selection (ArtifactPreview.tsx:387-393).",
+    "Reader view on web and shared Markdown renderer elsewhere: code and math display (MarkdownContent.tsx).",
+    "Mobile: source text box only (ArtifactFullScreen.tsx:2016). Others: none."
+   ],
+   "prerequisites": [
+    "The visual editor is open (see F027-03)."
+   ],
+   "screens_and_controls": [
+    "Dropdown 'Text style': Normal text, Heading 1 to 6, Code block.",
+    "Buttons: Bold, Italic, Strikethrough, Inline code, Link, Bulleted list, Numbered list, Checklist, Quote, Code block, Insert table, Undo, Redo.",
+    "Link form: box 'Link address' (hidden label) with placeholder 'Paste or type a link', buttons Apply and Remove link."
+   ],
+   "journey": [
+    "Select text or place the cursor.",
+    "Pick a style or click a button.",
+    "For a link, click Link, type an address, click Apply.",
+    "Save (F027-06)."
+   ],
+   "feedback_and_outputs": [
+    "Active styles show as pressed buttons.",
+    "Shortcut hints in tooltips: bold and italic (Cmd or Ctrl plus B and I), code block (Cmd or Ctrl plus Alt plus C), undo and redo (DocumentFormattingToolbar.tsx:152-186,215-216,255-268)."
+   ],
+   "settings": [
+    "None found in the code."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Heading levels 1 to 6, paragraph and code block via dropdown (DocumentFormattingToolbar.tsx:99-101,135-147).",
+    "Bold, italic, strike, inline code toggles (lines 148-178).",
+    "Link accepts only http, https and mailto; a bare address gets https (lines 33-43).",
+    "Bulleted, numbered, task list, blockquote and code block (lines 193-215).",
+    "Reader view renders task lists with clickable boxes and math through markdown-it plugins (taskList.ts:34-40; markdownItMath.ts exists)."
+   ],
+   "incomplete": [
+    "Math is shown but cannot be edited visually; such documents open as source (document-editor-markdown.ts:19)."
+   ],
+   "disconnected_or_disabled": [
+    "Underline switched off (document-editor-markdown.ts:11). The brief marks S27.06 done including underline, which the code contradicts."
+   ],
+   "not_available": [
+    "Alignment, spacing, indentation controls: none found.",
+    "Callout blocks: none found.",
+    "Any formatting controls on mobile, Chrome, CLI and VS Code for documents."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The editor offers controls to set heading levels on the current block.",
+     "source": "S27.04 (doc: knowledge-base/data/area-briefs/027-document-and-writing-editor.md)"
+    },
+    {
+     "statement": "Paragraph formatting (alignment, spacing, indentation).",
+     "source": "S27.05 (same brief)"
+    },
+    {
+     "statement": "Bold, italic, underline and links.",
+     "source": "S27.06 (same brief)"
+    },
+    {
+     "statement": "Bulleted, numbered and checklist items.",
+     "source": "S27.07 (same brief)"
+    },
+    {
+     "statement": "Callout blocks (note, warning, tip).",
+     "source": "S27.10 (same brief)"
+    },
+    {
+     "statement": "Code blocks and math equations rendered.",
+     "source": "S27.11 (same brief)"
+    },
+    {
+     "statement": "Links accept only http, https and mailto.",
+     "source": "DocumentFormattingToolbar.tsx:33-43"
+    }
+   ],
+   "acceptance_criteria": [
+    "Choosing Heading 2 turns the current line into an h2.",
+    "Bold and Italic toggle and show pressed.",
+    "A link 'javascript:alert(1)' is not applied.",
+    "A link 'example.com' becomes https://example.com/.",
+    "Checklist makes a task list item.",
+    "No Underline button exists (current).",
+    "A '$x$' document opens as source, and the reader view shows it as math."
+   ],
+   "inferred": [
+    "[inferred] The brief says heading controls are missing on web; the code has them."
+   ],
+   "proposed": [
+    "[proposed] Add underline, alignment and callouts if the product needs them.",
+    "[proposed] Add keyboard shortcut for strikethrough."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "DocumentFormattingToolbar",
+    "path": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "role": "All toolbar controls and link form."
+   },
+   {
+    "kind": "service",
+    "name": "documentEditorExtensions",
+    "path": "apps/web/features/chat/components/artifacts/document-editor-markdown.ts",
+    "role": "Underline off; link settings; tables; task lists."
+   },
+   {
+    "kind": "config",
+    "name": "MARKDOWN_SHORTCUTS",
+    "path": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "role": "Source-mode wrapping shortcuts (line 387)."
+   },
+   {
+    "kind": "component",
+    "name": "ArtifactCodeEditor",
+    "path": "apps/web/features/chat/components/artifacts/ArtifactCodeEditor.tsx",
+    "role": "Applies the wrap shortcuts in source mode."
+   },
+   {
+    "kind": "component",
+    "name": "MarkdownContent",
+    "path": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
+    "role": "Reader rendering of code, lists, tasks (lines 344, 405, 470)."
+   },
+   {
+    "kind": "service",
+    "name": "remarkPlugins",
+    "path": "packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts",
+    "role": "Math and Markdown plugins (lines 27-28)."
+   },
+   {
+    "kind": "service",
+    "name": "taskList helpers",
+    "path": "packages/ui/unified-chat/src/components/markdown/taskList.ts",
+    "role": "Find and toggle checklist items."
+   },
+   {
+    "kind": "service",
+    "name": "markdownItMath",
+    "path": "packages/ui/unified-chat/src/components/markdown/markdownItMath.ts",
+    "role": "Math parsing."
+   },
+   {
+    "kind": "component",
+    "name": "ArtifactPreview",
+    "path": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+    "role": "Handles checklist toggles in the reader (line 1154)."
+   },
+   {
+    "kind": "test",
+    "name": "toolbar test",
+    "path": "apps/web/features/chat/components/artifacts/ArtifactDocumentEditor.toolbar.test.tsx",
+    "role": "Tests heading and bold."
+   },
+   {
+    "kind": "test",
+    "name": "markdownDocument test",
+    "path": "packages/ui/unified-chat/src/components/markdown/markdownDocument.test.ts",
+    "role": "Markdown document logic (contents not opened)."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "A toolbar click runs a Tiptap command on the editor.",
+     "runs_on": "device",
+     "evidence": "DocumentFormattingToolbar.tsx:105-115,148-215"
+    },
+    {
+     "what_happens": "The editor serializes to Markdown and passes it to the draft.",
+     "runs_on": "device",
+     "evidence": "ArtifactDocumentEditor.tsx:40"
+    },
+    {
+     "what_happens": "Link text is checked by safeHref before the mark is set.",
+     "runs_on": "device",
+     "evidence": "DocumentFormattingToolbar.tsx:33-43,109-115"
+    }
+   ],
+   "data": [
+    {
+     "what": "Formatted text as Markdown",
+     "where_stored": "Draft in localStorage until saved, then the artifacts store (ArtifactPreview.tsx:395,1130-1139)",
+     "synced": "After Save, via artifact sync (see F027-06)",
+     "retained_or_deleted": "Old versions stay in version history."
+    }
+   ],
+   "models_and_providers": "No model is involved in formatting."
+  },
+  "access_and_usage": {
+   "account": "none found in the code.",
+   "permissions": "Editing only on the latest stored version.",
+   "subscription": "none found in the code.",
+   "limits_and_metering": "none found in the code.",
+   "flags": "none found in the code.",
+   "model_compatibility": "Not applicable.",
+   "provider_restrictions": "none found in the code.",
+   "local_mode": "All formatting runs on the device."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Invalid link",
+    "behaviour": "Silently not applied; the form closes.",
+    "evidence": "DocumentFormattingToolbar.tsx:109-115"
+   },
+   {
+    "state": "Escape in link box",
+    "behaviour": "Closes the box and returns focus.",
+    "evidence": "DocumentFormattingToolbar.tsx:226-232"
+   },
+   {
+    "state": "Insert table while inside a table",
+    "behaviour": "Button disabled.",
+    "evidence": "DocumentFormattingToolbar.tsx:219"
+   },
+   {
+    "state": "Toolbar overflow on narrow screens",
+    "behaviour": "Scrolls sideways.",
+    "evidence": "DocumentFormattingToolbar.tsx:123"
+   },
+   {
+    "state": "Buttons keep editor focus",
+    "behaviour": "mousedown default prevented.",
+    "evidence": "DocumentFormattingToolbar.tsx:57"
+   },
+   {
+    "state": "Invalid link feedback",
+    "behaviour": "not handled in the code (no error message is shown for a rejected address).",
+    "evidence": "DocumentFormattingToolbar.tsx:109-115 closes the form without a message"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/chat/components/artifacts/ArtifactDocumentEditor.toolbar.test.tsx",
+     "covers": "Heading level set from the toolbar; bold toggles and reports pressed."
+    },
+    {
+     "path": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.test.tsx",
+     "covers": "Markdown rendering (file exists; contents not opened)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Heading",
+     "steps": [
+      "Open editor",
+      "Choose Heading 3 in Text style"
+     ],
+     "expected": "Line becomes an h3; Markdown starts with '###'."
+    },
+    {
+     "name": "Unsafe link",
+     "steps": [
+      "Click Link",
+      "Enter 'javascript:alert(1)'",
+      "Apply"
+     ],
+     "expected": "No link is created."
+    },
+    {
+     "name": "Checklist",
+     "steps": [
+      "Click Checklist",
+      "Type an item",
+      "Save",
+      "View in reader"
+     ],
+     "expected": "Item renders with a clickable box."
+    },
+    {
+     "name": "Underline",
+     "steps": [
+      "Select text",
+      "Press Cmd or Ctrl plus U"
+     ],
+     "expected": "No underline (underline off)."
+    },
+    {
+     "name": "Math",
+     "steps": [
+      "Open a document with '$a$'"
+     ],
+     "expected": "Opens as source; reader view shows math."
+    }
+   ],
+   "diagnostics": [
+    "Toolbar testid document-formatting-toolbar and document-text-style.",
+    "Console errors from Tiptap on bad content."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No underline, alignment, spacing, indentation.",
+    "affects": "Web and Desktop",
+    "evidence": "document-editor-markdown.ts:11; no controls in toolbar",
+    "work_needed": "Decide scope; Markdown cannot store most of these, so a storage format decision is needed."
+   },
+   {
+    "gap": "No callouts.",
+    "affects": "All apps",
+    "evidence": "No callout code found; brief S27.10",
+    "work_needed": "Define a Markdown form and add render and insert."
+   },
+   {
+    "gap": "No formatting on mobile.",
+    "affects": "Mobile",
+    "evidence": "ArtifactFullScreen.tsx:2016 plain TextInput",
+    "work_needed": "Decide scope."
+   },
+   {
+    "gap": "Invalid link gives no message.",
+    "affects": "Web",
+    "evidence": "DocumentFormattingToolbar.tsx:109-115",
+    "work_needed": "Show an error."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "F027-03",
+   "F027-05",
+   "file:apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+   "SYS-shared-ui-and-design"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx",
+    "evidence": "DocumentFormattingToolbar.tsx:79"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F027-03",
+    "evidence": "Toolbar receives the editor (ArtifactDocumentEditor.tsx:51)"
+   },
+   {
+    "rel": "depends_on",
+    "to": "file:packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
+    "evidence": "Reader view renders code and math"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "ArtifactDocumentEditor.tsx:51"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:desktop",
+    "evidence": "AGENTS.md section 5: hosted web app"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/features/chat/components/artifacts/ArtifactDocumentEditor.toolbar.test.tsx",
+    "evidence": "File exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:packages/ui/unified-chat/src/components/markdown/MarkdownContent.test.tsx",
+    "evidence": "File exists"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/web/features/chat/components/artifacts/document-editor-markdown.ts",
+    "evidence": "document-editor-markdown.ts:10-17"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "No entitlement check found in toolbar code"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "F027-03",
+    "evidence": "Brief S27.05 and S27.10 have no code"
+   }
+  ],
+  "unknowns": [
+   "Whether Chrome has any document formatting (brief unverified).",
+   "Exact keyboard shortcuts for lists and headings supplied by Tiptap defaults; not read."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Link accepts only http, https and mailto; a bare address gets https (lines 33-43)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "safeHref (DocumentFormattingToolbar.tsx:32-42) only prepends https:// when the text does not start with a scheme-like token (/^[a-z][a-z0-9+.-]*:/). So 'example.com:8080' or 'localhost:3000' is read as a scheme, fails the protocol check and is silently dropped. Plain 'example.com' does become https://example.com/. Lines are off by one.",
+   "evidence": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx:32-42",
+   "correction": "A bare address without a scheme-like prefix gets https. An address with host:port is treated as a scheme and rejected without a message."
+  },
+  {
+   "section": "3",
+   "claim": "Reader view renders task lists with clickable boxes and math through markdown-it plugins (taskList.ts:34-40; markdownItMath.ts exists)",
+   "verdict": "wrong",
+   "what_the_code_shows": "The reader (MarkdownContent) uses remark-math, not markdown-it. taskList.ts:34-40 is taskIndexAtOffset, a helper that finds a task index, and it does not render boxes. markdownItMath.ts is imported by the Chrome side panel and the VS Code webview, not by the web reader.",
+   "evidence": "packages/ui/unified-chat/src/components/markdown/remarkPlugins.ts:2,73; packages/ui/unified-chat/src/components/markdown/taskList.ts:34-37; apps/extension/src/features/side-panel/markdown.ts; apps/extension-vscode/src/webview/render.ts",
+   "correction": "The web reader renders math through remark-math (remarkPlugins.ts:73). taskList.ts supplies the helpers that find and toggle checklist markers. markdownItMath.ts serves the Chrome side panel and the VS Code webview."
+  },
+  {
+   "section": "3",
+   "claim": "Math is shown but cannot be edited visually; such documents open as source (document-editor-markdown.ts:19)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The behaviour is right but the citation is not. MATH_SPAN is defined at line 16 and used in roundTripsAsDocument at line 82. ArtifactDocumentEditor.tsx:56 calls it to choose source mode. The same check also sends any document that fails the Markdown round trip to source, not only math. SlideTextEditor.tsx:83 uses it too.",
+   "evidence": "apps/web/features/chat/components/artifacts/document-editor-markdown.ts:16,81-90; apps/web/features/chat/components/artifacts/ArtifactDocumentEditor.tsx:56",
+   "correction": "Documents with math, or any content that does not round-trip through the Tiptap Markdown parser, open as source (roundTripsAsDocument, document-editor-markdown.ts:81-90)."
+  },
+  {
+   "section": "6",
+   "claim": "Draft in localStorage until saved, then the artifacts store (ArtifactPreview.tsx:395,1130-1139)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Line 395 is the ARTIFACT_DRAFT_STORAGE_PREFIX constant. The localStorage helpers are at lines 406-427 and wrap every access in try/catch. When storage is blocked, writeStoredDraft returns false and the draft is not kept. Lines 1130-1139 do upsert to useArtifactsStore. The page does not say sync happens elsewhere.",
+   "evidence": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:395,406-427,1130-1139",
+   "correction": "The draft is held in localStorage (key agi.artifact-draft:<id>) when storage is available and is removed after it is committed to the in-memory artifacts store. If storage is blocked, the draft is not persisted."
+  },
+  {
+   "section": "7",
+   "claim": "Permissions: Editing only on the latest stored version.",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "canEditSource requires variant==='panel', a stored artifact, the latest version, and not PDF, DOCX or image. The page omits the panel-only condition and the file-type exclusions.",
+   "evidence": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1041-1042",
+   "correction": "Editing is offered only in the panel variant, for a stored artifact, on the latest version, and never for PDF, DOCX or image artifacts."
+  },
+  {
+   "section": "8",
+   "claim": "Escape in link box closes the box (226-232); table button disabled in table (219); toolbar scrolls sideways (123); mousedown prevented (57)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The behaviours exist, but all four line cites are wrong. Escape is at 247-251. The disabled table button is at 215. overflow-x-auto is at 129. onMouseDown preventDefault is at 62.",
+   "evidence": "apps/web/features/chat/components/artifacts/DocumentFormattingToolbar.tsx:62,129,215,247-251",
+   "correction": "Escape: :247-251. Table disabled: :215. Overflow scroll: :129. Mousedown: :62."
+  }
+ ],
+ "missing_facts": [
+  "The same Tiptap editor and roundTripsAsDocument gate are also used by the slide text editor, so slide text gets the same formatting rules (apps/web/features/chat/components/artifacts/presentation/SlideTextEditor.tsx:12,83).",
+  "Source-mode Cmd/Ctrl+B, I and K wrap with ** , _ and [text](https://), and are wired for documents at ArtifactPreview.tsx:3295 and 3339. The K link shortcut inserts an unchecked https:// placeholder and bypasses safeHref.",
+  "The Chrome side panel and the VS Code webview both render math through markdownItMath (apps/extension/src/features/side-panel/markdown.ts, apps/extension-vscode/src/webview/render.ts). The page says math shows in the reader view only and marks VS Code as n/a."
+ ]
+}

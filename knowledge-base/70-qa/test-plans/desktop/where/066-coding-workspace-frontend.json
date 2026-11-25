@@ -1,0 +1,490 @@
+{
+ "S66.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change the folder"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Choose a local folder"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Select repository"
+   }
+  ],
+  "needs": "the Desktop app with at least one local folder added",
+  "note": "Cloud sessions use a \"Select repository\" chip instead of a folder chip; the exact composer position was not traced in the render tree.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the Desktop app and click Code in the sidebar.",
+   "Click New to start a session, then click the folder chip in the composer.",
+   "Pick a folder from the list in the menu.",
+   "Check that the chosen folder name stays on the chip before you send, to compare with Expected."
+  ],
+  "where": "Sidebar > Code > New > folder chip (local folder menu, \"Change the folder\")"
+ },
+ "S66.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Change the branch"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Search or type a branch name"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Use this branch"
+   }
+  ],
+  "needs": "a local git folder with more than one branch",
+  "note": "Cloud sessions use the same \"Change the branch\" label for a repository branch; local switching checks out the branch in the folder.",
+  "reachable": "yes",
+  "steps": [
+   "Open Code, click New, and pick a local folder that is a git repository.",
+   "Click the branch chip shown under the folder chip.",
+   "Type in \"Search or type a branch name\" or click a branch in the list, then click \"Use this branch\".",
+   "Check that the chip shows the branch you chose."
+  ],
+  "where": "Sidebar > Code > New > branch chip under the folder chip (\"Change the branch\")"
+ },
+ "S66.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Local"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Cloud"
+   }
+  ],
+  "needs": "a paid account for the Cloud option",
+  "note": "Cloud sandbox execution is unfinished: it depends on the E2B switch (apps/web/lib/e2b/gate.ts). Whether the Cloud option actually runs in a sandbox today was not verified; the exact selector position was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Click Code, then New.",
+   "Open the environment choice in the composer and look for \"Local\" and \"Cloud\".",
+   "Select \"Cloud\" and check that the composer changes to repository controls.",
+   "Select \"Local\" and check that the folder chip returns."
+  ],
+  "where": "Sidebar > Code > New > environment selector (\"Local\" or \"Cloud\")"
+ },
+ "S66.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Your computer"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "On this device"
+   }
+  ],
+  "needs": "the Desktop app with a folder allowed to run commands",
+  "note": "A folder shows no sessions until its command access is allowed; the empty-state text is \"No coding sessions on this device yet.\"",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the Desktop app and click Code in the sidebar.",
+   "Look for the \"Your computer\" section and the \"On this device\" list.",
+   "Click a session row to open it.",
+   "Check that the session opens and its title is shown, to compare with Expected."
+  ],
+  "where": "Sidebar > Code > Your computer (session list)"
+ },
+ "S66.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Rename"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Session name"
+   }
+  ],
+  "needs": "a Desktop app session",
+  "note": "Cloud sessions also have a \"Rename\" item (apps/web/features/code/code-surface.ts). The exact text of the More actions label was built from a function, not a fixed string.",
+  "reachable": "yes",
+  "steps": [
+   "Open a session from Your computer.",
+   "Click the \"More actions for\" control on the session row (its name is the session title).",
+   "Click Rename and type a new name in the \"Session name\" field.",
+   "Check that the new title shows in the list and the session header."
+  ],
+  "where": "Sidebar > Code > Your computer > session row > More actions > Rename"
+ },
+ "S66.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Running"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Ready"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Idle"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Archived"
+   }
+  ],
+  "needs": "a Desktop app session with a task that asks for approval",
+  "note": "Visible copy for failed and closed states was not found in the status labels read; \"Approval required\" appears on the approval card (apps/web/features/code/local-code.ts), not as a status word.",
+  "reachable": "yes",
+  "steps": [
+   "Open Code and look at the \"Your computer\" list.",
+   "Start a task in a session and watch the row change to \"Running\".",
+   "Wait for the run to end and check the row shows \"Ready\" or \"Idle\".",
+   "Check that a session with an archived state shows \"Archived\"."
+  ],
+  "where": "Sidebar > Code > Your computer (status words on each session row)"
+ },
+ "S66.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Files (\u2318P)"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Edit"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Save"
+   }
+  ],
+  "needs": "a Desktop app session with a text file in its folder",
+  "note": "The exact button position in the session panel was not traced; the editor code is in apps/web/features/code/components/LocalFileEditor.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Desktop app session whose folder has a text file.",
+   "Click Files (or press Command P) and open the file.",
+   "Click Edit, change a line, then click Save.",
+   "Check that the change shows in the file and that the file on disk changed."
+  ],
+  "where": "Sidebar > Code > Your computer > session > Files > open a file > Edit > Save"
+ },
+ "S66.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Terminal"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Run a command"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Run"
+   }
+  ],
+  "needs": "a Desktop app session with a local folder",
+  "note": "The terminal is LocalTerminal.tsx; the exact dock position was not traced in the render tree.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Desktop app session.",
+   "Click Terminal, or open Session actions > Open in > Terminal.",
+   "Click the \"Run a command\" field, type a short command such as ls, and click Run.",
+   "Check that the output appears under the terminal."
+  ],
+  "where": "Code > local session > Terminal (also Session actions > Open in > Terminal)"
+ },
+ "S66.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "No commands have run in this session."
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Terminal"
+   }
+  ],
+  "needs": "a Desktop app session with a local folder",
+  "note": "The exit status is kept in LocalTerminal.tsx (exitCode) but its visible wording was not found; check it on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Desktop app session and click Terminal.",
+   "Check that the empty text \"No commands have run in this session.\" shows if nothing ran.",
+   "Run a command, then look at the list of commands with their output.",
+   "Check that each entry shows the command and its result, to compare with Expected."
+  ],
+  "where": "Code > local session > Terminal (empty text \"No commands have run in this session.\")"
+ },
+ "S66.18": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Close the changes panel"
+   }
+  ],
+  "needs": "a git folder with a changed file",
+  "note": "The diff renderer (CodeDiffFile.tsx, LocalChangesPanel.tsx) was not read line by line; the \"Changes\" button label was confirmed from the test file apps/web/features/code/components/LocalSessionPanel.test.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Desktop app session in a git folder and make a change to a file (a task or an edit).",
+   "Click the \"Changes\" button in the session.",
+   "Click a changed file in the Changes panel.",
+   "Check that the line-by-line diff shows removed and added lines, to compare with Expected."
+  ],
+  "where": "Code > local session > Changes (the Changes panel, then pick a changed file)"
+ },
+ "S66.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Include in the commit:"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a git folder with several changed files",
+  "note": "The words for created, modified or deleted per file were not found in the labels read; check the file rows on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open a session with several changed files.",
+   "Click the \"Changes\" button.",
+   "Look at the commit line \"Commits N of M changed files\" and the \"Include in the commit:\" choices.",
+   "Untick one file and check the count changes."
+  ],
+  "where": "Code > local session > Changes (file list with commit choices)"
+ },
+ "S66.24": {
+  "labels": [
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Plan"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Reads and plans. Changes nothing."
+   }
+  ],
+  "needs": "a Desktop app session with a local folder",
+  "note": "The hint says Plan changes nothing; the approval step after the plan was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Desktop app session and click the \"Permissions\" chip (it shows the current mode, such as Ask).",
+   "Choose \"Plan\" and read the hint \"Reads and plans. Changes nothing.\"",
+   "Send a request that would edit a file, and check the agent proposes a plan and does not change files.",
+   "Check the plan waits for approval before any edit, to compare with Expected."
+  ],
+  "where": "Code > local session > the Permissions chip > Plan (cloud: Approval mode > Mode > Plan)"
+ },
+ "S66.25": {
+  "labels": [
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Auto"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Ask"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "a Desktop app session with a local folder",
+  "note": "The visible word is \"Auto\", not \"agent mode\". In the cloud composer the same control is labelled \"Approval mode\" (apps/web/features/code/code-surface.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open a Desktop app session and click the \"Permissions\" chip.",
+   "Read the choices: Ask, Auto, Plan, Bypass permissions.",
+   "Choose \"Auto\" and read the hint \"Edits files without asking. Asks before commands and git hook or MCP changes.\"",
+   "Send a small edit request and check it edits without asking, to compare with Expected."
+  ],
+  "where": "Code > local session > the Permissions chip > Auto (or Ask)"
+ },
+ "S66.26": {
+  "labels": [
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Bypass permissions"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Ask before every action"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Skip approvals"
+   }
+  ],
+  "needs": "a Desktop app session with a local folder",
+  "note": "The cloud Approval mode options are Ask, Auto and Skip. Whether the running session honours each mode was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Desktop app session and click the \"Permissions\" chip.",
+   "Pick \"Ask\" and send a task that runs a command; check it asks for approval.",
+   "Pick \"Auto\", then \"Bypass permissions\", and send the same task.",
+   "Check the approval prompts follow each mode, to compare with Expected."
+  ],
+  "where": "Code > local session > Permissions chip (Ask / Auto / Plan / Bypass permissions); cloud: Approval mode chip"
+ },
+ "S66.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Context window"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Usage"
+   }
+  ],
+  "needs": "a signed-in account with an open session",
+  "note": "The ring is UsageRing in apps/web/features/code/components/CodeComposer.tsx; it shows the context window only when the model size is known.",
+  "reachable": "yes",
+  "steps": [
+   "Open a session in the composer.",
+   "Click the small usage ring button (aria label \"Usage\").",
+   "Read the \"Context window\" line in the popover.",
+   "Send a message and reopen the popover to check the used amount rises."
+  ],
+  "where": "Code > composer > Usage ring button (popover shows \"Context window\")"
+ },
+ "S66.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Plan usage limits"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Five hour limit"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "See detailed breakdown"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "If usage data is missing the popover shows \"Usage is not available right now.\" (apps/web/features/code/code-surface.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open the composer in Code.",
+   "Click the \"Usage\" ring button.",
+   "Read \"Plan usage limits\", \"Five hour limit\" and \"Weekly, all models\", and \"See detailed breakdown\".",
+   "Check the bars and reset times match your plan, to compare with Expected."
+  ],
+  "where": "Code > composer > Usage ring button > \"Plan usage limits\""
+ },
+ "S66.36": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Push and open a pull request"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Open a pull request on GitHub"
+   }
+  ],
+  "needs": "a GitHub-connected repository, a non-default branch, and a linked GitHub account",
+  "note": "Panel placement was not traced; the panel component is apps/web/features/code/components/LocalPullRequest.tsx. Some states show a reason instead when a pull request is not possible.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Desktop app session in a GitHub-connected repository on a non-default branch.",
+   "Look for the \"Push and open a pull request\" action in the session.",
+   "Click it, then check the pull request number (\"Pull request #\") and state (open, draft, merged or closed) appear.",
+   "Open \"Open a pull request on GitHub\" to compare the link with the panel."
+  ],
+  "where": "Code > local session > \"Push and open a pull request\" (on a branch other than the default)"
+ },
+ "S66.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Run tests"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Test output"
+   }
+  ],
+  "needs": "a Desktop app session in a folder with a test command",
+  "note": "The button position was not traced in the session panel; if no test command is found, the text \"No test command found here\" appears.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Desktop app session in a folder with a test script in package.json.",
+   "Click \"Run tests\".",
+   "Watch for \"Running <command>\" and then the result line such as \"<command> passed.\" or \"<command> failed with exit code N.\"",
+   "Open \"Test output\" and check the failing output appears, to compare with Expected."
+  ],
+  "where": "Code > local session > Run tests (results under \"Test output\")"
+ },
+ "S66.40": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Share"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Share session"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Session actions"
+   }
+  ],
+  "needs": "a second account",
+  "note": "Sharing options shown as \"Shared with your team\" and \"Shared by link\" (apps/web/features/code/code-surface.ts). The share dialog file is apps/web/features/code/components/CodeShareDialog.tsx; the exact opening path was not traced end to end.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session in Code.",
+   "Click \"Session actions\" and choose \"Share\".",
+   "In the \"Share session\" dialog, pick the sharing option and copy the link.",
+   "Sign in with a second account in the same workspace (or open the link) and check the session opens, to compare with Expected."
+  ],
+  "where": "Code > session > Session actions > Share (dialog \"Share session\")"
+ },
+ "S66.41": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Open in"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Desktop app"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Continue in VS Code"
+   }
+  ],
+  "needs": "a paired desktop app signed into the same account",
+  "note": "\"Continue in VS Code\" also appears in the session panel (apps/web/features/code/components/LocalSessionPanel.tsx). The Desktop item shows only when a desktop is paired; the phone route was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open a session in Code in the web app or Desktop app.",
+   "Click \"Session actions\", then hover or click \"Open in\".",
+   "Choose \"Desktop app\" and check the session opens in the desktop app.",
+   "Check the same session is shown with the same transcript, to compare with Expected."
+  ],
+  "where": "Code > session > Session actions > Open in > Desktop app (or Open in > Terminal)"
+ }
+}

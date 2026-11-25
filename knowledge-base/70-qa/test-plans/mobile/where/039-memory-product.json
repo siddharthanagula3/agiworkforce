@@ -1,0 +1,540 @@
+{
+ "S39.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/memory/components/MemoryControlsCard.tsx",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Assistant"
+   },
+   {
+    "file": "apps/mobile/app/(app)/chat/[id].tsx",
+    "text": "Open menu"
+   }
+  ],
+  "needs": "a saved memory first (see S39.10) to check the effect",
+  "note": "The Memory screen is also reached from Profile > Local settings > Memory in Local mode. The exact place of the Open menu button on the chat tab was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "From the chat screen, tap Open menu, then tap Settings.",
+   "Under Assistant, tap Memory.",
+   "Look under MEMORY CONTROLS for the switch labelled Memory and turn it off.",
+   "Read the line Memory is off, so new memories can't be added or imported. and the Turn on button that appears.",
+   "Start a new chat and ask about a fact you saved earlier; the assistant should not use it while Memory is off.",
+   "Turn Memory back on and check the saved facts are used again."
+  ],
+  "where": "Open menu > Settings > Assistant > Memory, then the switch labelled Memory at the top"
+ },
+ "S39.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/memory/components/MemoryControlsCard.tsx",
+    "text": "Search and reference chats"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Memory"
+   }
+  ],
+  "needs": "one older chat with a distinct topic",
+  "note": "Code default is on for Local and off for Cloud (localSettingsStore and cloudSettingsStore).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Turn off the switch labelled Search and reference chats.",
+   "Start a new chat and ask about something that was only in an older chat.",
+   "Check the assistant does not bring in excerpts from other past chats.",
+   "Turn the switch on and ask the same question again to compare."
+  ],
+  "where": "Settings > Assistant > Memory, then the switch labelled Search and reference chats"
+ },
+ "S39.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Memory"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "No memories yet"
+   }
+  ],
+  "needs": "a few saved memories (add them with S39.10 first); with none, the screen shows No memories yet",
+  "note": "Local mode also opens this screen from Profile > Local settings > Memory.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Scroll down past the switches and the rows Memory summary and Replaced memories.",
+   "Read the count line under those rows, for example a number.",
+   "Scroll the list and check each saved memory appears as a card."
+  ],
+  "where": "Settings > Assistant > Memory (the list below the controls)"
+ },
+ "S39.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Search memories..."
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Pinned"
+   }
+  ],
+  "needs": "two or more saved memories with different words",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Tap the field with the placeholder Search memories....",
+   "Type one word that appears in a saved memory.",
+   "Check the list shows only matching memories.",
+   "Tap the clear control on the field, then tap the chip Pinned to filter to pinned memories."
+  ],
+  "where": "Settings > Assistant > Memory, then the field Search memories..."
+ },
+ "S39.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/memory/services/consolidation.ts",
+    "text": "Preferences"
+   },
+   {
+    "file": "apps/mobile/src/features/memory/services/consolidation.ts",
+    "text": "About you"
+   }
+  ],
+  "needs": "saved memories of several kinds (for example facts, preferences and decisions learned from chats)",
+  "note": "Headings appear only when there are at least two topic groups. The code has no work or background topic: the groups are Preferences, About you, Decisions, Context, Summaries and Skills.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Make sure the chip All is selected and the search field is empty.",
+   "Look for section headings between the memory cards.",
+   "Compare the headings with the Expected topics."
+  ],
+  "where": "Settings > Assistant > Memory, with the chip All selected and the search field empty"
+ },
+ "S39.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Reflect"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/reflect.tsx",
+    "text": "Work in progress"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with some Cloud chats",
+  "note": "The Work in progress section appears only when the recap has ongoing work.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud and switch to Cloud mode.",
+   "Open Settings and find the section Cloud.",
+   "Tap Reflect.",
+   "Look for the heading Work in progress and read the ongoing projects listed under it."
+  ],
+  "where": "Settings > Cloud > Reflect (Cloud mode only), then the section Work in progress"
+ },
+ "S39.10": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Add memory"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/components/AddMemorySheet.tsx",
+    "text": "What should AGI remember?"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/components/AddMemorySheet.tsx",
+    "text": "Save"
+   }
+  ],
+  "needs": "Memory turned on",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory. Memory must be on.",
+   "Tap the round button labelled Add memory at the bottom right.",
+   "Type a fact in the field What should AGI remember? for example I prefer metric units.",
+   "Tap Save.",
+   "Check the new card appears in the list with the line Added by you.",
+   "Start a new chat and ask a question the fact would answer, then compare with Expected."
+  ],
+  "where": "Settings > Assistant > Memory, then the round + button Add memory at the bottom right"
+ },
+ "S39.11": {
+  "labels": [
+   {
+    "file": "packages/ai/agent-core/src/memory.ts",
+    "text": "Saved to memory:"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Memory"
+   }
+  ],
+  "needs": "Memory turned on",
+  "note": "A repeated fact shows an already-known message instead.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure Memory is on (Settings > Assistant > Memory).",
+   "Open the chat tab and type Remember that I like short answers.",
+   "Send the message.",
+   "Look for the status line Saved to memory: followed by the fact.",
+   "Open Settings > Assistant > Memory and check the fact is in the list."
+  ],
+  "where": "Chat tab: type Remember that ... in the message box and send"
+ },
+ "S39.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/memory/components/MemoryControlsCard.tsx",
+    "text": "Generate memory from chat history"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Memory"
+   }
+  ],
+  "needs": "Memory and the generate switch on; a normal chat",
+  "note": "The client-side capture in the code runs only in Local mode and is off for temporary chats.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Turn on Memory and turn on the switch Generate memory from chat history.",
+   "In a normal chat (not temporary) say a lasting fact, for example I work as a nurse in Leeds.",
+   "Wait for the reply to finish, then go back to Settings > Assistant > Memory.",
+   "Check a new card appears with the line Learned from a chat, or Learned from the chat title."
+  ],
+  "where": "Settings > Assistant > Memory, then the switch labelled Generate memory from chat history"
+ },
+ "S39.13": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/components/MemoryItem.tsx",
+    "text": "Edit memory"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/components/AddMemorySheet.tsx",
+    "text": "Update"
+   }
+  ],
+  "needs": "a saved memory",
+  "note": "A card edited within 60 seconds of being added still says Added.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Tap the pencil button labelled Edit memory on a card.",
+   "Change the text in the field labelled Memory content.",
+   "Tap Update.",
+   "Check the card shows the new text and the line Edited, then ask a chat question that uses it."
+  ],
+  "where": "Settings > Assistant > Memory, then the pencil button Edit memory on a card"
+ },
+ "S39.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Delete memory?"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/components/MemoryItem.tsx",
+    "text": "Delete memory"
+   }
+  ],
+  "needs": "a saved memory",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Swipe a memory card to the left to show the red trash button labelled Delete memory.",
+   "Tap it and read the alert Delete memory?",
+   "Tap Delete.",
+   "Check the card is gone and the count has gone down by one."
+  ],
+  "where": "Settings > Assistant > Memory, swipe a card to the left and tap the red trash button"
+ },
+ "S39.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Reset memory"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Reset memory?"
+   }
+  ],
+  "needs": "some saved memories",
+  "note": "Reset also deletes chats? No: the alert says your chats are not deleted.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Tap the red row Reset memory.",
+   "Read the alert Reset memory? and tap Cancel first; check nothing was removed.",
+   "Tap Reset memory again in the alert.",
+   "Check the list says No memories yet and the count is zero."
+  ],
+  "where": "Settings > Assistant > Memory, then the red row Reset memory"
+ },
+ "S39.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/components/MemoryItem.tsx",
+    "text": "Pin memory"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/components/MemoryItem.tsx",
+    "text": "Pinned"
+   }
+  ],
+  "needs": "two or more saved memories",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Tap the pin button labelled Pin memory on a card.",
+   "Check the card shows the badge Pinned.",
+   "Tap the chip Pinned to see only pinned memories.",
+   "Compare with Expected: pinned memories are kept at the top and win a conflict."
+  ],
+  "where": "Settings > Assistant > Memory, then the pin button Pin memory on a card"
+ },
+ "S39.17": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/components/MemoryItem.tsx",
+    "text": "Added by you"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/components/MemoryItem.tsx",
+    "text": "Imported"
+   }
+  ],
+  "needs": "a memory added by hand, an import, and a chat-learned memory",
+  "note": "The chat-learned line uses the chat title when the chat is known.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Add a memory yourself (S39.10) and read the line under it: Added by you.",
+   "Import memories (S39.21) and check the line says Imported.",
+   "Find a card learned from a chat and check it says Learned from followed by the chat title."
+  ],
+  "where": "Settings > Assistant > Memory, read the small line under each memory card"
+ },
+ "S39.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/components/MemoryItem.tsx",
+    "text": "Edited"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/components/MemoryItem.tsx",
+    "text": "Added"
+   }
+  ],
+  "needs": "a memory you can add and edit",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory.",
+   "Add a memory (S39.10) and read the time line, which starts with Added.",
+   "Wait a minute, then edit the memory (S39.13).",
+   "Check the line now starts with Edited and shows a time such as 2m ago."
+  ],
+  "where": "Settings > Assistant > Memory, read the time line on each memory card"
+ },
+ "S39.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Replaced memories"
+   }
+  ],
+  "needs": "Memory on; a Free or paid account is not needed",
+  "note": "The rule runs automatically on the same topic; the code does not show a control for it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Add a memory such as I live in Paris (S39.10).",
+   "In a chat, say a newer fact on the same topic, for example I now live in London.",
+   "Open Settings > Assistant > Memory and check the Paris memory is no longer in the main list.",
+   "Open Replaced memories and check the Paris memory is listed there.",
+   "Start a chat and ask where you live; the answer should use London."
+  ],
+  "where": "Effect is seen in Settings > Assistant > Memory > Replaced memories"
+ },
+ "S39.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory-conflicts.tsx",
+    "text": "Use the replaced one instead"
+   },
+   {
+    "file": "apps/mobile/src/features/memory/services/memoryConflicts.ts",
+    "text": "Pinned, added, then newer memories win. The replaced one is kept here."
+   }
+  ],
+  "needs": "two conflicting memories",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Create two memories on the same topic (see S39.19).",
+   "Open Settings > Assistant > Memory > Replaced memories.",
+   "Read the heading When memories disagree and the rule text.",
+   "Tap Use the replaced one instead on the entry to settle it.",
+   "Check the list now uses the replaced memory and a chat answer follows it."
+  ],
+  "where": "Settings > Assistant > Memory > Replaced memories"
+ },
+ "S39.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory-import.tsx",
+    "text": "Choose a text or JSON file"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory-import.tsx",
+    "text": "Preview"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Import memories"
+   }
+  ],
+  "needs": "a text or JSON file, or some pasted lines",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory. Memory must be on.",
+   "Tap the upload button Import memories at the top right.",
+   "Pick a source under From (ChatGPT, Claude, Gemini, Copilot or Other).",
+   "Paste lines into the box or tap Choose a text or JSON file, then tap Preview.",
+   "Select the items, tap the import button, and check the message Added N memories."
+  ],
+  "where": "Settings > Assistant > Memory, then the upload button labelled Import memories at the top right"
+ },
+ "S39.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/data-controls/index.tsx",
+    "text": "Export Local Data"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/data-controls/index.tsx",
+    "text": "Chats, memory, settings and model details, exported on this device."
+   }
+  ],
+  "needs": "some saved memories; a way to open a .json file",
+  "note": "The file is JSON, not plain text. Cloud memory is exported with Export Cloud data in the AGI Cloud account section.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Data Controls.",
+   "Under Local data, tap Export Local Data.",
+   "Wait for the progress to finish and choose a place in the share sheet.",
+   "Open the saved file agi_data_export.json and find the memory_facts list.",
+   "Compare the saved memories with the list in Settings > Assistant > Memory."
+  ],
+  "where": "Settings > Assistant > Data Controls > Local data > Export Local Data"
+ },
+ "S39.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Personal memories. Workspace memories stay in their workspace."
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Cloud Memory"
+   }
+  ],
+  "needs": "an AGI Cloud account in a workspace, with a workspace memory and a personal chat",
+  "note": "In Local mode the scope line reads Stored on this device only.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud with a workspace and switch to Cloud mode.",
+   "Open Settings, tap Assistant, then tap Memory; the title says Cloud Memory.",
+   "Read the scope line under the count: Personal memories. Workspace memories stay in their workspace., or the workspace name line.",
+   "Start a personal chat and ask about a workspace memory; it should not appear.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Assistant > Memory, read the scope line under the count"
+ },
+ "S39.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "Temporary Chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx",
+    "text": "Won't be saved or use memory, and attachments never leave this device."
+   }
+  ],
+  "needs": "Memory on, with one saved memory",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open the chat tab and tap the eye-off temporary chat control, or turn on the switch Temporary Chat in Settings > Device > General.",
+   "Read the explainer text about temporary chats.",
+   "Send Remember that I like tea and ask a question about a saved memory.",
+   "Go to Settings > Assistant > Memory and check the new fact was not saved.",
+   "Start a normal chat and check the temporary chat content is not used as past-chat context."
+  ],
+  "where": "Chat tab: the eye-off button for temporary chat; or Settings > Device > General > Temporary Chat"
+ },
+ "S39.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/memory/components/MemoryControlsCard.tsx",
+    "text": "Include sensitive topics in memory"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Never remember"
+   },
+   {
+    "file": "packages/contracts/context/src/memory-content-policy.ts",
+    "text": "Memory never stores"
+   }
+  ],
+  "needs": "Memory on; use a fake test value only, never a real credential; Never remember needs Cloud mode",
+  "note": "The Never remember row appears only in Cloud mode; Local mode has no term list in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, tap Assistant, then tap Memory. Memory must be on for the switch to work.",
+   "Read the switch Include sensitive topics in memory and leave it off to stop sensitive topics being learned from chats.",
+   "In Cloud mode, tap Never remember, type a term in Term to never remember, and tap Add term.",
+   "In the chat tab, send Remember that my password is a fake test value; the reply should say Memory never stores ... so I left that out.",
+   "Compare with Expected."
+  ],
+  "where": "Settings > Assistant > Memory, then the switch Include sensitive topics in memory; in Cloud mode also Never remember"
+ },
+ "S39.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/data-controls/index.tsx",
+    "text": "Delete all local chats?"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/memory.tsx",
+    "text": "Reset memory"
+   }
+  ],
+  "needs": "some chats and some memories; this removes data, so use a test account",
+  "note": "Deleting chats does not change memory and resetting memory does not delete chats.",
+  "reachable": "yes",
+  "steps": [
+   "Note how many memories are in Settings > Assistant > Memory.",
+   "Open Settings, tap Assistant, then tap Data Controls and find Delete all local chats under Local chats.",
+   "Read the alert Delete all local chats? (it says memory stays), tap Cancel, then tap the button again and confirm.",
+   "Go back to Settings > Assistant > Memory and check the memories are still there.",
+   "Tap Reset memory on that screen, confirm, and check the chats in the chat tab are still there."
+  ],
+  "where": "Settings > Assistant > Data Controls > Local data > Local chats > Delete all local chats (and separately Settings > Assistant > Memory > Reset memory)"
+ }
+}

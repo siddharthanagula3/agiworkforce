@@ -1,0 +1,164 @@
+{
+ "S25.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Library"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Close"
+   }
+  ],
+  "needs": "an image in Library (generated or uploaded)",
+  "note": "Chat image attachments open the same viewer (accessibility hint 'Opens full screen' in apps/mobile/src/features/chat/components/MessageBubble.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open the navigation drawer (the icon button labelled 'Open navigation drawer' in apps/mobile/src/shared/components/DrawerButton.tsx; its position on screen was not verified) and tap Library.",
+   "Tap any image tile in the Library grid.",
+   "Look for a full-screen black viewer that shows the image, with a row of icon buttons at the top and a Close (X) button at the top right.",
+   "Tap Close to return to the grid and compare with Expected: images open in a viewer."
+  ],
+  "where": "Open navigation drawer > Library > tap an image tile"
+ },
+ "S25.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Library"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Could not play the video"
+   }
+  ],
+  "needs": "a video in Library",
+  "note": "The in-app player's controls were not read in detail; the failure hint tells the user to long-press the video and choose Share.",
+  "reachable": "yes",
+  "steps": [
+   "Open the navigation drawer and tap Library.",
+   "Tap a video file card in the Library grid.",
+   "Wait for the video player to open over the Library screen, then press play.",
+   "Check that the video plays inside the app and compare with Expected: video files play in an in-product player. If it fails, the alert 'Could not play the video' appears."
+  ],
+  "where": "Open navigation drawer > Library > tap a video file card"
+ },
+ "S25.14": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Zoom in"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Zoom out"
+   }
+  ],
+  "needs": "an image in Library, and a phone or touch screen for pinch and double-tap",
+  "note": "No on-screen zoom buttons exist; Expected says 'zoom controls', while the code offers pinch, double-tap, and screen-reader 'Zoom in' and 'Zoom out' actions (apps/mobile/src/features/chat/components/ZoomableImage.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open the navigation drawer, tap Library, and tap an image tile to open the viewer.",
+   "Pinch two fingers apart on the image, then pinch them together.",
+   "Double-tap the image to zoom in, then double-tap again to zoom out.",
+   "Compare with Expected: viewers offer zoom. Zoom is by gesture only."
+  ],
+  "where": "Open navigation drawer > Library > tap an image tile"
+ },
+ "S25.25": {
+  "labels": [],
+  "needs": "none",
+  "note": "No full-screen toggle was found: the image viewer always opens as a full-screen modal, and the only 'full screen' wording is the fallback label 'Full screen generated image' in apps/mobile/src/features/chat/components/ImageFullScreen.tsx. I searched apps/mobile/src for 'full screen', 'fullscreen' and 'Full-screen' in the library, chat and file viewer folders.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S25.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Share"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+    "text": "Save image to Photos"
+   }
+  ],
+  "needs": "a file in Library (an uploaded or generated file)",
+  "note": "No control named Download exists for Library files; for images, the viewer's 'Save image to Photos' saves to Photos instead of the original file.",
+  "reachable": "yes",
+  "steps": [
+   "Open the navigation drawer and tap Library.",
+   "Long-press a file card or image tile in the grid to open the action menu.",
+   "Tap Share. The app downloads the file to the phone and opens the system share sheet.",
+   "Compare with Expected: the original file can be downloaded. In the share sheet, check the save options the phone provides."
+  ],
+  "where": "Open navigation drawer > Library > long-press a file > Share"
+ },
+ "S25.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/artifact-viewers/TabularGridView.tsx",
+    "text": "Copy cell"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/artifact-viewers/TabularGridView.tsx",
+    "text": "Copy as Markdown"
+   }
+  ],
+  "needs": "a device, and a CSV file in Library",
+  "note": "The text-file selection path relies on the system selection menu and was not exercised; the visible Copy buttons exist only for CSV and table grids.",
+  "reachable": "yes",
+  "steps": [
+   "Open the navigation drawer, tap Library, and tap a CSV file.",
+   "Tap a cell in the grid to select it.",
+   "Tap Copy cell, then paste into another app such as Notes.",
+   "Compare with Expected: copied content matches the selected cell. Plain text files also allow long-press selection of lines and the system Copy menu (apps/mobile/src/features/chat/components/artifact-viewers/TextFileView.tsx)."
+  ],
+  "where": "Open navigation drawer > Library > tap a CSV file > tap a cell > Copy cell"
+ },
+ "S25.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/artifact-viewers/DocumentFileView.tsx",
+    "text": "Open it in another app to read it."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/artifact-viewers/DocumentFileView.tsx",
+    "text": "Share"
+   }
+  ],
+  "needs": "an Office document in Library",
+  "note": "The Office-file routing is read from a code comment in DocumentFileView.tsx; the exact list of file types was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the navigation drawer, tap Library, and tap an Office document.",
+   "Look for the message 'Open it in another app to read it.' with a Share button.",
+   "Tap Share to open the system share sheet, which lists apps that can open the file.",
+   "Compare with Expected: the file opens in another app. The file viewer header also has a share icon labelled 'Share' plus the file name (apps/mobile/src/features/chat/components/artifact-viewers/FileViewerScreen.tsx)."
+  ],
+  "where": "Open navigation drawer > Library > tap an Office file > Share"
+ },
+ "S25.30": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/artifact-viewers/FileViewerScreen.tsx",
+    "text": "Preview isn\u2019t available for this file type."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/artifact-viewers/FileViewerScreen.tsx",
+    "text": "Share"
+   }
+  ],
+  "needs": "a file in Library of a type with no in-app preview",
+  "note": "Only Share is offered; there is no separate Download or Open button. Which file types lack a preview depends on apps/mobile/src/features/chat/components/artifact-viewers/viewerKind.ts, which was not traced type by type.",
+  "reachable": "yes",
+  "steps": [
+   "Open the navigation drawer, tap Library, and tap a file type that has no preview.",
+   "Look for the message 'Preview isn\u2019t available for this file type.' with a Share button.",
+   "Tap Share to hand the file to another app through the system share sheet.",
+   "Compare with Expected: the app says there is no preview and offers Share as the download or open path."
+  ],
+  "where": "Open navigation drawer > Library > tap a file the viewer cannot render"
+ }
+}

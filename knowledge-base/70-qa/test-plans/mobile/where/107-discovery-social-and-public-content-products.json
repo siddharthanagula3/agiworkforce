@@ -1,0 +1,30 @@
+{
+ "S107.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Report\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
+    "text": "Harmful or dangerous"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
+    "text": "Save report"
+   }
+  ],
+  "needs": "a signed-in account; an AI answer in a chat; for the Sites path, a site shared with you by a second account and an outside account is not needed",
+  "note": "The Code line's quoted lines are gone, but the report flow exists: the menu item is written as 'Report\u2026' (shown as \"Report\u2026\") in MessageBubble.tsx, and the sheet is ReportFlagButton.tsx. The reason list has no infringement option, while Expected says harmful or infringing. The Sites report path is in SharedSitesList.tsx (Alert button \"Report\"). Whether the report reaches operators is not visible in the UI beyond the result text; I did not verify the server route apps/web/app/api/mobile/content-report/route.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, open a conversation that has an AI answer (not one still streaming).",
+   "Long-press the AI answer to open its action menu.",
+   "Tap \"Report\u2026\" in the menu.",
+   "Tap a reason such as \"Harmful or dangerous\" (there is no infringement option; \"Other\" is the closest), then tap \"Save report\".",
+   "Read the result screen: \"Report submitted for review\" means it reached the server. \"Send this report to AGI?\" or \"Report saved on this device\" means it was kept on the phone; tap \"Send\" if shown.",
+   "For a public page: open Sites, switch to \"Shared with you\", tap \"More options for <name>\", tap \"Report\", then repeat the reason and \"Save report\" steps and compare the result screen with Expected."
+  ],
+  "where": "Chat: open a conversation > long-press the AI answer > Report\u2026 > choose a reason > Save report. Public page: Sites (drawer entry, shown as \"Sites\") > Shared with you > More options for <site name> > Report > choose a reason > Save report."
+ }
+}

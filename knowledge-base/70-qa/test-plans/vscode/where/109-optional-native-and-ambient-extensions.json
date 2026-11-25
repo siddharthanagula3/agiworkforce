@@ -1,0 +1,54 @@
+{
+ "S109.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Remote Control"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Pair a phone"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Remote Control: waiting for your phone"
+   }
+  ],
+  "needs": "a trusted folder open in VS Code, an AGI account signed in, and a phone with the AGI Mobile app signed in to the same account",
+  "note": "The phone-side pairing and watching/approving happen in the Mobile app, whose code is outside this folder, so only the desktop side was checked. The panel title was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a folder in VS Code and trust it (a trusted workspace is required), then sign in to your AGI account.",
+   "Press Cmd+Shift+P, type Code: Remote Control, and press Enter.",
+   "In the panel that opens, read the text that starts 'Open the Mobile app on your phone, choose Pair with Desktop, and scan this code' and check that a pairing code appears.",
+   "Click Pair a phone if no code is shown, then (with the phone) scan the code, confirm the phone in the dialog, and check that the status bar item shows 'Remote Control: waiting for your phone', then 'Remote Control: {phone}' once connected."
+  ],
+  "where": "Command Palette (Cmd+Shift+P) > Code: Remote Control. The same command is also typed in the chat as /remote-control. The panel shows the Pair a phone link."
+ },
+ "S109.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+    "text": "On this device"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{provider} is not running. Start it to use its models."
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Auto"
+   }
+  ],
+  "needs": "Ollama or LM Studio installed on this computer (to see the running state); with neither installed, the not-running row still appears",
+  "note": "The health rows are shown inside the model menu only, not as a separate status indicator; the generic Code: Show Subsystem Health command (apps/extension-vscode/package.json) covers subsystems in general and was not confirmed to list the local runtime. The Auto label is the default text on the model button; the model button's hover title is Model. Whether the rows appear when the local runtime is not started at all (before the first model list loads) was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure Ollama is not running (quit it), then open the AGI chat panel.",
+   "Click the model button that shows Auto, and look at the group named On this device.",
+   "Check for a row that reads 'Ollama is not running. Start it to use its models.' (the same shape shows 'LM Studio is not running' for LM Studio), and check that the reason text appears if the server does not respond ('Ollama is not responding: ...').",
+   "Start Ollama, reopen the model menu, and check that the row now reads 'Ollama is running \u00b7 N models' (or 'Ollama is running with no models loaded') to compare with Expected."
+  ],
+  "where": "Chat panel > model button (shows Auto) > On this device group. Ollama and LM Studio status rows appear in that group."
+ }
+}

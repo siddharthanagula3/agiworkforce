@@ -1,0 +1,29 @@
+{
+ "S109.16": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Slack app"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Add to Slack"
+   },
+   {
+    "file": "apps/web/features/settings/sections/SlackSection.tsx",
+    "text": "Your Slack accounts"
+   }
+  ],
+  "needs": "a Slack workspace where you can add apps, and a Slack account; the app must be configured by the owner first (see note)",
+  "note": "Partly built: the Slack routes exist (apps/web/app/api/webhooks/slack/route.ts, apps/web/lib/slack/slack-config.ts) but the owner still has to create the Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, and migration 0333 must be applied. Teams, WhatsApp and Telegram have no chat-with-AGI path in the code: they appear only as connectors (Settings > Customize > Connectors, apps/web/features/connectors/data/connectors.ts), which send and read messages but do not answer a person there. The step that opens the Settings modal from the first screen was not confirmed in code; the modal title \"Settings\" is in packages/ui/ui/src/settings-modal/SettingsModal.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the web app and open Settings.",
+   "Under Customize, click \"Slack app\".",
+   "In the \"Slack workspaces you added\" card, click \"Add to Slack\". Slack's install page opens in the browser.",
+   "Approve the app in Slack. Come back to Settings and look for the message \"AGI was added to Slack. Send it a message there to start.\"",
+   "In Slack, send AGI a direct message or mention it in a channel after /invite-ing it. Click the link it sends to connect your Slack account, then check that \"Your Slack accounts\" in Settings lists your account and that AGI answers in the thread."
+  ],
+  "where": "Settings > Customize > Slack app > \"Add to Slack\" (then message AGI in Slack)"
+ }
+}

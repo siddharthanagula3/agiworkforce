@@ -1,0 +1,468 @@
+{
+ "S11.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "VoiceOver on macOS and a signed-in account",
+  "note": "Inner rule with no control of its own; the check is by screen reader.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver (Command+F5).",
+   "Tab to the Account menu button in the sidebar, then to Settings and to a few buttons on the chat page.",
+   "Listen: each control should say what it does (for example Keyboard shortcuts or Account menu for your name), not just 'button'."
+  ],
+  "where": "Any button or link in the web app; the accessible name is heard with VoiceOver"
+ },
+ "S11.02": {
+  "labels": [],
+  "needs": "VoiceOver on macOS and a signed-in account with a saved chat",
+  "note": "The title is an h1 in ConversationHeader.tsx; Settings section headings were not all checked.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver and open an existing chat.",
+   "Open the VoiceOver rotor (Control+Option+U) and choose Headings.",
+   "Listen for a top-level heading for the conversation title and nested headings in sections; compare with Expected."
+  ],
+  "where": "Top title of the chat page (conversation title) and section headings in Settings; seen with VoiceOver's headings list"
+ },
+ "S11.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Get help"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Arrow-key handling is in packages/ui/ui/src/primitives/useMenuKeyboard.ts; the Ctrl/Cmd+K command palette is also keyboard-driven (shortcut label not confirmed on screen).",
+  "reachable": "yes",
+  "steps": [
+   "Press Tab until the round account button is focused, then press Return.",
+   "Press Down Arrow to move through the menu items, then Right Arrow to open Get help.",
+   "Press Escape to close the menu, and check the menu closed and focus went back to the account button."
+  ],
+  "where": "Account menu > Get help > Keyboard shortcuts (menu opened from the round account button with your initial)"
+ },
+ "S11.04": {
+  "labels": [],
+  "needs": "a keyboard and a signed-in account",
+  "note": "Rule is in apps/web/app/globals.css (focus-visible outline).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the chat page and press Tab repeatedly.",
+   "Look at each focused control for a visible outline (2px ring).",
+   "Compare with Expected: the focused control always shows a clear indicator."
+  ],
+  "where": "Any control on any page; seen when tabbing with the keyboard"
+ },
+ "S11.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Get help"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Dialog focus handling is in packages/ui/ui/src/primitives/useDialogKeyboard.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Account menu and go to Get help > Keyboard shortcuts.",
+   "Check that focus moved into the dialog, then press Tab several times and confirm focus stays inside it.",
+   "Press Escape and check the dialog closes."
+  ],
+  "where": "Account menu > Get help > Keyboard shortcuts (the dialog opens)"
+ },
+ "S11.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Restore logic is in packages/ui/ui/src/primitives/useDialogKeyboard.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Keyboard shortcuts dialog from the Account menu, using the keyboard.",
+   "Press Escape to close it.",
+   "Check focus returns to the Get help item or the account button that opened it."
+  ],
+  "where": "Account menu > Get help > Keyboard shortcuts; close it and see where focus lands"
+ },
+ "S11.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ChatMessageList.tsx",
+    "text": "Response complete"
+   }
+  ],
+  "needs": "VoiceOver on macOS and a signed-in account",
+  "note": "Announcement text comes from buildStreamAnnouncement in ChatMessageList.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver (Command+F5) and open a chat.",
+   "Type a short message in the composer and send it, without moving focus.",
+   "Listen for a short announcement such as Response complete, and check focus stayed in the composer."
+  ],
+  "where": "Chat page after a reply finishes; the announcement is spoken, not shown"
+ },
+ "S11.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
+    "text": "Stop the current response"
+   }
+  ],
+  "needs": "VoiceOver on macOS and a signed-in account",
+  "note": "Chunking is in packages/ui/unified-chat/src/components/markdown/StreamAnnouncer.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver and send a message that asks for a long answer.",
+   "Listen while the reply streams: it should speak in short chunks or once at the end, not word by word.",
+   "While it streams, the send button shows Stop the current response; check it is labelled."
+  ],
+  "where": "A streaming reply in the chat; heard with VoiceOver while the reply is written"
+ },
+ "S11.09": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Needs approval"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   }
+  ],
+  "needs": "a signed-in account whose chat asks for tool approval",
+  "note": "The approve and deny button text comes from TOOL_APPROVAL_ACTION_LABELS, whose exact words were not read.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and ask AGI to do a task that needs a tool (agent mode), so it asks for approval.",
+   "Find the tool card showing Needs approval or This tool requires approval before execution.",
+   "Turn on VoiceOver and check the card states the step (running, done, failed or waiting) and that the approve and deny buttons have names."
+  ],
+  "where": "Chat > a reply that asks to run a tool > the tool card with Needs approval and the approval buttons"
+ },
+ "S11.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
+    "text": "Copy message"
+   }
+  ],
+  "needs": "a touch screen or phone width",
+  "note": "The row shows on hover or focus, and is always visible for touch (hover:none).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a reply on a touch device or at phone width, and tap a message.",
+   "Check the action buttons (Copy message and others) are visible without hovering.",
+   "Tap Copy message and check it works."
+  ],
+  "where": "Chat > any message bubble > the Copy message button under the message"
+ },
+ "S11.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx",
+    "text": "Upload from device"
+   },
+   {
+    "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+    "text": "Resize artifacts panel"
+   }
+  ],
+  "needs": "a file to upload and a signed-in account",
+  "note": "The control that opens the Files menu was not located in the code; the artifacts panel only shows on the desktop layout.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Files menu from the chat composer and choose Upload from device; pick a file from the file picker.",
+   "Check the file is attached without dragging anything.",
+   "Click or Tab to the separator labelled Resize artifacts panel and press Left Arrow or Right Arrow to resize the panel; check it moves."
+  ],
+  "where": "Chat composer > Files menu > Upload from device (non-drag upload); artifacts panel > Resize artifacts panel (arrow keys)"
+ },
+ "S11.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Chat text size"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The app only scales chat text; the Settings-level text size is not in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click Account menu > Settings, then Appearance.",
+   "Find Chat text size and choose Large.",
+   "Go back to a chat and check the text is bigger and not cut off; then try a larger text size in the browser (Cmd+Plus) and check again."
+  ],
+  "where": "Settings > Appearance > Chat text size (choose Small, Default or Large)"
+ },
+ "S11.13": {
+  "labels": [],
+  "needs": "a browser with zoom and a signed-in account",
+  "note": "Layout rules are in apps/web/shared/components/layout/WebAppShell.tsx and app-shell-layout.ts.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open the chat page in a browser window and press Cmd+Plus until zoom is 400%.",
+   "Check the page turns into one column (sidebar moves away or collapses) and there is no sideways scroll bar.",
+   "Read a long message and check no text is cut off."
+  ],
+  "where": "Chat page in a browser at high zoom; seen by zooming the page"
+ },
+ "S11.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Motion"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Reduced"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "System follows the device setting, so the OS reduce-motion switch can be tested too; the CSS rule is in apps/web/app/globals.css.",
+  "reachable": "yes",
+  "steps": [
+   "Click Account menu > Settings, then Appearance.",
+   "Under Motion, click Reduced.",
+   "Open a chat that is loading or streaming and check the looping and moving animations stop or are replaced; then click System to go back."
+  ],
+  "where": "Settings > Appearance > Motion > Reduced"
+ },
+ "S11.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceChatDock.tsx",
+    "text": "Captions"
+   }
+  ],
+  "needs": "a microphone and a signed-in account with voice allowed",
+  "note": "The button that opens the In this chat menu was not located as visible text.",
+  "reachable": "yes",
+  "steps": [
+   "Click Start voice mode in the chat composer and allow the microphone.",
+   "Open the menu from the call screen and turn on Captions.",
+   "Speak a sentence and check the Voice captions area shows your words and the reply as text."
+  ],
+  "where": "Composer > Start voice mode > voice call screen > menu with In this chat > Captions"
+ },
+ "S11.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a microphone and a signed-in account with voice allowed",
+  "note": "Transcript writes go to the chat through WebChatPage.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Click Start voice mode, allow the microphone, and say two or three sentences.",
+   "End the call and go back to the chat.",
+   "Read the messages and check each spoken line appears as text in the same chat."
+  ],
+  "where": "Composer > Start voice mode; after the call, the spoken turns appear as messages in the chat"
+ },
+ "S11.17": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx",
+    "text": "View chart data"
+   }
+  ],
+  "needs": "a signed-in account; AGI must produce a chart",
+  "note": "The chart title and summary are read by screen readers through aria-describedby.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and ask AGI to make a chart from some numbers.",
+   "Click View chart data under the chart.",
+   "Check the table shows the values and the chart has a title that matches what is plotted."
+  ],
+  "where": "Chat > ask AGI for a chart > the chart card > View chart data"
+ },
+ "S11.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Display Language"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The app sets document direction from the language; not every menu was checked for mirroring.",
+  "reachable": "yes",
+  "steps": [
+   "Click Account menu > Settings, then General.",
+   "Under Display Language, pick a right-to-left language such as Arabic.",
+   "Check the whole layout mirrors: the sidebar and menus move to the right and text aligns to the right."
+  ],
+  "where": "Settings > General > Display Language, choose an Arabic or Hebrew option"
+ },
+ "S11.20": {
+  "labels": [],
+  "needs": "a signed-in account and a keyboard that types Arabic or Hebrew",
+  "note": "The composer and bubbles set dir=auto in ComposerInput.tsx and MessageBubble.tsx.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "In the composer, type one line in English and a new line in Arabic or Hebrew.",
+   "Send it and read the message bubble.",
+   "Check each paragraph lines up in its own direction."
+  ],
+  "where": "Chat composer and message bubbles; seen when you type or read text in two directions"
+ },
+ "S11.21": {
+  "labels": [],
+  "needs": "a Japanese, Chinese or Korean input method and a signed-in account",
+  "note": "Composition check is in ChatComposerNew.tsx keydown handling.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Switch the Mac keyboard to a Japanese or Chinese input method.",
+   "In the composer, type a word and press Return to confirm the conversion (do not send yet).",
+   "Check the message is not sent, and press Return again to send only when you want."
+  ],
+  "where": "Chat composer; seen while typing with an input method (Japanese, Chinese or Korean)"
+ },
+ "S11.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Linked devices"
+   }
+  ],
+  "needs": "a signed-in account with at least one linked device",
+  "note": "Dates use the browser locale, not the Display Language picker; Passkeys dates in Settings > Security work the same way.",
+  "reachable": "yes",
+  "steps": [
+   "Click Account menu > Settings, then Account.",
+   "Find Linked devices and read the dates shown for each device.",
+   "Compare the date format with your Mac's region format (day/month order and 12 or 24 hour clock)."
+  ],
+  "where": "Settings > Account > Linked devices (dates shown in the list)"
+ },
+ "S11.23": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Billing"
+   },
+   {
+    "file": "apps/web/app/billing/invoices/page.tsx",
+    "text": "Invoices and receipts"
+   }
+  ],
+  "needs": "a paid or past-paid account with invoices",
+  "note": "The money formatter is in packages/contracts/types/src/money-format.ts; the pricing page at apps/web/app/pricing/page.tsx also shows prices but its path from the app was not confirmed.",
+  "reachable": "unsure",
+  "steps": [
+   "Click Account menu > Settings, then Billing.",
+   "Look for Invoices and receipts, or open the page directly at /billing/invoices.",
+   "Check each amount shows the right currency symbol and number format."
+  ],
+  "where": "Settings > Billing (the Invoices and receipts page); the link from Billing to that page was not confirmed"
+ },
+ "S11.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "ran {{count}} commands"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "ran a command"
+   }
+  ],
+  "needs": "a chat where AGI runs commands (agent mode)",
+  "note": "Plural rules are applied with translateUiPlural; other languages (for example Russian or Arabic) were not checked in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in agent mode where AGI runs more than one command.",
+   "Read the tool summary line in the reply.",
+   "Check it says ran a command for one and ran N commands for more than one, not a plain English s on every word."
+  ],
+  "where": "Chat > a reply that ran commands > the tool summary line (for example ran 2 commands or ran a command)"
+ },
+ "S11.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Display Language"
+   }
+  ],
+  "needs": "a signed-in account and a way to cause a network error",
+  "note": "Message text is in packages/ui/ui/src/lib/network-error.ts and apps/web/features/chat/lib/turn-error-notice.ts; not every error may be translated.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open Account menu > Settings > General and set Display Language to another language.",
+   "Turn off Wi-Fi, send a chat message, and read the error that appears.",
+   "Check the error text is in the language you chose, not always English."
+  ],
+  "where": "Error notices in the chat and the app's network error messages; seen after changing Display Language and causing an error"
+ },
+ "S11.26": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Get help"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Shortcut notation comes from packages/ui/ui/src/platformKeys.ts; earlier run was PARTIAL (E007).",
+  "reachable": "yes",
+  "steps": [
+   "Open the Account menu, go to Get help > Keyboard shortcuts.",
+   "Read the shortcut list and check the keys show the Mac symbol \u2318 (not Ctrl).",
+   "Compare with Expected. Earlier check: the dialog shows macOS labels but logs a React nesting warning (div inside p) in the console."
+  ],
+  "where": "Account menu > Get help > Keyboard shortcuts (the shortcut hints show \u2318 on a Mac)"
+ },
+ "S11.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Display Language"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Settings"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/settings.json",
+    "text": "General"
+   }
+  ],
+  "needs": "a Free account or a paid account, phone width optional for a second check",
+  "note": "The Code line was unverified and the plan gave no location; I searched apps/web and packages/ui for locale, i18n, truncate and line-clamp code and found the Display Language selector (apps/web/features/settings/components/LanguageSelector.tsx) and a Spanish locale (packages/ui/i18n/locales/es). The wrap and truncate rules themselves are spread across many CSS and component files, not one control, so the tester should judge the layout by eye on the translated screens. The exact visible text of the General tab heading and the Settings menu entry was not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open Settings from the account or sidebar menu.",
+   "Open the General section and find the row labelled Display Language.",
+   "Open the Display Language menu and pick a language other than English, such as Espa\u00f1ol.",
+   "Look at the settings rows, buttons and the sidebar: long or translated labels should wrap or truncate with no overlap or clipped controls."
+  ],
+  "where": "Settings > General > Display Language (choose Espa\u00f1ol or another language, then look at the page)"
+ }
+}

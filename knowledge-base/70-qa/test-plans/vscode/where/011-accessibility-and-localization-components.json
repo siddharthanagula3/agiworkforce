@@ -1,0 +1,329 @@
+{
+ "S11.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More actions"
+   }
+  ],
+  "needs": "VoiceOver turned on",
+  "note": "The code gives aria-labels on these buttons; the spoken result itself is not verified by reading code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the AGI Code icon in the Activity Bar to open the sidebar.",
+   "Turn on VoiceOver and move across the header buttons 'Sessions', 'Settings', 'New chat' and 'More actions'.",
+   "Check that each one is announced by its name and what it does, as in Expected."
+  ],
+  "where": "AGI Code icon in the VS Code Activity Bar > sidebar header buttons 'Sessions', 'Settings', 'New chat', 'More actions'"
+ },
+ "S11.02": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Settings"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Model and reasoning"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Start a conversation"
+   }
+  ],
+  "needs": "VoiceOver turned on",
+  "note": "Which Settings nav section holds 'Model and reasoning' was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click the 'Settings' button in the AGI Code sidebar header.",
+   "Turn on VoiceOver and use its heading navigation to jump between headings.",
+   "Check the top heading is 'Settings' and sections such as 'Model and reasoning' are headings below it."
+  ],
+  "where": "Settings (gear button) > page titled 'Settings' with section headings such as 'Model and reasoning'. The empty chat also has the heading 'Start a conversation'."
+ },
+ "S11.03": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More actions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Output style"
+   }
+  ],
+  "needs": "none",
+  "note": "The menu keyboard handler (wireMenuKeyboard) handles Escape and Tab; the Arrow key branch was counted, not fully read.",
+  "reachable": "yes",
+  "steps": [
+   "Press Tab until the 'More actions' button has focus, then press Enter.",
+   "Press the Down Arrow key to move between the menu items.",
+   "Press Escape to close the menu and check the menu closes with no mouse."
+  ],
+  "where": "'More actions' button (the ellipsis icon) in the AGI Code sidebar > menu items 'Output style', 'Next message effort', 'Focus view'"
+ },
+ "S11.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Chat input"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click in the 'Chat input' box, then press Tab repeatedly.",
+   "Look at each focused button for a visible outline ring.",
+   "Check the focused control is always clearly outlined, as in Expected."
+  ],
+  "where": "Tab key on any control in the AGI Code sidebar; the focus outline is a style rule (button:focus-visible)"
+ },
+ "S11.05": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Getting Started"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Work with your code"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Next"
+   }
+  ],
+  "needs": "none",
+  "note": "The Escape-to-close handling was not read; only the Tab trap code was read.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Command Palette and type 'Show Getting Started', then press Enter.",
+   "Press Tab repeatedly and check focus stays inside the dialog (Next and links).",
+   "Press Escape and check the dialog closes, as in Expected."
+  ],
+  "where": "Command Palette > 'Code: Show Getting Started' opens the dialog 'Work with your code' (role dialog)"
+ },
+ "S11.06": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More actions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Output style"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Press Tab until 'More actions' has focus, then press Enter to open the menu.",
+   "Press Escape to close the menu.",
+   "Check focus is back on the 'More actions' button, as in Expected."
+  ],
+  "where": "'More actions' button > menu, then Escape in the AGI Code sidebar"
+ },
+ "S11.07": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Chat input"
+   }
+  ],
+  "needs": "a signed-in account that can get a reply",
+  "note": "The code line cited for this item (webviewContent.ts:3122) is the developer runtime status region, not a reply-finished announcement; the completion announcement itself was not located.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver, click 'Chat input', type a short message and send it with Enter.",
+   "Keep focus in the chat input while the reply runs.",
+   "Listen for a short announcement when the reply finishes, and check focus did not move, as in Expected."
+  ],
+  "where": "Inner behaviour: the sidebar's status regions (role 'status', aria-live 'polite') announce finished events while focus stays put"
+ },
+ "S11.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Conversation"
+   }
+  ],
+  "needs": "a signed-in account with a live provider reply (live-web)",
+  "note": "Code status unverified: the cited line no longer holds the quoted code. The transcript log region is aria-live polite with additions, which may announce every streamed chunk; not verified.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver and send a message that gets a long streamed reply.",
+   "Listen while the reply streams and count how often it is announced.",
+   "Check it is spoken calmly in chunks or once when done, not word by word, as in Expected."
+  ],
+  "where": "Inner behaviour: the transcript region (role 'log', aria-live 'polite', aria-relevant 'additions') announces a streaming reply"
+ },
+ "S11.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Approval needed"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-status.ts",
+    "text": "Running"
+   }
+  ],
+  "needs": "a signed-in account and a workspace folder open",
+  "note": "Which buttons show depends on the request type; the exact tool step states were read from tool-status.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure a workspace folder is open and send a request that asks AGI to change a file or run a command.",
+   "When the card 'Approval needed' appears, turn on VoiceOver and move through it.",
+   "Check the card announces its summary and state, and that the approve and deny buttons have names, as in Expected."
+  ],
+  "where": "Chat > send a request that needs approval (for example a file edit or shell command) > card titled 'Approval needed' with status and approve or deny buttons"
+ },
+ "S11.11": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach or use tools"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Attach workspace files"
+   }
+  ],
+  "needs": "a workspace with a text file",
+  "note": "Drop onto the composer is the drag path (webviewContent.ts around line 7720). No resize or reorder control was found in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the '+' button labelled 'Attach or use tools' next to the chat input.",
+   "Click 'Attach workspace files' and pick a text file, instead of dragging.",
+   "Check the file is attached without any drag, as in Expected."
+  ],
+  "where": "'+' button ('Attach or use tools') in the composer > 'Attach workspace files'"
+ },
+ "S11.14": {
+  "labels": [],
+  "needs": "a Mac with Reduce motion on and a reply in progress",
+  "note": "The rule is a CSS media query for prefers-reduced-motion in webviewContent.ts; the app has no own setting for it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on the Mac's Reduce motion setting.",
+   "Open AGI Code, send a message and watch the spinning icon while the reply is pending.",
+   "Check the spinner stops or is replaced, as in Expected."
+  ],
+  "where": "Inner behaviour: the sidebar's looping spinner icons (for example a pending reply or a running tool step) are turned off by the Mac's reduced-motion setting"
+ },
+ "S11.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Chat input"
+   }
+  ],
+  "needs": "a Japanese, Chinese or Korean input method on the Mac",
+  "note": "The guard is in the keydown handler that returns early when isComposing is true.",
+  "reachable": "yes",
+  "steps": [
+   "Switch the Mac to a Japanese input method (or Chinese or Korean).",
+   "Click 'Chat input' and type a word so the text is still being composed.",
+   "Press Enter to confirm the conversion and check the message is NOT sent, the text stays in the box."
+  ],
+  "where": "'Chat input' box in the AGI Code composer"
+ },
+ "S11.22": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Usage & billing"
+   }
+  ],
+  "needs": "a paid account with a usage meter (Free shows no meters)",
+  "note": "The label is written as 'Usage &amp; billing' in the file. Dates use the browser locale. Token counts in webviewContent.ts (around line 5687) are hard-coded to en-US. Chat language follows vscode.env.language (l10n/index.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Change VS Code's display language to another language and restart VS Code.",
+   "Open Settings from the AGI Code sidebar and click 'Usage & billing'.",
+   "Compare the reset date and numbers with your system format, as in Expected."
+  ],
+  "where": "Settings > 'Usage & billing' (plan usage line such as '% used \u00b7 resets <date>')"
+ },
+ "S11.24": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "{count} action"
+   }
+  ],
+  "needs": "a signed-in account and a prompt that runs tools",
+  "note": "The exact visible spot of the activity count was not confirmed; plural forms come from Intl.PluralRules.",
+  "reachable": "yes",
+  "steps": [
+   "Change VS Code's display language to Spanish or French and restart VS Code.",
+   "Send a request that makes AGI run several tool steps.",
+   "Read the count, and compare one step ('1 acci\u00f3n') with several ('3 acciones'), as in Expected."
+  ],
+  "where": "A chat reply that runs several tool steps shows a count such as '3 actions' (the activity summary)"
+ },
+ "S11.25": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "AGI couldn't finish the reply."
+   }
+  ],
+  "needs": "a way to make a reply fail",
+  "note": "The error key chatError.generic is shown for unknown failures. Forcing a failure on demand was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Change VS Code's display language to Spanish or French and restart VS Code.",
+   "Cause a failed reply (for example a provider timeout or an invalid request).",
+   "Read the error text and check it is in that language, as in Expected."
+  ],
+  "where": "Chat > a failed reply shows the error text in the reply area, with a 'Retry' button"
+ },
+ "S11.26": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Send key"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Send (Enter)"
+   }
+  ],
+  "needs": "none",
+  "note": "The code writes the word 'Cmd' (not the symbol \u2318) on Mac (webviewContent.ts line 4458). The visible spot of the hint text was not fully confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and set 'Send key' to the modifier option.",
+   "Go back to the chat and check the send hint or tooltip.",
+   "Compare the modifier text with Expected: it should show Cmd on Mac and Ctrl elsewhere."
+  ],
+  "where": "Settings > 'Send key' (composer.enterBehavior), then the 'Send' button in the composer (tooltip 'Send (Enter)')"
+ },
+ "S11.27": {
+  "labels": [],
+  "needs": "a narrow sidebar and another display language",
+  "note": "The plan gives no code location. CSS overflow and ellipsis rules exist in apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts, but per-control behaviour was not verified.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Change VS Code's display language to German and restart VS Code.",
+   "Narrow the AGI Code sidebar and open Settings > 'Usage & billing'.",
+   "Check long labels wrap or truncate without overlapping or clipping controls, as in Expected."
+  ],
+  "where": "Inner layout rule: long labels in the AGI Code sidebar and Settings at a narrow width"
+ }
+}

@@ -1,0 +1,128 @@
+{
+ "S29.17": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Files from this answer"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The chart is created inside the workbook by the server (sheets may carry a chart, apps/web/lib/services/managed-office-file-service.ts); it is not shown in the side panel, only in the downloaded file.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel in Chrome and sign in.",
+   "Type a request for an Excel workbook with sheet data and a chart built from those rows, then send it.",
+   "When the reply shows the \"Files from this answer\" list, find the .xlsx file card and click its Download button (its name is \"Download <file name>\").",
+   "Open the saved .xlsx outside the app and check that the chart plots the rows from the sheet, to compare with Expected."
+  ],
+  "where": "Side panel chat > ask for an Excel workbook with a chart > Files from this answer > Download <file name>"
+ },
+ "S29.18": {
+  "labels": [],
+  "needs": "none",
+  "note": "No chart-type selector found. Searched apps/extension and packages/ui/unified-chat for chart, chart type and select; ChartArtifact only offers a PNG download and the extension does not import it. The chart type (bar, line or pie) is set by the assistant in the schema in apps/web/lib/services/managed-office-file-service.ts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S29.19": {
+  "labels": [],
+  "needs": "none",
+  "note": "No chart data-range editor found. Searched apps/extension and packages/ui/unified-chat for range, data range and chart; the column choices (category_column, value_column) are set by the assistant in apps/web/lib/services/managed-office-file-service.ts and no editing control was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S29.34": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Files from this answer"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "There is no Export menu; the .xlsx appears only when the assistant creates one from the request.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel in Chrome and sign in.",
+   "Type a request for an Excel workbook (.xlsx) with the sheet data you want, then send it.",
+   "When the reply shows the \"Files from this answer\" list, click the Download button on the .xlsx file card (\"Download <file name>\").",
+   "Open the saved .xlsx and check that its sheets match the data in the reply, to compare with Expected."
+  ],
+  "where": "Side panel chat > ask for an Excel workbook > Files from this answer > Download <file name>"
+ },
+ "S29.35": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Files from this answer"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "There is no separate export control; a CSV code block alone is not shown as an artifact in the side panel, so the file comes only as a generated file card.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel in Chrome and sign in.",
+   "Type a request for a CSV file containing a table of data, then send it.",
+   "When the reply shows the \"Files from this answer\" list, click the Download button on the .csv file card (\"Download <file name>\").",
+   "Open the saved .csv and check that its rows match the table, to compare with Expected."
+  ],
+  "where": "Side panel chat > ask for a CSV file of a table > Files from this answer > Download <file name>"
+ },
+ "S29.38": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Files from this answer"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The docx or pdf format is chosen by the assistant from the request (apps/web/lib/services/managed-office-file-service.ts); no format picker was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel in Chrome and sign in.",
+   "Ask for an analysis of some data, then ask for it as a formatted report in Word (.docx) or PDF.",
+   "When the reply shows the \"Files from this answer\" list, click the Download button on the report's file card (\"Download <file name>\").",
+   "Open the saved report and check that it is a formatted document containing the analysis, to compare with Expected."
+  ],
+  "where": "Side panel chat > ask for a Word report or PDF of an analysis > Files from this answer > Download <file name>"
+ },
+ "S29.39": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Files from this answer"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Download $FILE$"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The slide deck is made by the server (apps/web/lib/services/managed-office-file-service.ts) and only reaches the app as a file card; no slide control was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel in Chrome and sign in.",
+   "Ask for an analysis of some data, then ask for it as a slide deck in PowerPoint (.pptx).",
+   "When the reply shows the \"Files from this answer\" list, click the Download button on the .pptx file card (\"Download <file name>\").",
+   "Open the saved .pptx and check that it holds slides built from the analysis, to compare with Expected."
+  ],
+  "where": "Side panel chat > ask for a slide deck of an analysis > Files from this answer > Download <file name>"
+ }
+}

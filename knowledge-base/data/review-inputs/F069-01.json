@@ -1,0 +1,576 @@
+{
+ "feature": {
+  "id": "F069-01",
+  "aliases": [
+   "Chat page",
+   "Web chat",
+   "/chat",
+   "WebChatPage",
+   "Work mode",
+   "AGI Work (code name agiwork)",
+   "Chat | Work toggle",
+   "composer.modeAgiWork",
+   "/agi-work",
+   "S69.01"
+  ],
+  "summary": "The signed-in chat page of the AGI Workforce web app at /chat. A person types in the composer and gets a streamed reply. A Chat | Work toggle switches to Work mode, which runs multi-step tool tasks. Work is offered only on Premium or higher; below that the toggle is hidden and the server refuses it.",
+  "purpose": {
+   "what_it_does": "Gives a person a place in the browser to chat with the assistant. It streams replies, shows tool activity, and lets the person switch the composer between Chat and Work. Work mode sends work_mode 'agiwork' plus an optional goal and plan with the message (apps/web/lib/hooks/useChatStream.ts:4663-4670).",
+   "why_it_exists": "The web app is the main Cloud surface and is the product that the Desktop app shows inside its window (doc: AGENTS.md section 5). Work mode exists so paid users can hand off multi-step jobs that use tools, files and reviewable results (apps/web/features/chat/components/Composer/ChatComposerNew.tsx:329-332; packages/contracts/types/src/interaction-modes.json:50-85).",
+   "who_uses_it": "Signed-in web users. A signed-out visitor may get a limited guest chat at /chat when the guest chat is open (apps/web/app/chat/layout.tsx:18-52). Work is for Premium, Max, Ultra, Team, Team Premium and Enterprise accounts (packages/contracts/types/src/billing-catalog.ts:341,354).",
+   "problems_solved": [
+    "One place to ask questions and run tool tasks without installing anything.",
+    "Keeps paid agent work behind the plan check on the server, so hiding a button in the browser is not the only guard (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3538-3556).",
+    "Lets a person start in Work from a direct address (/agi-work) or from a project (apps/web/app/chat/page.tsx:5-19; ChatComposerNew.tsx:1217-1231)."
+   ],
+   "use_cases": [
+    "Ask a quick question in Chat mode and read the streamed answer.",
+    "Switch to Work and ask for a multi-step task such as gathering sources and producing a document.",
+    "Open /agi-work to land directly in Work mode.",
+    "Open a project and start a new chat in it, which lands an eligible account in Work."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "surface:web: the address /chat (new chat) and /chat/<id> (an existing chat) (apps/web/app/chat/page.tsx:1-19; apps/web/app/chat/[sessionId]/page.tsx:12-14).",
+    "surface:web: the address /agi-work is rewritten to /chat for a signed-in browser session and opens in Work mode; the address bar keeps /agi-work (apps/web/proxy.ts:109-133; apps/web/app/chat/page.tsx:5-19).",
+    "surface:web: /cowork redirects permanently to /agi-work (apps/web/next.config.ts:136).",
+    "The Chat | Work toggle sits on the composer face. Its buttons are labelled 'Chat' and 'Work' (translation keys composer.modeChat and composer.modeAgiWork) (apps/web/features/chat/components/Composer/ChatComposerNew.tsx:316-320; packages/ui/i18n/locales/en/chat.json:169,193). Hover text for Work is 'Work: multi-step tasks with tools, files, and reviewable deliverables' (ChatComposerNew.tsx:326-329).",
+    "Other apps: the area brief gives no status for desktop, mobile, CLI, VS Code or Chrome for this item (doc: knowledge-base/data/area-briefs/069-web-application.md S69.01). The Desktop app shows the hosted web app (doc: AGENTS.md section 5)."
+   ],
+   "prerequisites": [
+    "Signed in, accepted the current terms, and passed the adult eligibility check, or the page redirects (apps/web/app/chat/layout.tsx:56-58).",
+    "For Work: a plan of Premium or higher, billing policy loaded, not a free trial, the Work capability granted, and the toggle shown only when the composer has a project picker and no image or video mode is on (ChatComposerNew.tsx:1062-1066, 6171)."
+   ],
+   "screens_and_controls": [
+    "Composer text box and send control (ChatComposerNew.tsx).",
+    "Chat | Work segmented toggle, data-testid composer-work-mode (ChatComposerNew.tsx:6171-6208). It is disabled while a turn runs or the composer is disabled (ChatComposerNew.tsx:6184).",
+    "In Work mode an approval-mode control appears next to the toggle (ChatComposerNew.tsx:6211-6213).",
+    "Slash command /code turns on cloud code execution for one message (ChatComposerNew.tsx:3247-3265)."
+   ],
+   "journey": [
+    "Open /chat while signed in. The page shows the empty new-chat surface and saves nothing yet (apps/web/features/chat/pages/WebChatPage.tsx:2354-2356).",
+    "Type a message. For Work, press the 'Work' button first (handler ChatComposerNew.tsx:2806-2815).",
+    "Press send. If the browser is offline the send is refused with a notice (ChatComposerNew.tsx:3588-3590).",
+    "The first send creates the conversation and the address becomes /chat/<id> (WebChatPage.tsx:2679, 5792).",
+    "The reply streams in. Tool activity arrives as tool status frames and shows as running, completed or failed steps (apps/web/lib/hooks/useChatStream.ts:3470-3500).",
+    "In Work mode the server opens a durable work plan for the run when a goal is supplied (apps/web/lib/workflows/steps/work-plan-steps.ts:17-40)."
+   ],
+   "feedback_and_outputs": [
+    "Streamed assistant text and tool status lines (useChatStream.ts:3470-3500).",
+    "Offline notice: 'You are offline. Your draft is saved here and can be sent after you reconnect.' (ChatComposerNew.tsx:717).",
+    "Other reasons the send control is shut are read out to assistive technology, for example usage limit reached, trial run out, model unavailable (ChatComposerNew.tsx:707-718).",
+    "If a Work request reaches the server on a plan below Premium, the response is HTTP 403 with code agi_work_plan_required and the message 'Work requires Premium or higher.' (request-processor.ts:1484-1500, 3538-3556; label from billing-catalog.ts:193-195)."
+   ],
+   "settings": [
+    "Default work mode: a stored setting defaultWorkMode sets the starting mode for a new chat when the account may use Work (ChatComposerNew.tsx:1233-1237).",
+    "Kill switch for Work, set by operators, not by the person (apps/web/lib/feature-flags/kill-switches.ts:31,40)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Chat page route, loading skeleton and guest or sign-in gate exist (apps/web/app/chat/layout.tsx:41-65; apps/web/app/chat/loading.tsx).",
+    "Chat | Work toggle is built and gated by canUseAgiWork (ChatComposerNew.tsx:1062-1066, 6171-6208).",
+    "Server refuses Work below the Premium tier with code agi_work_plan_required and status 403 (request-processor.ts:1484-1500, 3538-3556).",
+    "Server also checks the Work kill switch before a Work turn (request-processor.ts:5217-5219).",
+    "Work turns are routed as the agentic task type (request-processor.ts:1040) and get a 24-hour managed-usage lease, because they may enter the tool loop (request-processor.ts:1525-1535).",
+    "A new chat is not saved until the first send (WebChatPage.tsx:2354-2356).",
+    "The composer returns to Chat if the account loses the Work capability (ChatComposerNew.tsx:1226-1228)."
+   ],
+   "incomplete": [
+    "The draft said Work needs 'a paid plan'. The code needs the Premium tier or higher; Basic is a paid plan but does not get Work (billing-catalog.ts:333-341,354).",
+    "Send failure paths were not traced end to end; the page has a chat error state and a turn failure notice (WebChatPage.tsx:6857-6862) but each cause was not followed."
+   ],
+   "disconnected_or_disabled": [
+    "The capability handshake removes Work if no model in the catalog is marked agentic (capability-handshake-service.ts:101). Whether the live catalog has one is unknown."
+   ],
+   "not_available": [
+    "Plain-browser Local mode: the web chat has no on-device model in a normal browser. A local model can be selected only through the desktop host bridge (WebChatPage.tsx:1282-1287; apps/web/features/desktop-host/lib/local-model-selection.ts:19-21). [inferred]",
+    "Work for Local-only and Local + BYOK plan tiers: those tiers are not in the Work tier list (billing-catalog.ts:341,354)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "Signed-in user opens the web app in a browser, chats, and switches the composer to AGI Work for multi-step tool runs.",
+     "source": "S69.01 (doc: knowledge-base/data/area-briefs/069-web-application.md)"
+    },
+    {
+     "statement": "Work mode is offered only when the plan allows it; a free-trial account never sees it.",
+     "source": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1062-1066"
+    },
+    {
+     "statement": "The server refuses Work below the Premium tier with error code agi_work_plan_required.",
+     "source": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1484-1500"
+    },
+    {
+     "statement": "Interaction modes are defined in a contract: Work needs streaming, tools and agentic model abilities, per-tool approval, synced across devices, and a queued draft only when offline.",
+     "source": "packages/contracts/types/src/interaction-modes.json:50-85"
+    },
+    {
+     "statement": "Every subscription capability on every app connects to one AGI Subscription system.",
+     "source": "task brief for this knowledge base"
+    }
+   ],
+   "acceptance_criteria": [
+    "On a Free account the Chat | Work toggle is not shown.",
+    "On a Premium or higher account the toggle shows 'Chat' and 'Work' and switching to Work changes the placeholder and shows the approval control.",
+    "A direct POST of work_mode 'agiwork' for a Basic account returns 403 with code agi_work_plan_required.",
+    "Opening /chat saves no conversation until the first send; after send the address is /chat/<id>.",
+    "Offline, pressing send shows the offline notice and the draft is kept.",
+    "Opening /agi-work while signed in shows the chat page with Work selected."
+   ],
+   "inferred": [
+    "Work availability should read the same entitlement on every app, so the Premium-or-higher rule is the one shared rule [inferred from billing-catalog.ts:354 being a shared contract]."
+   ],
+   "proposed": [
+    "[proposed] Show a short reason on the page when Work is hidden (for example 'Work needs Premium'), instead of hiding the toggle without explanation, so a free user can learn why.",
+    "[proposed] Add one test that checks the composer hides Work for Basic as well as Free."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "screen",
+    "name": "Chat route",
+    "path": "apps/web/app/chat/page.tsx",
+    "role": "New chat entry; starts in Work when the request path is /agi-work (lines 5-19)."
+   },
+   {
+    "kind": "screen",
+    "name": "Conversation route",
+    "path": "apps/web/app/chat/[sessionId]/page.tsx",
+    "role": "/chat/<id> entry with generated page title."
+   },
+   {
+    "kind": "component",
+    "name": "Chat layout gate",
+    "path": "apps/web/app/chat/layout.tsx",
+    "role": "Guest chat when open, sign-in redirect, current terms and adult eligibility checks."
+   },
+   {
+    "kind": "component",
+    "name": "WebChatRoot",
+    "path": "apps/web/features/chat/components/WebChatRoot.tsx",
+    "role": "Loads WebChatPage client-side with a skeleton and passes initialWorkMode."
+   },
+   {
+    "kind": "screen",
+    "name": "WebChatPage",
+    "path": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "role": "Whole chat page: sidebar, transcript, composer, panels, send logic."
+   },
+   {
+    "kind": "component",
+    "name": "ChatComposerNew",
+    "path": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "role": "Composer, Chat | Work toggle, slash commands, offline notice, send."
+   },
+   {
+    "kind": "hook",
+    "name": "useChatStream",
+    "path": "apps/web/lib/hooks/useChatStream.ts",
+    "role": "Builds the request (work_mode, agi_work_goal, agi_work_plan), reads the stream, tracks tool status, resumes a turn."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST chat completions",
+    "path": "apps/web/app/api/llm/v1/chat/completions/route.ts",
+    "role": "Managed Cloud chat endpoint that streams replies."
+   },
+   {
+    "kind": "service",
+    "name": "request-processor",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+    "role": "Work plan check (getWorkModeEntitlementError), kill switch, routing task type, usage lease."
+   },
+   {
+    "kind": "service",
+    "name": "tool-loop",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+    "role": "Runs the tool steps of a Work turn."
+   },
+   {
+    "kind": "service",
+    "name": "work-plan-steps",
+    "path": "apps/web/lib/workflows/steps/work-plan-steps.ts",
+    "role": "Opens a durable work plan for an agiwork run."
+   },
+   {
+    "kind": "config",
+    "name": "Plan capability table",
+    "path": "packages/contracts/types/src/billing-catalog.ts",
+    "role": "agi_work maps to the Premium-and-above tiers (lines 341, 354)."
+   },
+   {
+    "kind": "service",
+    "name": "Capability handshake",
+    "path": "apps/web/lib/services/capability-handshake-service.ts",
+    "role": "Removes canUseAgiWork by plan and by model catalog (lines 101, 121)."
+   },
+   {
+    "kind": "config",
+    "name": "Kill switches",
+    "path": "apps/web/lib/feature-flags/kill-switches.ts",
+    "role": "Operator switch for the Work capability."
+   },
+   {
+    "kind": "config",
+    "name": "Interaction modes contract",
+    "path": "packages/contracts/types/src/interaction-modes.json",
+    "role": "Declares the Work mode rules, tools and billing key."
+   },
+   {
+    "kind": "config",
+    "name": "Chat labels",
+    "path": "packages/ui/i18n/locales/en/chat.json",
+    "role": "modeChat and modeAgiWork label text."
+   },
+   {
+    "kind": "config",
+    "name": "Proxy rewrite",
+    "path": "apps/web/proxy.ts",
+    "role": "Rewrites /agi-work and / to /chat for signed-in sessions."
+   },
+   {
+    "kind": "component",
+    "name": "GuestChat",
+    "path": "apps/web/features/chat/guest/GuestChat.tsx",
+    "role": "Limited signed-out chat shown at /chat when open."
+   },
+   {
+    "kind": "test",
+    "name": "Work entitlement test",
+    "path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.web-search.test.ts",
+    "role": "Covers getWorkModeEntitlementError (lines 171-189)."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Browser loads /chat; the layout checks identity, terms and adult eligibility, then renders the chat page.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/chat/layout.tsx:41-65"
+    },
+    {
+     "what_happens": "The composer decides if Work is offered from plan, billing policy and capability, and shows the toggle.",
+     "runs_on": "device",
+     "evidence": "ChatComposerNew.tsx:1062-1066, 6171"
+    },
+    {
+     "what_happens": "On send the client builds the request with work_mode and goal and posts it to the managed chat endpoint.",
+     "runs_on": "device",
+     "evidence": "apps/web/lib/hooks/useChatStream.ts:4663-4670"
+    },
+    {
+     "what_happens": "The server checks the Work plan rule (403 if below Premium), then the Work kill switch, then routes the turn as agentic.",
+     "runs_on": "our servers",
+     "evidence": "request-processor.ts:3538-3556, 5217-5219, 1040"
+    },
+    {
+     "what_happens": "The server opens a durable work plan when a goal is given and runs the tool loop; frames stream back.",
+     "runs_on": "our servers",
+     "evidence": "work-plan-steps.ts:17-40; request-processor.ts:1525-1535"
+    },
+    {
+     "what_happens": "The model call goes to the chosen provider through the managed route.",
+     "runs_on": "outside service",
+     "evidence": "app/api/llm/v1/chat/completions/route.ts:1332-1340 [provider call path inferred from the adapter stream builder]"
+    },
+    {
+     "what_happens": "The client shows tool status and text as they arrive.",
+     "runs_on": "device",
+     "evidence": "useChatStream.ts:3470-3500"
+    }
+   ],
+   "data": [
+    {
+     "what": "Conversation and messages",
+     "where_stored": "Server database (conversation rows, table:web_conversations is read by the code-runs route)",
+     "synced": "Yes, loaded from the server by id on any browser (WebChatPage.tsx:2354-2375)",
+     "retained_or_deleted": "Kept until the person deletes or archives it; temporary chats exist (WebChatPage.tsx:2459-2470). Retention rules not traced."
+    },
+    {
+     "what": "Work plan for a run",
+     "where_stored": "Server database through work-plan-service (work-plan-steps.ts:24-35)",
+     "synced": "Server side only",
+     "retained_or_deleted": "unknown"
+    },
+    {
+     "what": "Unsent draft",
+     "where_stored": "store:browser localStorage under agi-composer-draft keys",
+     "synced": "No",
+     "retained_or_deleted": "Kept until cleared; see F069-03"
+    }
+   ],
+   "models_and_providers": "Work needs a model the catalog marks as agentic (capability-handshake-service.ts:101) and routes as the agentic task type (request-processor.ts:1040). The model and provider are chosen by the managed routing slots and the person's model picker; this page names no model. Own-key and Local routing are not part of the plain web chat path found here."
+  },
+  "access_and_usage": {
+   "account": "Signed in with accepted terms and adult eligibility (apps/web/app/chat/layout.tsx:56-58). Signed-out guests may use limited guest chat, never Work (layout.tsx:41-52).",
+   "permissions": "Per-tool approval in Work (interaction-modes.json:76-77 approvalBehavior). Workspace administrators can switch Work off for a workspace (apps/web/lib/support/agent/corpus.generated.json:224).",
+   "subscription": "Work needs plan tier pro (shown as Premium) or higher: Premium, Max, Ultra, Team, Team Premium, Enterprise (billing-catalog.ts:341,354). Free, Basic, Local-only and Local + BYOK do not get it.",
+   "limits_and_metering": "Usage accounting key is chat, billing key agi_work (interaction-modes.json:75-77). Tool-loop turns hold a 24-hour usage lease, others 15 minutes (request-processor.ts:1525-1535).",
+   "flags": "Kill switch capability canUseAgiWork (kill-switches.ts:31,40); server check at request-processor.ts:5217-5219.",
+   "model_compatibility": "Needs streaming, tools and agentic abilities (interaction-modes.json:61-62). Removed from the handshake if no catalog model is agentic (capability-handshake-service.ts:101).",
+   "provider_restrictions": "none found in the code for this page beyond the managed route; provider choice follows routing.",
+   "local_mode": "Work is not offered on Local-only or Local + BYOK tiers (billing-catalog.ts:341,354). In a normal browser there is no Local mode; a selected on-device model exists only through the desktop host bridge (local-model-selection.ts:19-21). What Work does there is unknown."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Empty new chat",
+    "behaviour": "Nothing is saved until first send.",
+    "evidence": "WebChatPage.tsx:2354-2356"
+   },
+   {
+    "state": "Loading",
+    "behaviour": "A skeleton shows while the chat page loads; replies stream in.",
+    "evidence": "WebChatRoot.tsx:9-12; useChatStream.ts:3470-3500"
+   },
+   {
+    "state": "Offline",
+    "behaviour": "Send is refused with a notice; the draft stays.",
+    "evidence": "ChatComposerNew.tsx:3588-3590, 4806"
+   },
+   {
+    "state": "Plan too low for Work",
+    "behaviour": "Toggle hidden; composer forces Chat; server returns 403 agi_work_plan_required.",
+    "evidence": "ChatComposerNew.tsx:1226-1228; request-processor.ts:3538-3556"
+   },
+   {
+    "state": "Turn running",
+    "behaviour": "The mode toggle is disabled.",
+    "evidence": "ChatComposerNew.tsx:6184"
+   },
+   {
+    "state": "Stream dropped",
+    "behaviour": "The client has a resume endpoint and retries up to 3 times, 500 ms apart.",
+    "evidence": "useChatStream.ts:1672-1676"
+   },
+   {
+    "state": "Failure",
+    "behaviour": "A chat error state and turn failure notice appear; every cause was not traced.",
+    "evidence": "WebChatPage.tsx:6857-6862"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Toggle buttons use aria-pressed and aria-label; send reasons are spoken to assistive technology.",
+    "evidence": "ChatComposerNew.tsx:707, 6184-6190"
+   },
+   {
+    "state": "Cancel",
+    "behaviour": "A stop control calls the stop handler (onStop).",
+    "evidence": "WebChatPage.tsx:7673 (prop onStop={handleStopGeneration})"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.web-search.test.ts",
+     "covers": "getWorkModeEntitlementError: refuses agiwork below Premium, allows from Premium up, ignores chat mode (lines 171-189)."
+    },
+    {
+     "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.agiwork.test.ts",
+     "covers": "Tool loop behaviour for Work turns."
+    },
+    {
+     "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.work-states.test.ts",
+     "covers": "Work run states in the tool loop."
+    },
+    {
+     "path": "apps/web/features/chat/pages/__tests__/WebChatPage.project-handoff-work-mode.test.tsx",
+     "covers": "Project hand-off landing in Work mode."
+    },
+    {
+     "path": "apps/web/features/chat/pages/__tests__/ChatRoute.test.tsx",
+     "covers": "Chat route rendering."
+    },
+    {
+     "path": "apps/web/app/chat/__tests__/NewChatDeepLink.test.tsx",
+     "covers": "New chat deep link."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Work hidden on Free",
+     "steps": [
+      "Sign in with a Free account.",
+      "Open /chat.",
+      "Look at the composer."
+     ],
+     "expected": "No Chat | Work toggle."
+    },
+    {
+     "name": "Work on Premium",
+     "steps": [
+      "Sign in with a Premium account.",
+      "Open /chat and press 'Work'.",
+      "Send a multi-step request."
+     ],
+     "expected": "Work is selected, approval control shows, tool steps stream, the address becomes /chat/<id>."
+    },
+    {
+     "name": "Server refuses Work on Basic",
+     "steps": [
+      "Using a Basic account, POST to the chat endpoint with work_mode agiwork."
+     ],
+     "expected": "HTTP 403, code agi_work_plan_required."
+    },
+    {
+     "name": "Offline send",
+     "steps": [
+      "Type a message.",
+      "Turn the network off.",
+      "Press send."
+     ],
+     "expected": "Offline notice shown; draft kept; sending works after reconnect."
+    },
+    {
+     "name": "/agi-work entry",
+     "steps": [
+      "Signed in, open /agi-work."
+     ],
+     "expected": "Chat page opens with Work selected."
+    }
+   ],
+   "diagnostics": [
+    "Error code agi_work_plan_required in the response body.",
+    "Server log 'Kill-switch gate unreadable' when the gate cannot be read (request-processor.ts:5206-5214).",
+    "Server log 'Durable work plan could not be opened' (work-plan-steps.ts:37-39).",
+    "Capability handshake output from /api/me (apps/web/app/api/me/route.ts:282-300)."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No visible reason when Work is hidden.",
+    "affects": "Free, Basic and trial users on web",
+    "evidence": "ChatComposerNew.tsx:6171 renders the toggle only when canUseAgiWork",
+    "work_needed": "Decide whether to show a locked toggle with an upgrade hint."
+   },
+   {
+    "gap": "Failure paths of a failed send were not traced.",
+    "affects": "All web users",
+    "evidence": "WebChatPage.tsx:6857-6862",
+    "work_needed": "Trace each error to its notice and write scenarios."
+   },
+   {
+    "gap": "Status of Work on desktop, mobile, CLI, VS Code and Chrome is not in the brief.",
+    "affects": "Cross-app subscription parity",
+    "evidence": "area brief S69.01 lists web only",
+    "work_needed": "Check each app against the shared Premium rule."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "mode:cloud",
+   "plan:Premium",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-chat-turn-pipeline",
+   "SYS-agents-tools-and-automation",
+   "SYS-model-catalog-and-routing",
+   "SYS-authentication-and-identity",
+   "file:apps/web/features/chat/pages/WebChatPage.tsx",
+   "api:POST /api/llm/v1/chat/completions"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "evidence": "Toggle and gating at lines 1062-1066, 6171-6208"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/chat/pages/WebChatPage.tsx",
+    "evidence": "Page and send logic"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/llm/v1/chat/completions",
+    "evidence": "interaction-modes.json:53-57 names this route for work_mode"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "billing-catalog.ts:354 agi_work: PRO_TIERS"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:Premium",
+    "evidence": "request-processor.ts:1494-1498 label from the pro tier"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-model-catalog-and-routing",
+    "evidence": "capability-handshake-service.ts:101; request-processor.ts:1040"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-agents-tools-and-automation",
+    "evidence": "tool-loop.ts and work-plan-steps.ts"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/web/lib/feature-flags/kill-switches.ts",
+    "evidence": "WORK_CAPABILITY at line 31"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/llm/v1/chat/completions/lib/request-processor.web-search.test.ts",
+    "evidence": "lines 171-189"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "area brief S69.01 status web done"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F069-06",
+    "evidence": "/code and Work both use the tool loop and optional code_execution (interaction-modes.json:72)"
+   }
+  ],
+  "unknowns": [
+   "Whether the live model catalog has an agentic model, which decides if Work is offered.",
+   "How Work behaves on the Desktop app's hosted web view with a local model.",
+   "What happens to a Work run's plan after deletion of the conversation.",
+   "Every send-failure cause and its message."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3/6/7",
+   "claim": "Work turns get a 24-hour managed-usage lease because they may enter the tool loop; others 15 minutes (request-processor.ts:1525-1535)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The lease is 86400 s when work_mode is agiwork, or tools are present, or web_search is true, or code_execution is true. Otherwise it is 900 s. The 24-hour lease is not specific to Work. The table row at section 7 says 'Tool-loop turns', which is closer.",
+   "evidence": "request-processor.ts:1525-1535",
+   "correction": "Any turn that can enter the tool loop (Work, tools, web search or code execution) holds a 24-hour managed-usage lease. Other turns hold 15 minutes."
+  },
+  {
+   "section": "7/3",
+   "claim": "Signed-out guests may use limited guest chat, never Work (layout.tsx:41-52)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Guest chat shows only when there is no userId, the path is a guest chat page, there is no browser session cookie, and guestChatOpen is true. Otherwise the visitor is redirected to sign-in. The page does not mention the no-session-cookie condition, which stops a signed-out user with an expired session from seeing guest chat (they get sessionExpiredRedirect). 'Never Work' is not enforced in this file. It follows from the missing sign-in, and the server enforces it.",
+   "evidence": "apps/web/app/chat/layout.tsx:41-62",
+   "correction": "Guest chat is rendered only for a visitor with no user, no browser session cookie, on a guest chat page, when the guest chat is open. Any other signed-out case redirects to sign-in or session-expired."
+  },
+  {
+   "section": "6/3",
+   "claim": "Own-key and Local routing are not part of the plain web chat path found here; in a plain browser there is no Local mode; a local model can be selected only through the desktop host bridge (WebChatPage.tsx:1282-1287; local-model-selection.ts:19-21)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "WebChatPage reads useLocalModelSelection and has a full local-model turn path. It sends without a session authority (no server auth), forces a temporary chat, refuses to start a local turn in a project, and skips the free-trial limit when a local model is selected. The store itself is a plain zustand store. The page does not show that only the desktop bridge sets it. The statement about Local routing 'not part of the path' is therefore wrong for the code on this page, even if the browser rarely reaches it.",
+   "evidence": "WebChatPage.tsx:1282-1287, 2436-2455, 2203; local-model-selection.ts:15-22",
+   "correction": "WebChatPage has a Local-model turn path. When a local model is selected through the desktop host, the send skips the server session authority, is forced temporary, and is refused when it would start a conversation in a project. Whether Work and the server plan check apply to such a turn was not traced."
+  },
+  {
+   "section": "8",
+   "claim": "Stream dropped: the client has a resume endpoint and retries up to 3 times, 500 ms apart (useChatStream.ts:1672-1676)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "STREAM_RESUME_ATTEMPTS = 3 is the total number of attempts in a loop. The 500 ms wait applies only before attempts after the first, so it is the first try plus 2 retries. The cited lines hold only the constants and the endpoint URL. The loop is at 2990-2996.",
+   "evidence": "useChatStream.ts:1672-1676, 2990-2996",
+   "correction": "On a dropped or gapped stream the client replays from its cursor through /runs/<turnId>/resume/stream, with up to 3 attempts in total and 500 ms before each attempt after the first."
+  }
+ ],
+ "missing_facts": [
+  "Local-model turns on the web page bypass the server session authority and are forced temporary. They are refused when starting a conversation inside a project (apps/web/features/chat/pages/WebChatPage.tsx:2436-2455). The page's Local mode rows say this is unknown or not part of the path.",
+  "The 24-hour lease and the tool-loop route are not Work-only. Any request with tools, web_search or code_execution gets them (apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1525-1535).",
+  "The Work approval flag agi_work_plan_approval is sent as true whenever no plan steps are supplied (apps/web/lib/hooks/useChatStream.ts:4668-4669). The page omits it from the request contract."
+ ]
+}

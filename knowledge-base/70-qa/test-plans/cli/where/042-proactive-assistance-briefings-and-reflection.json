@@ -1,0 +1,68 @@
+{
+ "S42.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Change a schedule's name, description, prompt, model, cron expression or time zone."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "IANA time zone the cron expression is read in. Defaults to this machine's."
+   }
+  ],
+  "needs": "a signed-in account (schedules run in AGI cloud)",
+  "note": "The words \"briefing\" and \"delivery\" do not appear in apps/cli; the nearest feature is scheduled agent runs with a cron expression and timezone, so the tester should treat a schedule as the briefing.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi schedules create --name \"Morning briefing\" --schedule \"0 9 * * *\" --prompt \"Summarize my day\" --timezone America/New_York`.",
+   "Note the id the command prints.",
+   "Run `agi schedules edit <id> --timezone Europe/London`.",
+   "Run `agi schedules list` and check that the cadence and timezone shown match the new zone (compare with Expected: the user sets the delivery time and timezone)."
+  ],
+  "where": "Type `agi schedules create --name <name> --schedule \"0 9 * * *\" --prompt <text> --timezone <IANA zone>` to set the time and zone, or `agi schedules edit <id or exact name> --timezone <IANA zone>` to change them later. Check with `agi schedules list`."
+ },
+ "S42.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Stop a schedule from firing until it is resumed."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Let a paused schedule fire again."
+   }
+  ],
+  "needs": "a signed-in account and at least one existing schedule (create one with `agi schedules create` first)",
+  "note": "The word \"briefing\" does not appear in apps/cli; pause and resume apply to schedules.",
+  "reachable": "yes",
+  "steps": [
+   "Run `agi schedules list` and note the id and status of a schedule.",
+   "Run `agi schedules pause <id or exact name>`.",
+   "Run `agi schedules list` and check that the schedule shows as paused (not active).",
+   "Run `agi schedules resume <id or exact name>`, then `agi schedules list` again, and check it is active. Compare with Expected: the user can pause and resume briefings."
+  ],
+  "where": "Type `agi schedules pause <id or exact name>` and `agi schedules resume <id or exact name>`. Check status with `agi schedules list`."
+ },
+ "S42.17": {
+  "labels": [
+   {
+    "file": "apps/cli/src/config.rs",
+    "text": "Bell when a long turn finishes"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Ring the terminal bell when a long turn finishes?"
+   }
+  ],
+  "needs": "a terminal that plays a bell sound, and a long-running chat request",
+  "note": "Only a foreground chat turn of 10 seconds or more rings the bell (apps/cli/src/tui/tui_app.rs); no completion notice for scheduled runs was found, and background runs are shown only through `agi background list`, `/threads` and `/gather`, so this may not match Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Type `/config set bell true` and press Enter.",
+   "Type `/config get bell` and check that it reports true.",
+   "Send a chat request that takes at least 10 seconds, switch to another window, and listen for the terminal bell when the turn finishes.",
+   "Compare with Expected: the user is notified when background work (a scheduled run or agent task) completes. The bell covers only a foreground chat turn, so a scheduled run finishing should not ring it."
+  ],
+  "where": "Type `/config set bell true` in the chat, then `/config get bell` to check it. The bell itself is shown as \"Bell when a long turn finishes\" in `/config show`."
+ }
+}

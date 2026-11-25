@@ -1,0 +1,134 @@
+{
+ "S87.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Workspace"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Account"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/workspace.tsx",
+    "text": "Workspace administration"
+   }
+  ],
+  "needs": "a cloud account that is an owner or admin of a Team or Enterprise workspace; phone width",
+  "note": "The security posture group titles and rows come from the server (fetchWorkspacePosture), so their exact wording is not in the app files. The overview card's name and plan lines were not checked line by line. The admin block only appears when canManage is true and a workspace exists. Non-entitled accounts see a plan message instead.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a cloud account that is an owner or admin of a Team or Enterprise workspace.",
+   "Open Settings and tap the row \"Workspace\" in the \"Account\" section.",
+   "On the \"Workspace\" screen, look at the top card: the workspace name, its plan label, the line \"N of M seats used\" and the line \"You are <role>\".",
+   "Scroll down to the \"Workspace administration\" block and look at the \"Seats and invitations\" section and the security groups below it.",
+   "Compare with Expected: name, plan, members/seats and security posture should all be on screen and match the live workspace."
+  ],
+  "where": "Settings > Account > Workspace (the row labelled \"Workspace\"), then the screen titled \"Workspace\""
+ },
+ "S87.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/workspace.tsx",
+    "text": "Members"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Workspace"
+   }
+  ],
+  "needs": "an owner or admin account in a workspace with at least two members (a second account in the same workspace helps); phone width",
+  "note": "The member list is loaded by fetchWorkspaceMembers in apps/mobile/src/features/team/service.ts. Email is shown only when the member has one. The source path was used for the section in the code audit; the code at the cited line 600 was not re-read in full.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an owner or admin account in a workspace that has more than one member.",
+   "Open Settings, tap \"Workspace\" in the \"Account\" section.",
+   "Scroll to the \"Members\" heading.",
+   "Check each member row shows the name (your own row ends with \" (you)\"), the email under it, and the role title such as \"Owner\".",
+   "Compare with Expected: every member should appear with name, email and role."
+  ],
+  "where": "Settings > Account > Workspace, then the \"Members\" list on the \"Workspace\" screen"
+ },
+ "S87.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/team/WorkspaceAdministration.tsx",
+    "text": "Invite by email"
+   },
+   {
+    "file": "apps/mobile/src/features/team/WorkspaceAdministration.tsx",
+    "text": "Send invitation"
+   },
+   {
+    "file": "apps/mobile/src/features/team/WorkspaceAdministration.tsx",
+    "text": "Seats and invitations"
+   },
+   {
+    "file": "apps/mobile/src/features/team/WorkspaceAdministration.tsx",
+    "text": "Revoke invitation"
+   }
+  ],
+  "needs": "an owner or admin account; a second email address for the invitee; a seat available in the workspace",
+  "note": "The invitee's accept step was not found in apps/mobile; it likely happens on the web via the emailed link (invitationLink in apps/mobile/src/features/team/administration.ts). Not verified. The invitation block is shown only when canManage is true and the workspace exists.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an owner or admin account and open Settings > \"Workspace\".",
+   "Scroll to \"Workspace administration\" and tap the row \"Invite by email\".",
+   "In the \"Invite by email\" sheet, type an email address, pick a role, then tap \"Send invitation\".",
+   "Look at the \"Seats and invitations\" list: the new invitation appears as a row with the email, and its value shows the role and expiry (for example \"Member \u00b7 <date>\").",
+   "Tap a pending invitation row: choose \"Resend invitation\" or \"Revoke invitation\". Revoke asks \"Revoke this invitation?\" with \"Cancel\" and \"Revoke\". Compare with Expected: invite, see pending, renew, revoke.",
+   "Accepting is done by the invitee: open the invitation email on a second account and follow the link. The acceptance step was not traced in this scope."
+  ],
+  "where": "Settings > Account > Workspace > \"Workspace administration\" block > \"Invite by email\" row. Pending invitations are the rows under \"Seats and invitations\""
+ },
+ "S87.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/workspace.tsx",
+    "text": "Change role"
+   },
+   {
+    "file": "apps/mobile/src/features/team/RolePickerModal.tsx",
+    "text": "Role for"
+   },
+   {
+    "file": "apps/mobile/src/features/team/RolePickerModal.tsx",
+    "text": "Save role"
+   }
+  ],
+  "needs": "an owner or admin account and a second member in the same workspace",
+  "note": "The role names and permission wording come from BUILT_IN_ORGANIZATION_ROLES and ORGANIZATION_PERMISSION_COPY outside apps/mobile/src/features/team, not checked. Server enforcement is not visible in the app; a failed change shows the alert \"Could not change role\".",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with an owner or admin account in a workspace with another member.",
+   "Open Settings > \"Workspace\" and find a member row that is not yourself.",
+   "Tap \"Change role\" under that member, then look at the sheet titled \"Role for <name>\" and read the radio options and the permissions list shown under the chosen role.",
+   "Pick a different role and tap \"Save role\". Look at the member row: the role title should now show the new role.",
+   "Compare with Expected: the roles and their permissions are shown, and the change sticks after reloading the screen. Owner is only offered to the current owner."
+  ],
+  "where": "Settings > Account > Workspace > Members list > \"Change role\" under a member > role picker titled \"Role for <name>\""
+ },
+ "S87.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/team/RolePickerModal.tsx",
+    "text": "Transfer ownership"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/workspace.tsx",
+    "text": "Change role"
+   }
+  ],
+  "needs": "the current owner account of a Team or Enterprise workspace and a second member; a way to complete the verification step",
+  "note": "Ownership moves through withStepUp in apps/mobile/app/(app)/settings/workspace.tsx, so a verification prompt is expected. The atomic server move was not checked. On failure the alert reads \"Could not transfer ownership\".",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as the current owner of a workspace that has another member.",
+   "Open Settings > \"Workspace\", tap \"Change role\" under another member.",
+   "In \"Role for <name>\", tap the Owner option. Read the warning text that appears: it says the member takes over billing and every admin control, and that only they can give ownership back.",
+   "Tap \"Transfer ownership\" and complete the verification step if one appears.",
+   "Compare with Expected: after confirmation, the member row shows the role \"Owner\", and your own row no longer shows the owner role."
+  ],
+  "where": "Settings > Account > Workspace > Members list > \"Change role\" under another member > choose Owner > \"Transfer ownership\""
+ }
+}

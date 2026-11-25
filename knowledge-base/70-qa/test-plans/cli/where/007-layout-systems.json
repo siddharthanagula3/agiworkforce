@@ -1,0 +1,126 @@
+{
+ "S7.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Welcome to AGI"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "none",
+  "note": "The centring code runs only when the transcript is empty and no turn is running; the start view is drawn horizontally and vertically centred in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Terminal and type agi, then press Enter.",
+   "Wait for the start view: the line Welcome to AGI with the version and the model line.",
+   "Check that the start view sits in the middle of the chat area, not at the top, with empty space above and below it.",
+   "Check that the composer at the bottom shows Message AGI...  / for commands, and that no earlier messages are shown above."
+  ],
+  "where": "Type agi in a terminal and press Enter (the app opens its chat when run with no arguments)"
+ },
+ "S7.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "The workspace pane now shows the changes since the last commit beside the chat"
+   }
+  ],
+  "needs": "a git project with uncommitted changes, phone width does not apply; window at least 90 columns wide",
+  "note": "The code shows only a changes (git diff) pane beside the chat; no terminal or editor pane was found, and the pane refreshes after each turn.",
+  "reachable": "yes",
+  "steps": [
+   "Open Terminal in a git project that has uncommitted file changes, type agi and press Enter.",
+   "Make the window at least 90 columns wide.",
+   "Type /diff panel in the composer and press Enter.",
+   "Check that a second pane opens to the right of the chat and lists the changes since the last commit, with added lines in green and removed lines in red.",
+   "Type /diff panel again and press Enter to close the pane."
+  ],
+  "where": "Type agi in a terminal in a git folder with uncommitted changes, then type /diff panel and press Enter"
+ },
+ "S7.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Open external editor for current input"
+   }
+  ],
+  "needs": "none; a terminal editor such as vi is used if VISUAL or EDITOR is not set",
+  "note": "This is the terminal's external editor, not a built-in full-screen editor inside the app; the code also binds Ctrl+G to it.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Enter, then type a few lines of text in the composer (Ctrl+J adds a new line).",
+   "Press Ctrl+E.",
+   "Check that the terminal hands over to an external editor (the one in VISUAL or EDITOR, otherwise vi) with your draft in it.",
+   "Edit the text, save and quit the editor.",
+   "Check that the chat comes back with the edited text in the composer."
+  ],
+  "where": "Type agi in a terminal, type text in the composer, then press Ctrl+E (Ctrl+G also works)"
+ },
+ "S7.20": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "none",
+  "note": "The composer is laid out as a fixed bottom row below the chat area in the code; the placeholder text is shown only while the input is empty.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Enter.",
+   "Send a few messages (type text and press Enter) until the chat is longer than the screen.",
+   "Press PageUp.",
+   "Check that the messages above scroll into view while the bordered input box at the bottom stays where it is.",
+   "Press PageDown until the newest message is back in view."
+  ],
+  "where": "Type agi in a terminal, send several messages, then press PageUp in the chat"
+ },
+ "S7.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Ctrl+J       Insert newline (multiline)"
+   }
+  ],
+  "needs": "none",
+  "note": "The code caps the growth at 8 content rows; what happens to text beyond that (scrolling inside the box) was not confirmed in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Enter.",
+   "Type a long sentence until it passes the width of the box, or press Ctrl+J between lines.",
+   "Check that the input box above the status bar grows taller as the text wraps onto more rows.",
+   "Keep typing and check that the box stops growing at 8 text rows."
+  ],
+  "where": "Type agi in a terminal, then type a long prompt in the composer"
+ },
+ "S7.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "The workspace pane now shows the changes since the last commit beside the chat"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "a git project with uncommitted changes and a window at least 90 columns wide for the side-pane check; otherwise none",
+  "note": "The code scrolls only the chat with PageUp/PageDown; the side pane is drawn as a fixed block with no scroll key, so it should not move, but this was read from code and not run.",
+  "reachable": "yes",
+  "steps": [
+   "Type agi and press Enter, then send messages until the chat is longer than the screen.",
+   "Optionally open the side pane: in a wide window (at least 90 columns) in a git project with changes, type /diff panel and press Enter.",
+   "Press PageUp and check that only the chat text moves.",
+   "Check that the side pane, the header and the composer stay in place while the chat scrolls.",
+   "Press PageDown to return to the newest messages."
+  ],
+  "where": "Type agi in a terminal, send several messages, then press PageUp (Up arrow also scrolls when the composer is empty)"
+ }
+}

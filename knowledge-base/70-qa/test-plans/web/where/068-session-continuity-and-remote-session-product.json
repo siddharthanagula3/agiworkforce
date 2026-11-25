@@ -1,0 +1,312 @@
+{
+ "S68.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Code"
+   }
+  ],
+  "needs": "a signed-in account and a second client",
+  "note": "The session ID is only visible in the URL; no button shows it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in, open Code and open a cloud session",
+   "Copy the address from the address bar (it ends in the session ID)",
+   "Open the same address in a second signed-in browser or client",
+   "Compare the session title and transcript with the first client"
+  ],
+  "where": "Address bar of a Code session page, /code/<sessionId>"
+ },
+ "S68.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Code"
+   }
+  ],
+  "needs": "a Free or paid account with an existing Code session",
+  "note": "The exact text of the session list entry was not located; the path starts at the Code surface.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session that already has turns",
+   "Read the transcript from the first message down",
+   "Open the same session on a second client and compare the transcript"
+  ],
+  "where": "Code > open a session (address /code/<sessionId>), read the transcript"
+ },
+ "S68.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a session linked to a repository",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session that is linked to a repository",
+   "Click the Changes button in the session header",
+   "Read the branch line at the top of the panel (base, arrow, working branch)",
+   "Compare the working branch name on a second client"
+  ],
+  "where": "Code session page > Changes (header button) > branch line at the top of the panel"
+ },
+ "S68.04": {
+  "labels": [],
+  "needs": "a session linked to a repository",
+  "note": "The chip text is built from the environment and repository name, so no fixed label exists in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session linked to a repository",
+   "Read the chip beside the title (environment, then a dot, then repository)",
+   "Open the same session on a second client and compare the chip"
+  ],
+  "where": "Code session page > header chip beside the session title"
+ },
+ "S68.06": {
+  "labels": [],
+  "needs": "a paid account with Code sessions",
+  "note": "Gate in apps/web/lib/e2b/gate.ts only decides whether sandbox execution is enabled (AGI_E2B_EXECUTION and E2B_API_KEY); no visible model or instruction-file setting was found for each client.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.08": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Approval required"
+   },
+   {
+    "file": "apps/web/features/code/local-code.ts",
+    "text": "Approve and continue"
+   }
+  ],
+  "needs": "a Code session that reaches an approval step (needs the sandbox gate switched on)",
+  "note": "The cloud button label is built from the shared approve label plus 'and continue'; the literal 'Approve and continue' is from the local copy. Pending approval depends on the unfinished sandbox switch-on.",
+  "reachable": "yes",
+  "steps": [
+   "Start a task in a cloud session that needs a tool approval",
+   "Wait for the Approval required card in the transcript",
+   "Read the approval reason and the command shown in the card",
+   "Click Approve and continue or Deny",
+   "Open the same session on a second client and check the card is answered there"
+  ],
+  "where": "Code session page > transcript > Approval required card > Deny or Approve and continue"
+ },
+ "S68.09": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Stop the task"
+   }
+  ],
+  "needs": "a Code session with a task that uses tools (sandbox gate switched on)",
+  "note": "Tool activity is shown in the transcript; no separate tool-activity panel was found.",
+  "reachable": "yes",
+  "steps": [
+   "Send a task in a Code session",
+   "Watch the transcript while the task runs",
+   "Note the tool steps as they appear",
+   "Open the same session on a second client and compare the tool steps"
+  ],
+  "where": "Code session page > send a task > transcript while the turn runs"
+ },
+ "S68.11": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Stop the task"
+   },
+   {
+    "file": "packages/contracts/types/src/cloud-code.ts",
+    "text": "Approval required"
+   }
+  ],
+  "needs": "a Code session that is running a turn (sandbox gate switched on for approvals)",
+  "note": "The approvals route moved; the UI reads approvals in apps/web/features/code/components/CodeTranscript.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a running cloud session",
+   "Send a new turn from the composer",
+   "Click Stop the task while the turn runs",
+   "When an Approval required card appears, click Approve and continue or Deny",
+   "Check the result on the same session in a second client"
+  ],
+  "where": "Code session page > composer (send a turn) > Stop the task while running > Approval required card"
+ },
+ "S68.13": {
+  "labels": [],
+  "needs": "two clients on one session",
+  "note": "Searched apps/web/features/code/code-surface.ts and CodeChangesPanel.tsx for transfer and found no transfer-control text; the nearest is the Continue in VS Code link, which is not an explicit handoff.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.15": {
+  "labels": [],
+  "needs": "the Desktop app and a cloud session",
+  "note": "Only help text exists (apps/web/features/code/code-surface.ts line 325 says a session can be continued in the desktop app); no button to continue a cloud session on Desktop was found, and the sandbox gate is unfinished.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S68.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Create pull request"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Continue in VS Code"
+   },
+   {
+    "file": "apps/web/features/code/code-surface.ts",
+    "text": "Changes"
+   }
+  ],
+  "needs": "a session linked to a repository with changes",
+  "note": "These are the nearest controls that return results; no control was found that names the local workspace directly.",
+  "reachable": "yes",
+  "steps": [
+   "Open a cloud session that has changed files",
+   "Click the Changes button in the session header",
+   "Review the changed files and click Create pull request, or click Continue in VS Code",
+   "Check the pull request or the editor shows the cloud results"
+  ],
+  "where": "Code session page > Changes (header button) > Create pull request, or Continue in VS Code"
+ },
+ "S68.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerLink.tsx",
+    "text": "Your computer"
+   },
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx",
+    "text": "Computers on your account"
+   }
+  ],
+  "needs": "a Desktop app linked to the account",
+  "note": "Where the Your computer link appears in the navigation was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the Your computer link, or type /code/computer in the address bar",
+   "Read the heading and the Computers on your account list",
+   "Check each computer shows its name and presence (online, asleep or offline)"
+  ],
+  "where": "Your computer (link named 'Your computer') > /code/computer > section Computers on your account"
+ },
+ "S68.20": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Account"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Linked devices"
+   }
+  ],
+  "needs": "a linked device on the account",
+  "note": "Rows are shown as list rows; the page does not show a card.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Account",
+   "Scroll to Linked devices",
+   "Read each device row for its name, platform, surface and status (Online, Sleeping or Offline)"
+  ],
+  "where": "Settings > Account > Linked devices"
+ },
+ "S68.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Computer use"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Local models"
+   }
+  ],
+  "needs": "a linked device that reports capabilities",
+  "note": "The list has no Code sessions item, which the Expected line names; the cited dispatcher.ts line does not show capabilities.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, then Account, then Linked devices",
+   "Read the capability names under a device (Browser, Computer use, Local models, Local MCP, Remote Control)",
+   "Compare the list with what that machine runs"
+  ],
+  "where": "Settings > Account > Linked devices > capability names under a device"
+ },
+ "S68.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx",
+    "text": "Connect"
+   },
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx",
+    "text": "Pairing link"
+   }
+  ],
+  "needs": "the Desktop app on a computer and a browser",
+  "note": "The Desktop menu path was written in the web page copy only; 'Pair a phone' was not found in apps/desktop/src or packages/ui. The 503 'Pairing is not configured' check is unfinished until the website deploy.",
+  "reachable": "yes",
+  "steps": [
+   "Open /code/computer in a signed-in browser",
+   "In the Desktop app, copy the pairing link for a browser (the page text says: Settings, Capabilities, Remote Control, Pair a phone, then Copy link for a browser)",
+   "Paste the link into the field labelled Pairing link",
+   "Click Connect and read the status",
+   "Check the computer shows as connected"
+  ],
+  "where": "/code/computer > Pairing link field > Connect (paste the link copied in the Desktop app)"
+ },
+ "S68.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx",
+    "text": "Disconnect"
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Unlink device"
+   }
+  ],
+  "needs": "a paired computer",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Pair a computer as in S68.22 and open /code/computer",
+   "Click Disconnect and read the confirm dialog",
+   "Confirm and check the page shows the connection has ended",
+   "Try to send a task again and check it stops working",
+   "Or open Settings > Account > Linked devices and click Unlink, then confirm"
+  ],
+  "where": "/code/computer > Disconnect (confirm Disconnect from your computer?) ; or Settings > Account > Linked devices > Unlink"
+ },
+ "S68.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx",
+    "text": "Your computer went offline. This page reconnects when it is back."
+   },
+   {
+    "file": "apps/web/features/settings/components/LinkedDevicesPanel.tsx",
+    "text": "Offline"
+   }
+  ],
+  "needs": "a paired computer that you can take offline",
+  "note": "Linked devices shows the word Offline only, with no explanation; the explanation is on /code/computer.",
+  "reachable": "yes",
+  "steps": [
+   "Pair with a computer and open /code/computer",
+   "Quit the Desktop app or put the computer to sleep",
+   "Read the message on the page",
+   "Open Settings > Account > Linked devices and read the presence label for that device"
+  ],
+  "where": "/code/computer > message below Connecting (shown when the computer goes offline)"
+ }
+}

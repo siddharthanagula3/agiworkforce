@@ -1,0 +1,463 @@
+{
+ "S105.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/ProjectsPanel.tsx",
+    "text": "Create project"
+   },
+   {
+    "file": "apps/web/features/developers/components/DeveloperConsolePage.tsx",
+    "text": "Developer console"
+   },
+   {
+    "file": "apps/web/features/developers/components/ProjectsPanel.tsx",
+    "text": "Monthly limit in credits"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Developer console has no link in the account menu or primary rail; it was found only at /developers. No organization-creation control was found, only projects.",
+  "reachable": "yes",
+  "steps": [
+   "After signing in, type /developers in the address bar and press Return.",
+   "Find the card with the \"Projects\" heading and the name field.",
+   "Type a project name. Optionally fill \"Monthly limit in credits\".",
+   "Click \"Create project\".",
+   "Look for the new project in the card's list and compare with Expected (a project that scopes keys, usage and limits). No control to create an organization was found on this page."
+  ],
+  "where": "Type /developers in the address bar after signing in (no menu link to it was found), then the \"Projects\" card > \"Create project\""
+ },
+ "S105.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+    "text": "API Keys"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+    "text": "New Key"
+   },
+   {
+    "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+    "text": "Delete Key"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The UI says Delete, not Revoke. The removal confirm text is \"Delete Key\" and its aria-label is \"Delete <name>\".",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return.",
+   "In the \"API Keys\" card, click \"New Key\".",
+   "Enter a \"Key Name\", pick \"Scopes\", optionally a \"Project\" and an \"Expires\" choice, then submit.",
+   "Read the new key once in the dialog, then close it.",
+   "In the key list, check the masked key, the \"Created\" date and \"Last used\" date, then click the trash button labelled \"Delete <key name>\" and confirm \"Delete Key\". Compare with Expected (scoped key, expiry, masked, last used, revoke)."
+  ],
+  "where": "Type /developers in the address bar, then the \"API Keys\" card > \"New Key\""
+ },
+ "S105.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceServicePrincipals.tsx",
+    "text": "Service principals"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceApiKeys.tsx",
+    "text": "Create key"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
+    "text": "Audit"
+   }
+  ],
+  "needs": "a workspace admin account on a workspace that allows workspace API keys (Team or Enterprise)",
+  "note": "No separate create-principal control was found; principals are created implicitly by the first workspace API key. Identity is in the console nav, which I did not confirm as a grouped heading.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in as a workspace admin and open the workspace console (Settings > Workspace > \"Workspace administration\").",
+   "Open Records > Audit and find the \"Workspace API keys\" card.",
+   "Enter a name, choose scopes, then click \"Create key\"; copy the key shown once.",
+   "Open Identity and find the \"Service principals\" list; check the new principal and its permissions.",
+   "Click \"Disable\" on a principal, confirm in the dialog, then check the button changes to \"Enable\" and the row shows \"Disabled\". Compare with Expected."
+  ],
+  "where": "Workspace console > Records > Audit > \"Create key\" (creates a service principal with the first workspace API key); list and disable under Workspace console > Identity > \"Service principals\""
+ },
+ "S105.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/models/components/ModelCatalogueBrowser.tsx",
+    "text": "Models"
+   },
+   {
+    "file": "apps/web/features/developers/components/DeveloperConsolePage.tsx",
+    "text": "Reference"
+   },
+   {
+    "file": "apps/web/features/models/components/ModelCatalogueBrowser.tsx",
+    "text": "Capabilities"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The page description says every model the plan can reach; I did not confirm it filters by the key's scopes.",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return.",
+   "Scroll to the \"Reference\" card and click \"Models\".",
+   "On the Models page read the model cards: each shows \"Context\" and capability chips.",
+   "Use the \"Capabilities\" filter buttons and check the list narrows.",
+   "Compare with Expected (models your key can call, with capabilities and context size)."
+  ],
+  "where": "Type /developers in the address bar, then the \"Reference\" card > \"Models\""
+ },
+ "S105.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Custom commands"
+   },
+   {
+    "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
+    "text": "New command"
+   },
+   {
+    "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
+    "text": "Create command"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The template takes a single user-text token, not named arguments. The Prompts card on /developers (\"Prompts and evaluations\") is a separate feature.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu and choose \"Settings\", then the \"General\" pane.",
+   "Scroll to \"Custom commands\" and click \"New command\".",
+   "Fill \"Name\", \"Description\" and the \"Template\" field (it takes one user-text placeholder).",
+   "Click \"Create command\".",
+   "In a chat, type / and look for the new command in the slash menu; check that the placeholder is filled with the text you typed."
+  ],
+  "where": "Account menu > Settings > General > \"Custom commands\" > \"New command\""
+ },
+ "S105.18": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Usage"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Where your usage went"
+   },
+   {
+    "file": "apps/web/features/settings/sections/UsageSection.tsx",
+    "text": "Days"
+   }
+  ],
+  "needs": "a signed-in account with some usage",
+  "note": "The pane reports credits, not a currency cost; the \"By model\" table appears only when history exists.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, choose \"Settings\", then \"Usage\".",
+   "Read \"Where your usage went\" and the \"Group usage history by\" control; choose \"Days\", \"Weeks\" or \"Months\".",
+   "Read the \"By model\" table for the period.",
+   "Compare the figures across periods with Expected (usage and cost over time, broken down by model)."
+  ],
+  "where": "Account menu > Settings > \"Usage\" (settings pane)"
+ },
+ "S105.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/RateLimitsPanel.tsx",
+    "text": "Rate limits"
+   },
+   {
+    "file": "apps/web/features/developers/components/RateLimitsPanel.tsx",
+    "text": "Request limits by endpoint"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The panel lists the limits only; I did not find a used-versus-limit figure, so \"how close\" may not be shown.",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return.",
+   "Scroll to the \"Rate limits\" card.",
+   "Read each row in \"Request limits by endpoint\": endpoint, requests per window, and whether it counts per account or per IP.",
+   "Compare with Expected (see the limits and how close the account is to them)."
+  ],
+  "where": "Type /developers in the address bar, then the \"Rate limits\" card"
+ },
+ "S105.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Monthly spend limit"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Set limit"
+   },
+   {
+    "file": "apps/web/features/workspace-console/components/WorkspaceSpendLimit.tsx",
+    "text": "Block"
+   }
+  ],
+  "needs": "a workspace owner account on a workspace",
+  "note": "Enforcement by the API is not visible from the UI. The owner-only check was not confirmed in this component. A personal \"Monthly spend limit\" also exists in Settings > Usage (apps/web/features/settings/sections/UsageSection.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, choose the \"Workspace\" pane and click \"Workspace administration\".",
+   "Open Records > Usage and scroll to \"Monthly spend limit\".",
+   "Enter a cap, choose \"Notify\" or \"Block\" under \"Spend limit enforcement\", then click \"Set limit\".",
+   "Read the usage meter (\"% of the monthly limit used\") and check the cap shows.",
+   "Optionally click \"Remove limit\" and confirm, then check the message says spending is no longer capped. Compare with Expected (an owner's spend cap the API enforces)."
+  ],
+  "where": "Settings > Workspace > \"Workspace administration\" > Usage > \"Monthly spend limit\""
+ },
+ "S105.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Webhooks"
+   },
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Add endpoint"
+   },
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Endpoint URL"
+   }
+  ],
+  "needs": "a signed-in account and an HTTPS URL you control",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return.",
+   "In the \"Webhooks\" card, click \"Add endpoint\".",
+   "Enter the \"Endpoint URL\" and an optional \"Description\", tick the events under \"Events\", then click \"Add endpoint\" in the dialog.",
+   "Copy the signing secret from the \"Copy the signing secret now\" dialog and close it.",
+   "Check the endpoint appears in the \"Webhook endpoints\" list with its events. Compare with Expected."
+  ],
+  "where": "Type /developers in the address bar, then the \"Webhooks\" card > \"Add endpoint\""
+ },
+ "S105.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Recent deliveries"
+   },
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Resend"
+   },
+   {
+    "file": "apps/web/features/developers/components/WebhooksPanel.tsx",
+    "text": "Send test event"
+   }
+  ],
+  "needs": "a signed-in account with at least one webhook endpoint",
+  "note": "The redeliver control is labelled \"Resend\", not \"Redeliver\". How an endpoint is picked in the list was not fully traced.",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return.",
+   "In the \"Webhooks\" card, pick an endpoint from \"Webhook endpoints\" (or use \"Send test event\").",
+   "Read the \"Recent deliveries\" list: each row shows its status.",
+   "Click \"Resend\" on one delivery.",
+   "Check a new row appears with \", resent\" after its details. Compare with Expected (delivery history with status and redeliver)."
+  ],
+  "where": "Type /developers in the address bar, then the \"Webhooks\" card > an endpoint > \"Recent deliveries\" > \"Resend\""
+ },
+ "S105.23": {
+  "labels": [
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "SDKs."
+   },
+   {
+    "file": "apps/web/features/developers/components/DeveloperConsolePage.tsx",
+    "text": "API docs"
+   }
+  ],
+  "needs": "none",
+  "note": "The page says there is no AGI SDK; it documents OpenAI's official Python and TypeScript libraries pointed at the AGI base URL. Differs from Expected's wording.",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return.",
+   "In the \"Reference\" card, click \"API docs\".",
+   "Scroll to the \"SDKs.\" heading and read the Python and TypeScript tabs.",
+   "Compare with Expected (documentation for official client SDKs)."
+  ],
+  "where": "Type /developers in the address bar, then the \"Reference\" card > \"API docs\" > scroll to \"SDKs.\""
+ },
+ "S105.24": {
+  "labels": [
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Reference."
+   },
+   {
+    "file": "apps/web/features/developers/components/DeveloperConsolePage.tsx",
+    "text": "OpenAPI bundle"
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Quick start"
+   }
+  ],
+  "needs": "none",
+  "note": "I did not verify that the OpenAPI bundle covers every endpoint.",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return.",
+   "In the \"Reference\" card, click \"API docs\" and read the \"Quick start\" text on credentials and scopes.",
+   "Scroll to the \"Reference.\" heading and follow its link to the bundle.",
+   "Click \"OpenAPI bundle\" on the /developers Reference card and check it lists endpoints. Compare with Expected (every public endpoint, credential and scope)."
+  ],
+  "where": "Type /developers in the address bar, then the \"Reference\" card > \"API docs\" (and \"OpenAPI bundle\")"
+ },
+ "S105.25": {
+  "labels": [
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "curl"
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Quick start"
+   },
+   {
+    "file": "apps/web/features/developers/components/DeveloperConsolePage.tsx",
+    "text": "API docs"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return, then click \"API docs\" in the Reference card.",
+   "Find the \"Quick start\" section.",
+   "Click the \"curl\" tab, then \"Python\", then \"TypeScript\".",
+   "Check each tab shows a copyable example. Compare with Expected (curl, Python and TypeScript examples)."
+  ],
+  "where": "Type /developers in the address bar, then the \"Reference\" card > \"API docs\" > \"Quick start\" tabs \"curl\", \"Python\", \"TypeScript\""
+ },
+ "S105.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/DeveloperConsolePage.tsx",
+    "text": "Migration guides"
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "From the OpenAI API"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return.",
+   "In the \"Reference\" card, click \"Migration guides\".",
+   "Read the headings \"From the OpenAI API\", \"From the Anthropic API\" and \"Between models\".",
+   "Compare with Expected (migration guides for API and model changes and from other providers)."
+  ],
+  "where": "Type /developers in the address bar, then the \"Reference\" card > \"Migration guides\""
+ },
+ "S105.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/developers/components/DeveloperConsolePage.tsx",
+    "text": "Deprecations"
+   },
+   {
+    "file": "apps/web/app/api-docs/page.tsx",
+    "text": "Deprecations."
+   }
+  ],
+  "needs": "none",
+  "note": "The page gives the rule and points to the models list for dates; the dated list itself was not found on this page.",
+  "reachable": "yes",
+  "steps": [
+   "Type /developers in the address bar and press Return.",
+   "In the \"Reference\" card, click \"Deprecations\".",
+   "Read the \"Deprecations.\" section, which says models are announced before they go and points to deprecation_date in GET /models.",
+   "Compare with Expected (developers told ahead of time). The dated list is not on this page itself."
+  ],
+  "where": "Type /developers in the address bar, then the \"Reference\" card > \"Deprecations\""
+ },
+ "S105.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/support/components/SupportTicketsPanel.tsx",
+    "text": "Raise ticket"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Help"
+   },
+   {
+    "file": "apps/web/app/support/page.tsx",
+    "text": "Raise a ticket"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Ticket creation is from the Help pane; the account menu's \"Email support\" is a mail link.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, choose \"Settings\", then \"Help\".",
+   "Find the support ticket form and fill it in.",
+   "Click \"Raise ticket\".",
+   "Check the ticket appears in the list with replies. Compare with Expected (a support channel reachable from the product)."
+  ],
+  "where": "Settings > Help > \"Raise ticket\" (also the /support page's \"Raise a ticket\" button)"
+ },
+ "S105.29": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Upload plugin"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Plugins"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Create a plugin"
+   }
+  ],
+  "needs": "a plugin archive file on disk",
+  "note": "The upload route is wired on the web adapter; I did not verify that an uploaded plugin stays private to the account.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, choose \"Settings\", then \"Plugins\".",
+   "Click the \"Upload plugin\" action in the list toolbar.",
+   "Choose a plugin archive file and submit (the \"Upload\" button).",
+   "Read the result and check the plugin appears in your list without being published. Compare with Expected (load an unpublished plugin into your own account)."
+  ],
+  "where": "Settings > \"Plugins\" > \"Upload plugin\" (or \"Create a plugin\")"
+ },
+ "S105.30": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Submit to the directory"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Submit for review"
+   },
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Switch version"
+   }
+  ],
+  "needs": "a plugin you own",
+  "note": "Submit-for-review is traced. Publishing a new version to users was not clearly found; \"Switch version\" changes an installed version, and review is by moderators.",
+  "reachable": "yes",
+  "steps": [
+   "Open the account menu, choose \"Settings\", then \"Plugins\".",
+   "Open one of your plugins from the list.",
+   "Click \"Submit to the directory\" and confirm \"Submit for review\".",
+   "Check the status shows a pending submission, with \"Withdraw\" available.",
+   "Use \"Switch version\" to choose an installed version. Compare with Expected (submit for review and publish versions)."
+  ],
+  "where": "Settings > \"Plugins\" > open your plugin > \"Submit to the directory\""
+ }
+}

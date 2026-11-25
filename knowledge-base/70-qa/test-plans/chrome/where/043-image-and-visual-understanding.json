@@ -1,0 +1,215 @@
+{
+ "S43.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a PNG, JPEG, WebP or GIF file to upload; an account where file uploads are on",
+  "note": "The + button shows no visible name; its hover name is Add attachment (apps/extension/src/side_panel.ts). Whether the chosen model is vision-capable is not checked by the UI; the image is sent as an image part (apps/extension/src/features/cloud-bridge/freeTrialClient.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button next to the message box and click Upload from device.",
+   "Choose one PNG, JPEG, WebP or GIF image in the file chooser.",
+   "Type a question about the picture, for example: What is in this picture?",
+   "Press Enter to send.",
+   "Look at the reply: it should describe or answer about the image you attached, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Upload from device, then type the question in the message box and send"
+ },
+ "S43.02": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "two or more image files; an account where file uploads are on",
+  "note": "One message takes at most 5 files (MANAGED_CHAT_MAX_ATTACHMENTS in apps/extension/src/features/cloud-bridge/managedChatHandler.ts), and the selected model may accept fewer images; the notice reads that the model accepts one image, or up to a count, per message (apps/extension/_locales/en/messages.json). Which model is selected and how it is changed was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and click Upload from device.",
+   "In the file chooser, select two or more images at once (or add them one after another).",
+   "Check that each image appears as a thumbnail above the message box.",
+   "Type a question such as: What is different between these two pictures?",
+   "Press Enter and look at the reply: it should compare all the images you attached."
+  ],
+  "where": "Chat screen: + (attach button) > Upload from device, pick several files, then send"
+ },
+ "S43.03": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Take a screenshot"
+   }
+  ],
+  "needs": "a normal website open in the current tab; a screenshot on the clipboard for the paste route",
+  "note": "If the tab cannot be captured the app says: To capture this tab, click the extension icon in Chrome\u2019s toolbar, then try again (apps/extension/_locales/en/messages.json). Dragging an image onto the composer is a third route (apps/extension/src/side_panel.ts). The screenshot item is disabled when uploads are off for the account.",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal website (not a Chrome settings page) in the current tab.",
+   "Click the + button and click Take a screenshot.",
+   "Or copy a screenshot to the clipboard and press Cmd+V in the message box.",
+   "Type a question such as: What does this screenshot show?",
+   "Press Enter and look at the reply: it should explain what is in the captured image, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Take a screenshot, or paste a screenshot into the message box"
+ },
+ "S43.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a photo or scan of a document, or a scanned PDF; an account where file uploads are on",
+  "note": "A PDF is accepted through the same item but travels as a document, not as an image (apps/extension/src/side_panel.ts, COMPOSER_DOCUMENT_MIME_TYPES).",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and click Upload from device.",
+   "Choose a photo of a document (JPEG or PNG) or a scanned PDF file.",
+   "Type a request such as: Read this document and explain it.",
+   "Press Enter.",
+   "Look at the reply: it should read and explain the document, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Upload from device, choose a photo or a scanned PDF, then send"
+ },
+ "S43.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a chart image file; an account where file uploads are on",
+  "note": "Same route as S43.01; the chart reading itself is model output and was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and click Upload from device.",
+   "Choose a PNG or JPEG image of a chart.",
+   "Type a request such as: What trends does this chart show?",
+   "Press Enter.",
+   "Look at the reply: it should name the data and trends shown in the chart, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Upload from device, choose a chart image, then send"
+ },
+ "S43.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a diagram image file; an account where file uploads are on",
+  "note": "Same route as S43.01; the explanation itself is model output and was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and click Upload from device.",
+   "Choose a PNG or JPEG image of a diagram.",
+   "Type a request such as: Explain the structure of this diagram.",
+   "Press Enter.",
+   "Look at the reply: it should explain the parts and how they connect, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Upload from device, choose a diagram image, then send"
+ },
+ "S43.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a photo of handwritten notes; an account where file uploads are on",
+  "note": "Same route as S43.01; the quality of the transcription is model output and was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and click Upload from device.",
+   "Choose a photo of handwritten notes (JPEG or PNG).",
+   "Type a request such as: Transcribe these notes.",
+   "Press Enter.",
+   "Look at the reply: it should transcribe or answer about the handwriting, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Upload from device, choose a photo of handwritten notes, then send"
+ },
+ "S43.08": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Copy response"
+   }
+  ],
+  "needs": "an image that contains text; an account where file uploads are on",
+  "note": "The Copy response button appears on hover and is built in apps/extension/src/features/side-panel/bubbles.ts (buildCopyButton); its label is the spCopyResponse message in apps/extension/_locales/en/messages.json.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and click Upload from device.",
+   "Choose an image that contains printed text.",
+   "Type a request such as: Extract all the text in this image.",
+   "Press Enter, then hover over the reply.",
+   "Click the Copy response button and paste it somewhere; the copied text should be the extracted text, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Upload from device, send a request to extract the text, then hover over the reply and click Copy response"
+ },
+ "S43.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "an image with countable objects; an account where file uploads are on",
+  "note": "No separate control exists for counting; it is the same route as S43.01, and the count accuracy is model output.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and click Upload from device.",
+   "Choose an image with several of the same object (for example apples).",
+   "Type a question such as: How many apples are in this picture?",
+   "Press Enter.",
+   "Look at the reply: it should give a count and answer the question, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Upload from device, choose a picture with items to count, then ask how many"
+ },
+ "S43.13": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "two scene image files; an account where file uploads are on",
+  "note": "Two images in one message may exceed the selected model's image limit (apps/extension/src/side_panel.ts, selectedModelImageLimitNotice); the limit values are in apps/extension/src/features/cloud-bridge/managedModelLimits.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click the + button and click Upload from device.",
+   "In the file chooser, select two images of different scenes.",
+   "Type a request such as: Describe the differences between these two scenes.",
+   "Press Enter.",
+   "Look at the reply: it should describe the differences between the two scenes, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Upload from device, pick two scene images at once, then ask for the differences"
+ },
+ "S43.14": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Take a screenshot"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Upload from device"
+   }
+  ],
+  "needs": "a normal website open in the current tab, or a photo of the problem; an account where file uploads are on",
+  "note": "The advice quality is model output and was not checked in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the page or error that shows the problem, in a normal website tab.",
+   "Click the + button and click Take a screenshot (or Upload from device for a photo of the device).",
+   "Type a request such as: My printer shows this error, what should I do?",
+   "Press Enter.",
+   "Look at the reply: it should give troubleshooting steps for the problem shown, as Expected says."
+  ],
+  "where": "Chat screen: + (attach button) > Take a screenshot, or Upload from device for a photo, then describe the problem and send"
+ }
+}

@@ -113,8 +113,8 @@ first.
 
 `docs/product/surface-feature-matrix.json` (rendered to
 `docs/product/surface-feature-matrix.md` and held by
-`check:surface-feature-matrix`) records feature-by-surface cells: 184 present,
-95 absent, 63 unverified and 1 partial as of 2026-09-20. The capability ledger
+`check:surface-feature-matrix`) records feature-by-surface cells: 190 present,
+106 absent, 60 unverified and 1 partial as of 2026-11-24. The capability ledger
 in `audit/ledger/` records the same kind of status, audited later and in more
 detail. Two registers will drift apart.
 

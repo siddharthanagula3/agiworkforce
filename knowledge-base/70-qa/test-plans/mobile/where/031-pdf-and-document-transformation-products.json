@@ -1,0 +1,151 @@
+{
+ "S31.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Export Message\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/FileExportButton.tsx",
+    "text": "Export as PDF"
+   }
+  ],
+  "needs": "none; a chat with a finished assistant answer",
+  "note": "Only answer text (and documents or artifacts) becomes a PDF; no control was found that converts an uploaded Word or text file attachment itself to PDF. Artifacts also offer PDF under Download artifact (apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat that has an assistant answer with text.",
+   "Long-press the answer (or use the More message actions control under it).",
+   "Tap Export Message\u2026.",
+   "Tap Export as PDF and wait for the share sheet.",
+   "Compare: a PDF of the answer text opens or shares, with the formatting kept. Compare with Expected."
+  ],
+  "where": "Chat > long-press an answer > Export Message\u2026 > Export as PDF"
+ },
+ "S31.02": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/mobile for spreadsheet, xlsx and PDF export. Spreadsheet attachments are accepted in Cloud mode (apps/mobile/src/features/chat/utils/attachmentValidation.ts), but the only PDF export options found are for answers, conversations and text or markdown artifacts (apps/mobile/src/features/chat/utils/artifactExport.ts, apps/mobile/src/features/chat/components/ConversationExportSheet.tsx). No spreadsheet-to-PDF control was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S31.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   }
+  ],
+  "needs": "a PDF file with readable text; Cloud mode (the File row is shown only in Cloud mode)",
+  "note": "The File row is shown only when the app is in Cloud mode (AddToChatSheet.tsx). The summary itself is produced by the model on the server (apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts), so the exact wording is not fixed by code.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat (Cloud mode) or start a new one.",
+   "Tap Add to chat (the plus button by the message box).",
+   "Tap File and choose a PDF file.",
+   "Wait until the file chip above the message box is ready, type \"Summarize this PDF\", and send.",
+   "Compare: the answer gives a summary of the PDF content. Compare with Expected."
+  ],
+  "where": "Chat > Add to chat > File, pick a PDF, then send a request to summarize it"
+ },
+ "S31.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   }
+  ],
+  "needs": "a PDF file with readable text; Cloud mode",
+  "note": "The File row is shown only in Cloud mode. Answers are produced by the server-side model path in apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in Cloud mode.",
+   "Tap Add to chat, then tap File and choose a PDF file.",
+   "Type a specific question about a fact in the PDF and send.",
+   "Compare: the answer gives the fact as it appears in the PDF. Compare with Expected."
+  ],
+  "where": "Chat > Add to chat > File, pick a PDF, then ask a question about it"
+ },
+ "S31.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   }
+  ],
+  "needs": "a multi-page PDF file; Cloud mode",
+  "note": "Page handling is server-side: each page is sent as a [Page n] marker and image (apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:702). The page markers are not shown to the user. The page viewer shows Page N of M (apps/mobile/src/features/chat/components/artifact-viewers/PdfFileView.tsx:197).",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Attach a multi-page PDF with Add to chat > File in Cloud mode.",
+   "Type \"What is on page 3?\" (use a page number that exists in the file) and send.",
+   "Compare: the answer describes page 3 and not another page. Compare with Expected."
+  ],
+  "where": "In the chat answer, after attaching a PDF with Add to chat > File and asking about one page"
+ },
+ "S31.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "File"
+   }
+  ],
+  "needs": "a PDF with a text layer; a Cloud or local-mode chat",
+  "note": "No button that shows or copies the extracted plain text was found. Local mode extracts PDF text on the phone (apps/mobile/services/docParser.ts, extractTextFromPdfBuffer). The old code location apps/mobile/app/(app)/chat/[id].tsx:1052 now holds research-decision code, so it was not used.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Attach a PDF with Add to chat > File.",
+   "Type \"Write out all of the text in this PDF exactly as it appears\" and send.",
+   "Compare: the answer contains the plain text of the PDF, without layout or tables. Compare with Expected."
+  ],
+  "where": "Chat > Add to chat > File (attach a PDF), then ask for its text"
+ },
+ "S31.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx",
+    "text": "Add sources"
+   },
+   {
+    "file": "apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx",
+    "text": "Couldn\u2019t read"
+   }
+  ],
+  "needs": "a scanned (image-only) PDF; a project you can edit",
+  "note": "The OCR transcription runs on the server in apps/web/lib/server/project-knowledge-extraction.ts. The Projects tab label and the project screen wording were not confirmed in apps/mobile, and the file picker used by Add sources was not traced. In a plain chat, scanned pages are sent to the model as images instead of OCR text.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Projects tab and open a project.",
+   "Tap Add sources and choose an image-only (scanned) PDF.",
+   "Wait until the source row leaves the Indexing state.",
+   "Ask a question whose answer is only in the scanned pages, in a chat inside that project.",
+   "Compare: the answer uses text from the scan, and a failed source shows Couldn\u2019t read. Compare with Expected."
+  ],
+  "where": "Projects > open a project > Add sources (choose a scanned PDF), then ask about text that appears only in the scan"
+ },
+ "S31.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/mobile and apps/web for table and tabular handling in PDF code. The only PDF path returns plain text and page text (apps/mobile/services/docParser.ts, apps/web/lib/server/pdf-attachment-content.ts); table rows and columns exist only for CSV files (docParser.ts parseCsvToText, rows and columns metadata). The cited apps/mobile/stores/chat/chatExecutionStore.ts:1702 is attachment replay, not table extraction.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

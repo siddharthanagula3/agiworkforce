@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-10-21
+Last updated: 2026-11-24
 
 Claude Code adapter. `AGENTS.md`, imported below, is the canonical contract for
 every agent; obey it. Nothing here overrides or weakens it; this file only adds
@@ -76,3 +76,4 @@ the diff).
   durable discovery into the owner named in AGENTS.md §11 and delete the note.
 - When you make the same mistake twice, fix it with a rule, an abstraction, a
   test or a guard, not a longer prompt.
+- Method: `docs/standards/working-method.md`. Verify in the running app first.

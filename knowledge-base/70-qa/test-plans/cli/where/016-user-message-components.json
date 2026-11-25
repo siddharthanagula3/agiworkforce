@@ -1,0 +1,106 @@
+{
+ "S16.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "  > "
+   }
+  ],
+  "needs": "none",
+  "note": "The only author cue found is the text marker; no avatar, name or assistive-tech announcement was found.",
+  "reachable": "yes",
+  "steps": [
+   "Start the app with `agi`.",
+   "Type a short message and press Enter.",
+   "Look at your message in the transcript: it starts with a '  > ' marker. There is no avatar or name in the code; compare with Expected, which also asks for a screen-reader announcement (none was found in the code)."
+  ],
+  "where": "agi (the chat screen), then type a message and press Enter"
+ },
+ "S16.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "  > "
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start the app with `agi`.",
+   "Type a unique sentence, such as 'test line one', and press Enter.",
+   "Look at the transcript: the sentence appears under the '  > ' marker, indented four spaces, as the text you sent."
+  ],
+  "where": "agi (the chat screen), then type a message and press Enter"
+ },
+ "S16.03": {
+  "labels": [],
+  "needs": "a file to upload",
+  "note": "Staged files show as a chip above the composer ('\ud83d\udcce ... \u00b7 /attach remove to drop', apps/cli/src/tui/tui_app.rs:3280) and /attach prints 'Attached {label}.'. The transcript renderer (apps/cli/src/tui/tui_app.rs around lines 2880-2945) draws only message text, so no file list on a sent turn was found. Searched apps/cli/src/tui/tui_app.rs for attach, chip and attachment.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S16.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/cli/src for chip rendering on sent user messages. Only composer chips were found (apps/cli/src/tui/tui_app.rs:3277-3291); turn_context at apps/cli/src/tui/tui_app.rs:4545 is not rendered as chips. The cited line 8152 is a Detail role, not a chip.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S16.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched apps/cli/src for resend, re-send and retry in the TUI and slash commands; no resend action on a user message was found. apps/cli/src/tui/tui_app.rs:4169 is the End key, not resend. /rewind (apps/cli/src/tui/tui_app.rs:6045) is a checkpoint picker, not a resend.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S16.10": {
+  "labels": [],
+  "needs": "a Free account",
+  "note": "Found /fork and /branch (apps/cli/src/tui/tui_app.rs:6014), which fork the whole session, and a turn-index fork in apps/cli/src/lib.rs:1949 ('Turn index to fork at'). No action on a chosen user message was found. /rewind (apps/cli/src/tui/tui_app.rs:6045) opens a checkpoint picker, not verified as a branch.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S16.15": {
+  "labels": [],
+  "needs": "none",
+  "note": "Only separate Error lines exist (apps/cli/src/tui/tui_app.rs:1263 and 2901, ChatRole::Error, '  \u2717 '). No failed state on a user turn was found, and no failed-delivery text was found in apps/cli/src.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S16.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/voice"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "(spoken)"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "The marker '(spoken)' is added to user messages from the voice session when it ends (apps/cli/src/tui/tui_app.rs:7569).",
+  "reachable": "yes",
+  "steps": [
+   "Start the app with `agi`.",
+   "Type /voice and press Enter, then speak one sentence.",
+   "End the voice session when the app offers it (the exact key was not checked in the code).",
+   "Look at your message after 'Voice session ended.': it starts with '(spoken)'. Compare with Expected: no 'Transcribed' text or mic badge was found."
+  ],
+  "where": "agi, then type /voice"
+ },
+ "S16.20": {
+  "labels": [],
+  "needs": "an outside account (Google)",
+  "note": "The attribution line exists: 'The messages below came from {origin}.' (apps/cli/src/tui/tui_app.rs:696), with origin set to 'your AGI account' (apps/cli/src/sessions.rs:771) or by import_hosted_session (apps/cli/src/sessions.rs:662). The user command or screen that brings in a hosted conversation was not found; searched apps/cli/src for import_hosted_session and adopt.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

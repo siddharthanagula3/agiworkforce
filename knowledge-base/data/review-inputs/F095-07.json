@@ -1,0 +1,643 @@
+{
+ "feature": {
+  "id": "F095-07",
+  "aliases": [
+   "Versions, sharing and access",
+   "File versions",
+   "Version lineage",
+   "Project sharing",
+   "Shared projects",
+   "Share project with organization",
+   "Sharing page (workspace)",
+   "Resource-sharing service (S95.27)",
+   "File-version store (S95.15)"
+  ],
+  "summary": "Keeps older versions of files (project knowledge files, published artifacts, and, in code only, generated files) and lets the owner of a project share it with their organisation as read-only or with named editors. Web and mobile have a sharing screen; versions have no per-file history screen found for files.",
+  "purpose": {
+   "what_it_does": "Two linked jobs. First, versioning: a re-uploaded project file with the same name becomes a new version and the old one is marked superseded (apps/web/lib/server/project-knowledge-files.ts:394, :425); a published artifact keeps an append-only history that can be listed, read and restored (apps/web/lib/services/published-artifact-service.ts:871, :971, :500; apps/web/app/api/artifacts/publish/[token]/versions/route.ts:34); a generated file can point at the file it replaced and at the file it was made from (apps/web/lib/server/generated-file-persist.ts:95, :56). Second, sharing: a project owner or sharing manager shares a project with the organisation and sets per-person access (apps/web/lib/services/org-sharing-service.ts:305, :405).",
+   "why_it_exists": "Migration 0257 says a file had no history and no parent, a republish overwrote the earlier version, and nobody could answer where an export came from (apps/web/db/neon/0257_file_versions_and_lineage.sql:2-20). Sharing exists so a team can work from one project's instructions and files while chats stay private (apps/web/features/settings/sections/OrganizationSharingSection.tsx:196).",
+   "who_uses_it": "Project owners, organisation owners and admins, members with the share right, invited editors, and anyone who republishes an artifact. [inferred] from the permission checks (apps/web/lib/services/org-sharing-service.ts:91).",
+   "problems_solved": [
+    "A newer upload of a same-named project file no longer destroys the old row; it is superseded, not deleted (apps/web/lib/resources/deletion-policies.ts:197-218).",
+    "Raising a project's default access can never silently give the whole organisation edit rights; edit is a per-member grant (apps/web/lib/services/org-sharing-service.ts:213-217).",
+    "A member later moved to Viewer cannot keep using an old edit grant, because the right is checked again on every read (apps/web/lib/services/org-sharing-service.ts:264-266).",
+    "A health space cannot be shared (apps/web/lib/services/org-sharing-service.ts:361)."
+   ],
+   "use_cases": [
+    "Owner shares a research project with the workspace so every member can read its files.",
+    "Owner shares a project 'with people I choose' and grants two colleagues Can edit.",
+    "User re-uploads a corrected spec with the same file name; the project uses the new one and the old is kept as a superseded version.",
+    "User restores an earlier published version of an artifact."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "surface:web: workspace route /workspace/sharing, page title 'Sharing', section title 'Shared projects', button 'Share project with organization' (apps/web/app/workspace/sharing/page.tsx:8-17; apps/web/features/settings/sections/OrganizationSharingSection.tsx:195, :241).",
+    "surface:mobile: project settings, members section, buttons 'Share with the workspace' and 'Share with people I choose' (apps/mobile/src/features/projects/components/ProjectMembersSection.tsx:271, :279).",
+    "surface:desktop: no sharing control found in apps/desktop/src (searched for the route; none). Not available in code found.",
+    "surface:cli, surface:vscode, surface:chrome: no use of the sharing route found in apps/cli; apps/vscode and apps/chrome folders were not found at those paths, so unknown.",
+    "Version history of a published artifact: API only is confirmed (GET /api/artifacts/publish/[token]/versions); the screen that calls it was not located."
+   ],
+   "prerequisites": [
+    "Signed in, and an active organisation membership (apps/web/lib/services/org-sharing-service.ts:50-66, :120-125).",
+    "Role right 'sharing.manage', or right 'content.share' and ownership of the project (apps/web/lib/services/org-sharing-service.ts:91-118).",
+    "A plan whose project limit is not 0 (apps/web/lib/services/org-sharing-service.ts:310).",
+    "Personal accounts see a note on how to get an organisation instead of an error (apps/web/features/settings/sections/OrganizationSharingSection.test.tsx test 'tells a personal account how to get an organization')."
+   ],
+   "screens_and_controls": [
+    "Project picker 'Select one of your projects\u2026' (label 'Project to share'), audience picker (label 'Who can open it'), button 'Share project with organization' / 'Sharing\u2026' (OrganizationSharingSection.tsx:209-241).",
+    "Shared list rows show 'Visible to N of M members' and 'read-only' or 'N can edit', plus an unshare control for those who may manage the project (OrganizationSharingSection.tsx:260-300).",
+    "Empty state text 'Nothing is shared yet.' (OrganizationSharingSection.tsx:247)."
+   ],
+   "journey": [
+    "Open Sharing in the workspace.",
+    "Pick one of your projects not already shared.",
+    "Choose who can open it: the workspace (default access read) or only invited people (default access none) (apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts:83).",
+    "Press 'Share project with organization'; the client sends PUT to the project route.",
+    "Optionally set a person to read, write, none or inherit (PATCH).",
+    "To stop, use unshare (DELETE)."
+   ],
+   "feedback_and_outputs": [
+    "Toast 'Project shared with your workspace' or 'Project shared with the people you invite' (apps/web/features/settings/hooks/use-settings-queries.ts:1765-1769).",
+    "Toast 'Access updated' and 'Project is no longer shared' (use-settings-queries.ts:1787, :1813).",
+    "Errors show a toast with a user-safe message, for example 'Only the project's owner or someone who manages sharing can change who can open it.' (org-sharing-service.ts:113-117).",
+    "An audit event is recorded: project_shared, project_member_access_changed, project_unshared (route.ts:89, route.ts:114, route.ts:196)."
+   ],
+   "settings": [
+    "Organisation roles and permissions decide who may share (SYS-authorization-and-workspaces).",
+    "Plan project limit (sharedProjectLimit) decides how many projects may be shared (apps/web/lib/services/org-entitlements.ts:128)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Share, per-member access and unshare routes exist with CSRF, rate limit, validation and audit (apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts:216-218).",
+    "Sharing quota is enforced inside the same SQL statement via assert_org_resource_limit (apps/web/lib/services/org-sharing-service.ts:305-345).",
+    "Edit grant is checked against the current role on every read (org-sharing-service.ts:264, :276).",
+    "Project knowledge file versions: version = max+1, supersedes_id set, older row marked superseded_at, under an advisory lock per project and file name (apps/web/lib/server/project-knowledge-files.ts:389-430).",
+    "Published artifact version list, read and restore routes (apps/web/app/api/artifacts/publish/[token]/versions/route.ts:34; apps/web/app/api/artifacts/publish/[token]/versions/[version]/route.ts:46, :133).",
+    "Library helper groups files into newest version plus older ones and walks lineage (packages/platform/files/src/library.ts:20-128)."
+   ],
+   "incomplete": [
+    "Generated-file revisions: persistGeneratedFileBytes accepts supersedesFileId and parentFileId (apps/web/lib/server/generated-file-persist.ts:296-316), but no production caller was found that passes a provenance object; only the function definition and tests mention it. So media_assets rows get version 1 in practice [inferred from a code search of apps/web].",
+    "Migration 0257 file header says 'NOT YET APPLIED : draft only' (apps/web/db/neon/0257_file_versions_and_lineage.sql:4). Whether it is applied is not recorded in the files read; the product memory notes a later migration number in production, so the header is probably stale [inferred].",
+    "No restore route for an older project knowledge file version or an older generated file version was found (only DELETE and GET on the file route: apps/web/app/api/projects/[id]/knowledge-files/[fileId]/route.ts:96-97)."
+   ],
+   "disconnected_or_disabled": [
+    "file_lineage is written only when a caller passes parentFileId; no such caller found, so the lineage table is likely empty in practice [inferred]."
+   ],
+   "not_available": [
+    "surface:desktop: no project sharing screen found.",
+    "surface:cli: no sharing or version call found.",
+    "surface:vscode and surface:chrome: not searched under confirmed paths (apps/vscode and apps/chrome do not exist); unknown.",
+    "Folder hierarchy and external references are out of this feature (brief S95.17, S95.18 marked platform missing)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "File versions are kept (supersede chain, published versions, lineage).",
+     "source": "S95.15 (area brief)"
+    },
+    {
+     "statement": "Files and file-bearing resources can be shared (org sharing, publish links) under access control.",
+     "source": "S95.27 (area brief)"
+    },
+    {
+     "statement": "Sharing checks the organisation permission before a write.",
+     "source": "apps/web/lib/services/org-sharing-service.ts:91-118"
+    },
+    {
+     "statement": "Shared projects: members with access read instructions and files; Can edit lets them change it; chats stay private.",
+     "source": "apps/web/features/settings/sections/OrganizationSharingSection.tsx:196"
+    }
+   ],
+   "acceptance_criteria": [
+    "Re-uploading a same-named file to a project makes the newest row version N+1, the previous row has superseded_at set, and the file list shows only the newest.",
+    "Sharing a project as a member without sharing.manage who does not own it returns 403 'Only the project's owner or someone who manages sharing...'.",
+    "Sharing with audience 'invited' sets default access none; 'workspace' sets read.",
+    "Granting write to a Viewer-role member is refused with the Viewer message.",
+    "A plan with project limit 0 refuses sharing with a validation error; at the limit, sharing returns a conflict.",
+    "Unsharing a project that is not shared returns 404 'That project is not shared with your organization'.",
+    "Each share, access change and unshare writes an audit event.",
+    "Republishing an artifact adds a version row and restore creates a new version rather than editing history."
+   ],
+   "inferred": [
+    "Generated files should get versions when the model edits an earlier file, which needs callers to pass supersedesFileId [inferred from the unused parameter].",
+    "Shared project file access should also hide files of a deleted or archived project (see archived retrieval rules, apps/web/db/neon/0244_archived_resources_leave_ai_retrieval.sql) [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Pass supersedesFileId and parentFileId from the tool loop and sandbox file sweep so edits and exports record versions and lineage.",
+    "[proposed] Add a per-file version history screen and restore route for project knowledge files and generated files.",
+    "[proposed] Correct or remove the 'NOT YET APPLIED' header in migration 0257 once its state is confirmed."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "endpoint",
+    "name": "api:PUT/PATCH/DELETE /api/settings/organization/shared/projects/[projectId]",
+    "path": "apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts",
+    "role": "Share, set a member's access, unshare; audits each change."
+   },
+   {
+    "kind": "service",
+    "name": "org-sharing-service",
+    "path": "apps/web/lib/services/org-sharing-service.ts",
+    "role": "Membership, sharing rights, shareProject, setProjectMemberAccess, clearProjectMemberAccess, resolveProjectWriteAccess, readable/writable project ids."
+   },
+   {
+    "kind": "service",
+    "name": "org-entitlements",
+    "path": "apps/web/lib/services/org-entitlements.ts",
+    "role": "Maps the plan to sharedProjectLimit."
+   },
+   {
+    "kind": "table",
+    "name": "organization_shared_projects",
+    "path": "apps/web/lib/services/org-sharing-service.ts",
+    "role": "One row per shared project with default_access (queries at :189, :305)."
+   },
+   {
+    "kind": "table",
+    "name": "organization_project_access",
+    "path": "apps/web/lib/services/org-sharing-service.ts",
+    "role": "Per-member read, write or none grant."
+   },
+   {
+    "kind": "screen",
+    "name": "OrganizationSharingSection (web Sharing page)",
+    "path": "apps/web/features/settings/sections/OrganizationSharingSection.tsx",
+    "role": "Share, list and unshare projects."
+   },
+   {
+    "kind": "screen",
+    "name": "WorkspaceSharingPage",
+    "path": "apps/web/app/workspace/sharing/page.tsx",
+    "role": "Hosts the section at /workspace/sharing."
+   },
+   {
+    "kind": "hook",
+    "name": "useShareProjectWithOrganization and related mutations",
+    "path": "apps/web/features/settings/hooks/use-settings-queries.ts",
+    "role": "Calls PUT, PATCH, DELETE and shows toasts (:1751-1845)."
+   },
+   {
+    "kind": "screen",
+    "name": "ProjectMembersSection (mobile)",
+    "path": "apps/mobile/src/features/projects/components/ProjectMembersSection.tsx",
+    "role": "Mobile share controls."
+   },
+   {
+    "kind": "service",
+    "name": "mobile project sharing client",
+    "path": "apps/mobile/src/features/projects/projectSharing.ts",
+    "role": "Reads the shared overview and calls the sharing route."
+   },
+   {
+    "kind": "service",
+    "name": "persistGeneratedFileBytes",
+    "path": "apps/web/lib/server/generated-file-persist.ts",
+    "role": "Stores generated bytes, records version and lineage when provenance is passed."
+   },
+   {
+    "kind": "service",
+    "name": "registerProjectKnowledgeFile",
+    "path": "apps/web/lib/server/project-knowledge-files.ts",
+    "role": "Inserts a new version and supersedes the old row."
+   },
+   {
+    "kind": "service",
+    "name": "published-artifact-service",
+    "path": "apps/web/lib/services/published-artifact-service.ts",
+    "role": "Publish, restore and list artifact versions."
+   },
+   {
+    "kind": "endpoint",
+    "name": "api:GET /api/artifacts/publish/[token]/versions",
+    "path": "apps/web/app/api/artifacts/publish/[token]/versions/route.ts",
+    "role": "Lists versions."
+   },
+   {
+    "kind": "endpoint",
+    "name": "api:GET,POST /api/artifacts/publish/[token]/versions/[version]",
+    "path": "apps/web/app/api/artifacts/publish/[token]/versions/[version]/route.ts",
+    "role": "Reads or restores a version."
+   },
+   {
+    "kind": "schema",
+    "name": "0257_file_versions_and_lineage",
+    "path": "apps/web/db/neon/0257_file_versions_and_lineage.sql",
+    "role": "Adds version and parent_version_id, published_artifact_versions, file_lineage."
+   },
+   {
+    "kind": "table",
+    "name": "file_lineage",
+    "path": "apps/web/db/neon/0257_file_versions_and_lineage.sql",
+    "role": "Derivation edges (edit, export, conversion, extraction, copy)."
+   },
+   {
+    "kind": "table",
+    "name": "published_artifact_versions",
+    "path": "apps/web/db/neon/0257_file_versions_and_lineage.sql",
+    "role": "Append-only version history."
+   },
+   {
+    "kind": "service",
+    "name": "library version grouping",
+    "path": "packages/platform/files/src/library.ts",
+    "role": "Groups versions and walks lineage for desktop, mobile and web."
+   },
+   {
+    "kind": "config",
+    "name": "FILE_DERIVATIONS",
+    "path": "packages/contracts/types/src/file-model.ts",
+    "role": "Allowed derivation names, kept in step with the table check."
+   },
+   {
+    "kind": "service",
+    "name": "security-audit",
+    "path": "apps/web/lib/security-audit.ts",
+    "role": "recordAuditEvent used by the sharing route."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person presses share in the Sharing page; the browser sends PUT with the audience.",
+     "runs_on": "device",
+     "evidence": "apps/web/features/settings/hooks/use-settings-queries.ts:1757-1761"
+    },
+    {
+     "what_happens": "Server checks rate limit and CSRF, resolves membership, and requires sharing.manage or content.share plus ownership.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/api/settings/organization/shared/projects/[projectId]/route.ts:46-70; apps/web/lib/services/org-sharing-service.ts:91-118"
+    },
+    {
+     "what_happens": "shareProject reads the plan limit, then one SQL statement checks ownership, upserts the share row and asserts the quota.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/services/org-sharing-service.ts:305-345"
+    },
+    {
+     "what_happens": "Audit event is recorded and the shared project summary returned.",
+     "runs_on": "our servers",
+     "evidence": "route.ts:86-103"
+    },
+    {
+     "what_happens": "Later reads include shared projects the member can read; write is allowed only for owner or a current-role-valid write grant.",
+     "runs_on": "our servers",
+     "evidence": "org-sharing-service.ts:189-300"
+    },
+    {
+     "what_happens": "Version flow: a new project file registration locks per project and name, inserts version max+1 and marks the older row superseded.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/lib/server/project-knowledge-files.ts:389-430"
+    }
+   ],
+   "data": [
+    {
+     "what": "Share row and member grants",
+     "where_stored": "table:organization_shared_projects, table:organization_project_access (Neon Postgres)",
+     "synced": "Server only; clients re-read it.",
+     "retained_or_deleted": "Removed on unshare; not otherwise covered in the files read (unknown for project purge)."
+    },
+    {
+     "what": "File version fields and superseded marker",
+     "where_stored": "table:project_knowledge_files (version, supersedes_id, superseded_at); table:media_assets (version, parent_version_id)",
+     "synced": "Server only.",
+     "retained_or_deleted": "Superseded is not deleted: only deleted_at starts the 30-day window (apps/web/lib/resources/deletion-policies.ts:216-217)."
+    },
+    {
+     "what": "Lineage edges",
+     "where_stored": "table:file_lineage",
+     "synced": "Server only.",
+     "retained_or_deleted": "Deleted when either file is purged (deletion-policies.ts:246-251)."
+    },
+    {
+     "what": "Artifact version history",
+     "where_stored": "table:published_artifact_versions",
+     "synced": "Server only.",
+     "retained_or_deleted": "No update policy; deleted with owner rows (0257 migration policies)."
+    }
+   ],
+   "models_and_providers": "No model or provider takes part in sharing or versioning itself. Generated-file versions are produced by tool output from a chat turn, so the model decides when a file is generated; the sandbox provider is recorded as the provider field on the file (apps/web/lib/server/generated-file-persist.ts:217-260)."
+  },
+  "access_and_usage": {
+   "account": "Signed-in account and active organisation membership required for sharing (org-sharing-service.ts:120-125). Versions need a signed-in owner.",
+   "permissions": "sharing.manage, or content.share plus project ownership. Edit grants need content.share held by the target (org-sharing-service.ts:91-118, :264, :405).",
+   "subscription": "Plan project limit via sharedProjectLimit; 0 blocks sharing (org-sharing-service.ts:310; org-entitlements.ts:128). The exact numbers per plan were not read (unknown).",
+   "limits_and_metering": "Shared project count limited by plan; rate limit key 'settings-org-patch' (route.ts:47). Storage metering of versions: superseded rows are excluded from the project file list (knowledge-files route list query) [inferred], storage meter rules not read in full.",
+   "flags": "none found in the code for sharing; the routes read no feature flag.",
+   "model_compatibility": "none found in the code; independent of model.",
+   "provider_restrictions": "none found in the code.",
+   "local_mode": "Sharing and server versions need the Cloud service and an organisation; mode:local has no sharing rule in the code read. Local desktop files and versions: unknown (not searched)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Personal account (no organisation)",
+    "behaviour": "Page explains how to get an organisation; mobile shows 'Only you can open this project. Workspace projects can be shared.'",
+    "evidence": "OrganizationSharingSection.test.tsx; apps/mobile/src/features/projects/__tests__/ProjectSettings.test.tsx:340-346"
+   },
+   {
+    "state": "Viewer role",
+    "behaviour": "All mutation controls hidden; edit never offered to view-only members.",
+    "evidence": "OrganizationSharingSection.test.tsx"
+   },
+   {
+    "state": "Plan limit reached or zero",
+    "behaviour": "Conflict or validation error with a limit message.",
+    "evidence": "org-sharing-service.ts:310-313, :351-356"
+   },
+   {
+    "state": "Health space project",
+    "behaviour": "Conflict 'Health cannot be shared.'",
+    "evidence": "org-sharing-service.ts:361"
+   },
+   {
+    "state": "Project not owned or deleted",
+    "behaviour": "Share statement returns no row, 404 'Project not found'.",
+    "evidence": "org-sharing-service.ts:366-368"
+   },
+   {
+    "state": "Unshare of something not shared",
+    "behaviour": "404.",
+    "evidence": "route.ts:200-202"
+   },
+   {
+    "state": "Project list fails to load",
+    "behaviour": "Error with retry.",
+    "evidence": "OrganizationSharingSection.tsx:198-207"
+   },
+   {
+    "state": "Sharing request fails",
+    "behaviour": "Toast with user-safe message; no automatic retry.",
+    "evidence": "use-settings-queries.ts:1771-1772"
+   },
+   {
+    "state": "Offline, timeout, cancel",
+    "behaviour": "not handled in the code beyond the generic toast on failure.",
+    "evidence": "searched the sharing hooks and section; none found"
+   },
+   {
+    "state": "Two uploads of the same file name at once",
+    "behaviour": "Serialised by an advisory lock so versions do not collide.",
+    "evidence": "apps/web/lib/server/project-knowledge-files.ts:389"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Hidden but present labels for the two selects.",
+    "evidence": "OrganizationSharingSection.tsx:209, :225"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/lib/server/generated-file-persist.test.ts",
+     "covers": "Persist, catalog, wire shape, size cap, cleanup on failure; revision and lineage helpers are in the same module."
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/org-sharing-service.test.ts",
+     "covers": "Admin roles, membership predicate, 403 on missing membership, custom role with sharing.manage."
+    },
+    {
+     "path": "apps/web/app/api/settings/organization/shared/projects/[projectId]/__tests__/route.audit.test.ts",
+     "covers": "Audit events for share, member grant, clear, unshare."
+    },
+    {
+     "path": "apps/web/features/settings/sections/OrganizationSharingSection.test.tsx",
+     "covers": "Page states, viewer limits, editor counts, share mutation."
+    },
+    {
+     "path": "apps/web/app/api/projects/[id]/__tests__/knowledge-files.org-shared.test.ts",
+     "covers": "Knowledge files of an organisation-shared project."
+    },
+    {
+     "path": "apps/web/app/api/projects/[id]/knowledge-files/__tests__/route.test.ts",
+     "covers": "Knowledge files route."
+    },
+    {
+     "path": "apps/web/lib/services/__tests__/published-artifact-service.transactions.test.ts",
+     "covers": "Published artifact version transactions."
+    },
+    {
+     "path": "apps/web/app/api/settings/organization/shared/__tests__/route.cross-org-isolation.test.ts",
+     "covers": "Cross-organisation isolation of the shared overview."
+    },
+    {
+     "path": "apps/mobile/src/features/projects/__tests__/ProjectSettings.test.tsx",
+     "covers": "Mobile share, list and change access calls."
+    },
+    {
+     "path": "apps/web/db/neon/retrieval-index-migration.test.ts",
+     "covers": "Retrieval index migration, which tracks superseded rows."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Share to workspace",
+     "steps": [
+      "Sign in as a member with content.share who owns a project.",
+      "Open Sharing, pick the project, choose the workspace audience, press Share.",
+      "Sign in as another member and open the project."
+     ],
+     "expected": "The second member can read the project and its files but not edit; an audit row project_shared exists."
+    },
+    {
+     "name": "Invited only and Can edit",
+     "steps": [
+      "Share with 'invited'.",
+      "Grant write to a Member and to a Viewer."
+     ],
+     "expected": "Member is granted; Viewer grant is refused with the role message."
+    },
+    {
+     "name": "Role downgrade",
+     "steps": [
+      "Grant write to a member.",
+      "Change their role to Viewer.",
+      "They try to save the project."
+     ],
+     "expected": "Write is refused because the right is re-checked on read."
+    },
+    {
+     "name": "Plan limit",
+     "steps": [
+      "Use a plan at its shared-project limit.",
+      "Share one more project."
+     ],
+     "expected": "Conflict message about the limit; nothing shared."
+    },
+    {
+     "name": "File version supersede",
+     "steps": [
+      "Upload a.pdf to a project, then upload a different a.pdf."
+     ],
+     "expected": "List shows one a.pdf; the old row has superseded_at and the new has version 2."
+    },
+    {
+     "name": "Artifact restore",
+     "steps": [
+      "Publish an artifact, change it, republish, then restore version 1 through the versions route."
+     ],
+     "expected": "A new latest version holds version 1's content; history keeps all rows."
+    }
+   ],
+   "diagnostics": [
+    "Audit events project_shared, project_member_access_changed, project_unshared in security audit logs.",
+    "Logger errors 'Failed to record file lineage for a generated file' and 'Failed to record a generated file revision' (apps/web/lib/server/generated-file-persist.ts:77, :115).",
+    "Tables organization_shared_projects, organization_project_access, file_lineage, published_artifact_versions."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Generated files never get a version or a lineage edge because no caller passes provenance.",
+    "affects": "surface:web, surface:desktop, surface:mobile users who edit or export generated files.",
+    "evidence": "apps/web/lib/server/generated-file-persist.ts:296-316 versus no caller passing provenance in apps/web (code search).",
+    "work_needed": "Pass supersedesFileId, parentFileId and derivation from the tool loop and sandbox sweep; add tests."
+   },
+   {
+    "gap": "No visible history or restore for project file versions or generated file versions.",
+    "affects": "All apps.",
+    "evidence": "Only DELETE and GET on the project file route (knowledge-files/[fileId]/route.ts:96-97); library.ts groups versions in a helper but a screen using it was not confirmed.",
+    "work_needed": "Add restore routes and a version list in the Library and project file views."
+   },
+   {
+    "gap": "Desktop and CLI have no sharing control.",
+    "affects": "surface:desktop, surface:cli.",
+    "evidence": "No call to the sharing route found outside web and mobile.",
+    "work_needed": "Decide whether the Desktop (which shows the hosted web app) already covers it, and add parity otherwise."
+   },
+   {
+    "gap": "Migration 0257 header says not applied.",
+    "affects": "Engineers and testers.",
+    "evidence": "apps/web/db/neon/0257_file_versions_and_lineage.sql:4",
+    "work_needed": "Confirm applied state with pnpm db:migrate status and fix the header."
+   }
+  ],
+  "depends_on": [
+   "SYS-authorization-and-workspaces",
+   "SYS-data-model-and-migrations",
+   "SYS-files-artifacts-and-storage",
+   "SYS-subscriptions-entitlements-and-usage",
+   "SYS-security-and-privacy",
+   "surface:web",
+   "surface:mobile",
+   "mode:cloud",
+   "table:organization_shared_projects",
+   "table:organization_project_access",
+   "table:file_lineage",
+   "table:media_assets",
+   "table:project_knowledge_files",
+   "table:published_artifact_versions"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/lib/services/org-sharing-service.ts",
+    "evidence": "Share, grant and write-access logic at :305, :405, :276."
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:PUT /api/settings/organization/shared/projects/[projectId]",
+    "evidence": "route.ts:216"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:PATCH /api/settings/organization/shared/projects/[projectId]",
+    "evidence": "route.ts:217"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:DELETE /api/settings/organization/shared/projects/[projectId]",
+    "evidence": "route.ts:218"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:GET /api/artifacts/publish/[token]/versions",
+    "evidence": "apps/web/app/api/artifacts/publish/[token]/versions/route.ts:34"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:file_lineage",
+    "evidence": "apps/web/lib/server/generated-file-persist.ts:56-70"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "table:organization_project_access",
+    "evidence": "org-sharing-service.ts:405-420"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "plan:org plan limit sharedProjectLimit",
+    "evidence": "apps/web/lib/services/org-entitlements.ts:128"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "apps/web/app/workspace/sharing/page.tsx"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "apps/mobile/src/features/projects/components/ProjectMembersSection.tsx:271"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/lib/services/__tests__/org-sharing-service.test.ts",
+    "evidence": "Covers membership and sharing-right rules."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/app/api/settings/organization/shared/projects/[projectId]/__tests__/route.audit.test.ts",
+    "evidence": "Covers audit events."
+   },
+   {
+    "rel": "depends_on",
+    "to": "F095-08",
+    "evidence": "Purge of a file also removes its lineage edges (deletion-policies.ts:246-251)."
+   },
+   {
+    "rel": "configured_by",
+    "to": "SYS-authorization-and-workspaces",
+    "evidence": "Roles supply sharing.manage and content.share."
+   }
+  ],
+  "unknowns": [
+   "Whether migration 0257 is applied in each environment.",
+   "The numeric shared-project limit per plan.",
+   "Whether any screen calls the artifact version routes.",
+   "Whether apps/cli, the VS Code extension or Chrome extension use sharing or versions (apps/vscode and apps/chrome do not exist).",
+   "Whether the Library UI shows version history; the grouping helper exists but its use in a screen was not confirmed.",
+   "How local desktop files handle versions in mode:local."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "7",
+   "claim": "Subscription: Plan project limit via sharedProjectLimit; 0 blocks sharing (org-entitlements.ts:128)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "sharedProjectLimit is the plan's general 'projects' limit (limits?.projects) run through toEnforceableBillingPlanLimit, not a dedicated sharing limit. 'unlimited' and 'custom' become null (no cap). The page says the numbers were not read, but they are in the catalog: Free is 5, paid and max plans are 'unlimited'.",
+   "evidence": "apps/web/lib/services/org-entitlements.ts:120-130; packages/contracts/types/src/billing-catalog.ts:618 (free projects: 5), :563, :584, :714; :787-790",
+   "correction": "The shared-project cap reuses the plan's projects limit (Free 5, most paid plans unlimited, one plan custom); a limit of 0 (or non-numeric undefined) blocks sharing."
+  },
+  {
+   "section": "3/8",
+   "claim": "surface:vscode and surface:chrome: apps/vscode and apps/chrome do not exist; unknown",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The paths are indeed absent, but the real folders are apps/extension (Chrome) and apps/extension-vscode. The page never searched them. A grep of apps/extension/src, apps/extension-vscode/src, apps/cli and apps/desktop/src for 'organization/shared' found no sharing-route call.",
+   "evidence": "ls apps -> cli, desktop, extension, extension-vscode, mobile, web",
+   "correction": "Chrome is apps/extension and VS Code is apps/extension-vscode. Neither calls the organization shared-projects route (searched). They are not 'unknown' for sharing."
+  },
+  {
+   "section": "8",
+   "claim": "Deletion: Superseded is not deleted: only deleted_at starts the 30-day window (deletion-policies.ts:216-217); lineage deleted when either file is purged (:246-251)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The 'only deleted_at starts the window' text is at the cited place. The window length comes from RESOURCE_RECOVERY_WINDOW_DAYS, not a literal 30 in these lines, so 30 days is not shown at these lines. The lineage deletion matches (columns child_file_id and parent_file_id). The supersedes_id child rule is 'detach', which the page omits.",
+   "evidence": "apps/web/lib/resources/deletion-policies.ts:197-218, :246-251",
+   "correction": "Say 'the recovery window (RESOURCE_RECOVERY_WINDOW_DAYS)' unless the constant is verified as 30. Purging an old version detaches supersedes_id on the newer row; it does not delete the newer row."
+  }
+ ],
+ "missing_facts": [
+  "The shared-project cap is the plan's general projects limit (Free 5, most paid plans unlimited, one plan custom), so most paid orgs have no sharing limit. packages/contracts/types/src/billing-catalog.ts:618,563,584,714,787-790; apps/web/lib/services/org-entitlements.ts:128.",
+  "Chrome and VS Code live in apps/extension and apps/extension-vscode; the page searched non-existent paths and left them unknown. Neither calls the sharing route.",
+  "The published-artifact versions GET and the restore POST are scoped to userId (owner only) via getUserScopedDb. apps/web/app/api/artifacts/publish/[token]/versions/[version]/route.ts:38,64-71."
+ ]
+}

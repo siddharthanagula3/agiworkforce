@@ -1,0 +1,212 @@
+{
+ "S26.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the account's artifacts, newest first."
+   },
+   {
+    "file": "apps/cli/src/cloud/artifacts.rs",
+    "text": "Untitled artifact"
+   }
+  ],
+  "needs": "a signed-in account with artifacts (Managed mode, not Local); one artifact with no title for the fallback check",
+  "note": "The CLI has no card or viewer, so the title appears only on the list row and in --json output.",
+  "reachable": "yes",
+  "steps": [
+   "Open a terminal and run: agi artifacts list",
+   "Find a row: the title sits between the artifact id and the [type] tag",
+   "Check that an artifact with no title shows Untitled artifact",
+   "Compare with Expected: the title shows on the row (no card or viewer exists in the CLI); agi artifacts show <id> --json also carries the title"
+  ],
+  "where": "agi artifacts list"
+ },
+ "S26.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the account's artifacts, newest first."
+   }
+  ],
+  "needs": "a signed-in account with artifacts of more than one kind (Managed mode)",
+  "note": "The type is shown only as the raw stored value in brackets, with no card or viewer and no human-readable kind name.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi artifacts list",
+   "Look at the [bracketed] tag after each title",
+   "Compare the tag with the kind named in Expected (for example html, react, svg, mermaid, markdown, text, code)"
+  ],
+  "where": "agi artifacts list"
+ },
+ "S26.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print an artifact's content, or write it to a file."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List the account's artifacts, newest first."
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact (Managed mode)",
+  "note": "The view is terminal output; the in-chat form /artifacts show <id> exists only in Managed mode and no in-chat artifact link was found.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi artifacts list and copy one id from the first column",
+   "Run: agi artifacts show <that id>",
+   "Look: the artifact's content prints in the terminal",
+   "Optionally run agi artifacts open <id> to open its page in the browser, then compare with Expected"
+  ],
+  "where": "agi artifacts show <id>"
+ },
+ "S26.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print an artifact's content, or write it to a file."
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact (Managed mode)",
+  "note": "The CLI has no viewer to close or toggle, so reopening means running the same command again.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi artifacts show <id> and read the output",
+   "Note that the command prints and ends, so there is nothing to close",
+   "Open a new terminal window (the reload step) and run the same command again",
+   "Compare: the same content prints with the same id"
+  ],
+  "where": "agi artifacts show <id>"
+ },
+ "S26.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print an artifact's content, or write it to a file."
+   }
+  ],
+  "needs": "a signed-in account with at least two artifacts in one conversation (Managed mode)",
+  "note": "No viewer stays open in the CLI, so switching means running show again with another id.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi artifacts list in an account with several artifacts",
+   "Run: agi artifacts show <first id> and read the content",
+   "Run: agi artifacts show <second id> and read the content",
+   "Compare: each command prints its own artifact's content"
+  ],
+  "where": "agi artifacts list, then agi artifacts show <id>"
+ },
+ "S26.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Browse, read and publish the artifacts in your AGI account."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Print an artifact's content, or write it to a file."
+   }
+  ],
+  "needs": "a signed-in account with at least one artifact (Managed mode)",
+  "note": "The code has no read-only state or label; read-only is only true because no artifact subcommand edits content.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Run: agi artifacts --help and read the subcommand list: list, show, open, publish, published, audience, unpublish",
+   "Run: agi artifacts show <id> and confirm it only prints the content",
+   "Compare with Expected: no edit command or read-only label exists in the code for artifacts"
+  ],
+  "where": "agi artifacts show <id> prints content; no artifact subcommand changes content"
+ },
+ "S26.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Copy the content to the clipboard."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Copied '{}' to the clipboard."
+   }
+  ],
+  "needs": "a Mac terminal with clipboard access, a signed-in account with an artifact (Managed mode)",
+  "note": "If the clipboard write fails the command reports Could not copy to the clipboard instead.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi artifacts list and copy an id",
+   "Run: agi artifacts show <id> --copy",
+   "Look for the line Copied '<title>' to the clipboard.",
+   "Paste into a text editor and compare with the output of agi artifacts show <id>"
+  ],
+  "where": "agi artifacts show <id> --copy"
+ },
+ "S26.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Publish an artifact to a shareable URL."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Change who can open a published artifact: public or workspace."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Take a published artifact's URL away again."
+   }
+  ],
+  "needs": "a signed-in account with an artifact (Managed mode); a workspace that can share artifacts for the workspace step",
+  "note": "No copy-link control exists; the share URL is only printed, so it must be copied by hand.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi artifacts publish <id> and read the line Published '<title>' at <share URL> (opens for anyone with the link).",
+   "Run: agi artifacts audience <id> workspace and read the reply: can now be opened by workspace",
+   "Run: agi artifacts unpublish <id>, answer the prompt, and read: Unpublished artifact <id>. Its share link no longer resolves.",
+   "Run: agi artifacts published to check the state, then compare with Expected"
+  ],
+  "where": "agi artifacts publish <id>, then agi artifacts audience <id> workspace, then agi artifacts unpublish <id>"
+ },
+ "S26.32": {
+  "labels": [
+   {
+    "file": "apps/cli/src/cloud/artifacts.rs",
+    "text": "anyone with the link"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List what this account has published, with each page's audience and link."
+   }
+  ],
+  "needs": "a signed-in account with one published and one unpublished artifact (Managed mode)",
+  "note": "The code shows no explicit private label; an unpublished artifact is marked only by the absence of a published state, and agi artifacts published prints the raw visibility value.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi artifacts list",
+   "Look at each row: a published artifact ends with published: anyone with the link or published: workspace",
+   "Check that an unpublished row shows no published state",
+   "Run: agi artifacts published and compare the audience of each page with Expected"
+  ],
+  "where": "agi artifacts list"
+ },
+ "S26.38": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Always open the conversation it came from, even when it is published."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Open an artifact in the browser: its published page, or the conversation"
+   }
+  ],
+  "needs": "a signed-in account with an artifact, and a browser on the Mac (Managed mode)",
+  "note": "Without --chat a published artifact opens its share page instead; if the browser cannot open, the terminal prints Open it yourself: <url>, and no gallery or library screen was found in the CLI.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi artifacts list and copy the id of an artifact (each row also shows its conversation id)",
+   "Run: agi artifacts open <id> --chat",
+   "Look for Opened https://... in the terminal and check the browser shows that conversation",
+   "Compare with Expected"
+  ],
+  "where": "agi artifacts open <id> --chat"
+ }
+}

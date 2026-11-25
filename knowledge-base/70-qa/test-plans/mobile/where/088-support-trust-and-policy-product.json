@@ -1,0 +1,241 @@
+{
+ "S88.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/about.tsx",
+    "text": "Contact Support"
+   },
+   {
+    "file": "apps/mobile/src/features/support/SupportTicketsScreen.tsx",
+    "text": "Raise ticket"
+   },
+   {
+    "file": "apps/mobile/src/features/support/SupportTicketScreen.tsx",
+    "text": "Send reply"
+   }
+  ],
+  "needs": "a Cloud account (signed in) in Cloud mode; replies come from the support team, so a reply may not arrive during the test",
+  "note": "The ticket list and ticket screens exist; whether support replies arrive cannot be checked from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with a Cloud account and make sure the app is in Cloud mode.",
+   "Open the side menu, tap Settings, then tap About.",
+   "Tap Contact Support (it only appears for a signed-in Cloud user; Email Support is always there).",
+   "Tap New ticket, type a Subject and What happened, then tap Raise ticket.",
+   "Open the new ticket from the list, type in Write a reply, tap Send reply.",
+   "Compare: the ticket shows in the list with its status, and replies from support appear in the ticket thread."
+  ],
+  "where": "Open the side menu > Settings > About > Contact Support > New ticket"
+ },
+ "S88.04": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/feedback/presentation.ts",
+    "text": "Report App Issue"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Bug Report"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Submit Feedback"
+   }
+  ],
+  "needs": "a Cloud account for the stored-report path; a mail app for Local mode",
+  "note": "In Local mode the mailto link carries only the subject and message, not the build or platform, which differs from Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap Settings.",
+   "In the Support group, tap Report App Issue.",
+   "Tap the Bug Report chip and type in the box (placeholder: What happened? What did you expect to happen?).",
+   "Tap Submit Feedback (Cloud mode) and read the Thank You! alert.",
+   "Compare: in Cloud mode the app sends the app version and platform with the report; in Local mode the button reads Email Feedback and opens the mail app."
+  ],
+  "where": "Open the side menu > Settings > Support > Report App Issue > Bug Report"
+ },
+ "S88.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "General Feedback"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Thank You!"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Submit Feedback"
+   }
+  ],
+  "needs": "a Cloud account for server storage; a mail app for Local mode",
+  "note": "The app shows only the confirmation; the team-side storage cannot be checked from the app.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap Settings, then in the Support group tap Report App Issue.",
+   "General Feedback is selected by default; tap it to confirm.",
+   "Type a message in the box (placeholder: Tell us what you think...).",
+   "Tap Submit Feedback.",
+   "Compare: the Thank You! alert appears with Your feedback has been submitted."
+  ],
+  "where": "Open the side menu > Settings > Support > Report App Issue > General Feedback"
+ },
+ "S88.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Feature Request"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Describe the feature you would like..."
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Submit Feedback"
+   }
+  ],
+  "needs": "a Cloud account for server storage; a mail app for Local mode",
+  "note": "Storage for the team is not visible from the app.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap Settings, then in the Support group tap Report App Issue.",
+   "Tap the Feature Request chip.",
+   "Type in the box (placeholder: Describe the feature you would like...).",
+   "Tap Submit Feedback.",
+   "Compare: the Thank You! alert appears with Your feedback has been submitted."
+  ],
+  "where": "Open the side menu > Settings > Support > Report App Issue > Feature Request"
+ },
+ "S88.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Export Diagnostics"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts",
+    "text": "Share diagnostics?"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts",
+    "text": "Share your AGI diagnostics"
+   }
+  ],
+  "needs": "none",
+  "note": "The app has no in-app list of bundle contents; the user sees them only in the .json file in the share sheet. The share sheet sends to any app the user picks, not a built-in support button.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap Settings, then in the Support group tap Export Diagnostics.",
+   "Read the Share diagnostics? alert: it sends app, device and error details, never messages, files or passwords.",
+   "Tap Continue; the system share sheet titled Share your AGI diagnostics opens with a .json file.",
+   "If the share sheet lets you preview the file, open it to see the fields (app version, platform, locale, time zone, screen size, recent errors); otherwise cancel.",
+   "Compare: the Diagnostics exported alert shows a summary, and the user picks the share target in the share sheet."
+  ],
+  "where": "Open the side menu > Settings > Support > Export Diagnostics"
+ },
+ "S88.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/utils/messageStreamError.ts",
+    "text": "Reference:"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Tap to try again."
+   }
+  ],
+  "needs": "a reply that fails; this cannot be forced reliably from the UI",
+  "note": "The id is shown only when the server logged one; the server side is in apps/web/lib/error-handler.ts and was not traced further.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chat and send a message.",
+   "If the reply fails with an error notice, read the text under the reply.",
+   "Compare: the notice ends with Reference: followed by an id that the user can quote to support, and it may say Tap to try again.",
+   "If no id appears, the server did not log one for that failure."
+  ],
+  "where": "Chat > the notice under a reply that failed"
+ },
+ "S88.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Privacy"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Helpful resources"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-privacy/index.tsx",
+    "text": "Data rights requests"
+   }
+  ],
+  "needs": "a Cloud account (the Privacy row sits in the Cloud section of Settings)",
+  "note": "The app only opens a web page; the request form and status tracking live on that web page, which was not checked from the mobile code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu, tap Settings, then tap Privacy.",
+   "Scroll to the Helpful resources group.",
+   "Tap Data rights requests; a web page (/privacy/requests) opens in the browser.",
+   "Compare: the web page should let the user submit access, correction or erasure requests and show their status."
+  ],
+  "where": "Open the side menu > Settings > Privacy > Helpful resources > Data rights requests"
+ },
+ "S88.18": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Report\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
+    "text": "Report this response"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
+    "text": "Save report"
+   }
+  ],
+  "needs": "a Cloud account for server delivery; in Local mode the report is saved on the device or sent by email",
+  "note": "The MessageBubble.tsx file holds the ellipsis as the escape \u2026, which renders as Report\u2026 ; the moderation intake was not traced past services/contentReport.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in Chat and wait for the AI reply to finish.",
+   "Long-press the AI reply.",
+   "Tap Report\u2026 ; the sheet titled Report this response opens.",
+   "Pick a category such as Harmful or dangerous, then type in the box (placeholder: Describe the issue...).",
+   "Tap Save report.",
+   "Compare: the sheet shows Report submitted for review (or Send this report to AGI? if it was saved on the device)."
+  ],
+  "where": "Chat > long-press an AI reply > Report\u2026"
+ },
+ "S88.20": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "The model declined to finish this response for safety reasons."
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Report"
+   },
+   {
+    "file": "apps/mobile/src/features/feedback/index.tsx",
+    "text": "Report an incorrect refusal"
+   }
+  ],
+  "needs": "a reply that is refused for safety reasons; a Cloud account for server submission",
+  "note": "The notice shows only for refusal finish reasons; in Local mode the appeal goes out through the mail app.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in Chat that gets a safety refusal (cannot be forced reliably from the UI).",
+   "Read the notice: The model declined to finish this response for safety reasons.",
+   "Tap Report on the notice; the screen titled Report an incorrect refusal opens.",
+   "Type the reason and tap Submit Feedback (Cloud mode) or Email Feedback (Local mode).",
+   "Compare: the Thank You! alert appears and the app goes back."
+  ],
+  "where": "Chat > the notice under a reply the model declined for safety reasons > Report"
+ }
+}

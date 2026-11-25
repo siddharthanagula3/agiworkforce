@@ -1,0 +1,300 @@
+{
+ "S58.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "List registered MCP servers."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "No MCP servers registered in"
+   }
+  ],
+  "needs": "none",
+  "note": "The list comes from the local registry file (~/.agiworkforce/mcp.json) and project MCP files; the code shows no account or workspace-level server list.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi mcp list",
+   "Look for one row per registered server, each with its name, a status word (enabled, disabled or blocked), its transport and its target.",
+   "If no servers exist, look for the line that names the registry file.",
+   "Compare with Expected: a list of configured MCP servers."
+  ],
+  "where": "Type \"agi mcp list\" in a terminal, or type \"/mcp\" in the agi chat screen"
+ },
+ "S58.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Register an MCP server."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Registered MCP server"
+   }
+  ],
+  "needs": "a local executable for a stdio server",
+  "note": "The product starts a stdio server only when a session starts or /mcp restart runs; the add command itself does not launch it.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi mcp add my-local-server --command node --arg server.js (use any executable on this Mac)",
+   "Read the confirmation line that starts with \"Registered MCP server\".",
+   "Run: agi mcp list and check the new row appears with status enabled.",
+   "Run: agi mcp get my-local-server and check the transport shows stdio and the target shows the command."
+  ],
+  "where": "Type \"agi mcp add <name> --command <executable>\" in a terminal (in chat, \"/mcp add <name> stdio <command>\")"
+ },
+ "S58.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Registered MCP server"
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Header for a remote server as \"Name: value\", for example an API key. Repeat for each."
+   }
+  ],
+  "needs": "a remote MCP server URL; a token if the server needs one",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi mcp add my-remote --url https://example.com/mcp (use a real remote MCP URL)",
+   "Read the line that starts with \"Registered MCP server\".",
+   "Optional credentials: add --header \"Authorization: Bearer <token>\" to the same command, then check with agi mcp get my-remote.",
+   "Run: agi mcp list and check the row shows the URL with status enabled."
+  ],
+  "where": "Type \"agi mcp add <name> --url <url>\" in a terminal (in chat, \"/mcp add <name> <url>\")"
+ },
+ "S58.04": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show one registered MCP server."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Replace an existing entry with the same name."
+   }
+  ],
+  "needs": "an existing registered server",
+  "note": "There is no interactive editor screen; editing is done by re-running add with --force (or /mcp reconfigure in chat).",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi mcp get my-remote and read the name, status, transport, target and file lines.",
+   "Run: agi mcp add my-remote --url https://new.example.com/mcp --force to replace the entry.",
+   "Run: agi mcp get my-remote again and check the target now shows the new URL.",
+   "Compare with Expected: the URL, transport and arguments can be viewed and changed."
+  ],
+  "where": "Type \"agi mcp get <name>\" in a terminal to view, then \"agi mcp add <name> --url <url> --force\" to edit"
+ },
+ "S58.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Environment variable for a stdio server as KEY=VALUE, repeat for each."
+   }
+  ],
+  "needs": "none",
+  "note": "The --env flag applies only to stdio servers (it requires --command). Env values are not shown by agi mcp get in the code read; no in-chat env command was found.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi mcp add my-local-server --command node --arg server.js --env API_REGION=us-east-1",
+   "Read the line that starts with \"Registered MCP server\".",
+   "Run: agi mcp get my-local-server and check the file line points to the registry where the entry is stored.",
+   "Compare with Expected: the variable is set for the stdio server."
+  ],
+  "where": "Type \"agi mcp add <name> --command <executable> --env KEY=VALUE\" in a terminal"
+ },
+ "S58.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Authorize a remote MCP server over OAuth and store the token."
+   },
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "The token is stored in the OS credential store."
+   }
+  ],
+  "needs": "an outside account (the remote server's sign-in) and a remote server that offers OAuth",
+  "note": "Token-based credentials are entered with --header at add time; the stored OAuth token location is the OS credential store per the confirmation text.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi mcp login my-remote (for a remote server that offers OAuth)",
+   "Complete the sign-in in the browser that opens.",
+   "Read the line that starts with \"Authorized MCP server\" and check it says the token is stored in the OS credential store.",
+   "Optional: run agi mcp logout my-remote and read the sign-out result line."
+  ],
+  "where": "Type \"agi mcp login <name>\" in a terminal (for OAuth), or pass --header when adding a remote server"
+ },
+ "S58.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "did not answer within 20 seconds"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "MCP reconnected:"
+   }
+  ],
+  "needs": "a registered server (a remote one needs a reachable URL)",
+  "note": "A disabled server shows only the turn-on hint and no connection test. /mcp test runs the same reconnect as /mcp restart.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the server is enabled (agi mcp list shows enabled).",
+   "Run: agi mcp get my-remote and wait up to 20 seconds.",
+   "Read the connection line: it shows a connect error or \"did not answer within 20 seconds\" on failure, and the tool list on success.",
+   "Compare with Expected: the result shows whether the connection succeeded."
+  ],
+  "where": "Type \"agi mcp get <name>\" in a terminal, or \"/mcp restart\" in the agi chat screen"
+ },
+ "S58.08": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "MCP tools:"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/mcp tools [server] lists tools"
+   }
+  ],
+  "needs": "a connected MCP server that offers tools",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Connect a server first (agi mcp get <name> or /mcp restart).",
+   "In chat, type: /mcp tools",
+   "Read the heading \"MCP tools:\" and check each tool row lists its server name and description.",
+   "Optional: type /mcp tools <server-name> and check only that server's tools appear."
+  ],
+  "where": "Type \"/mcp tools\" in the agi chat screen, or \"agi mcp get <name>\" in a terminal"
+ },
+ "S58.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Run a connected server's prompt as /mcp:<server>:<prompt>"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/mcp"
+   }
+  ],
+  "needs": "a connected MCP server that offers prompts",
+  "note": "Prompt commands are registered only when the server offers prompts; the [MCP: prefix text is built in tui_app.rs.",
+  "reachable": "yes",
+  "steps": [
+   "Connect a server that offers prompts (/mcp restart).",
+   "Type / in the chat input and look for commands whose description starts with [MCP:<server-name>].",
+   "Choose one and run it, then read the reply in chat.",
+   "Compare with Expected: the prompt is listed and runs."
+  ],
+  "where": "Type \"/\" in the agi chat screen and find the entries that start with \"[MCP:\", or type \"/mcp:<server>:<prompt>\""
+ },
+ "S58.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Capabilities: none advertised"
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Protocol"
+   }
+  ],
+  "needs": "a connected MCP server",
+  "note": "The Capabilities line lists the advertised capability names; resources, prompts and extensions are not shown as separate sections in the code read.",
+  "reachable": "yes",
+  "steps": [
+   "Connect the server first (/mcp restart).",
+   "In chat, type: /mcp info <server-name>",
+   "Read the Protocol line, the server name and version, and the Capabilities line.",
+   "Compare with Expected: protocol, tools, resources, prompts and extensions are visible."
+  ],
+  "where": "Type \"/mcp info <server>\" in the agi chat screen, or \"agi mcp get <name>\" in a terminal"
+ },
+ "S58.12": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "No output from this server yet."
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Recent output"
+   }
+  ],
+  "needs": "a connected MCP server",
+  "note": "No call history view was found; only status and recent output lines are shown.",
+  "reachable": "yes",
+  "steps": [
+   "Connect the server first (/mcp restart).",
+   "In chat, type: /mcp info <server-name> and read whether it says responding or not responding.",
+   "Type: /mcp logs <server-name> and read the Recent output section.",
+   "Compare with Expected: health and recent logs are visible; no call history was found in the code."
+  ],
+  "where": "Type \"/mcp info <server>\" for health, or \"/mcp logs <server>\" for recent logs, in the agi chat screen"
+ },
+ "S58.13": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Turn a registered MCP server off without removing it."
+   },
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Disabled MCP server"
+   }
+  ],
+  "needs": "none",
+  "note": "A running session keeps a disabled server until /mcp restart.",
+  "reachable": "yes",
+  "steps": [
+   "Run: agi mcp disable my-remote and read the Disabled MCP server line.",
+   "Run: agi mcp list and check the status is disabled and the row is still there.",
+   "Run: agi mcp enable my-remote and check the status returns to enabled.",
+   "Compare with Expected: the server is kept while off and can be turned back on."
+  ],
+  "where": "Type \"agi mcp disable <name>\" and \"agi mcp enable <name>\" in a terminal, or \"/mcp disable <name>\" and \"/mcp enable <name>\" in chat"
+ },
+ "S58.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/screen_renderers.rs",
+    "text": "Project MCPs (.mcp.json)"
+   },
+   {
+    "file": "apps/cli/src/app_server/surfaces.rs",
+    "text": "Run /trust grant in agi"
+   }
+  ],
+  "needs": "a project folder you can write to; a terminal for the first approval",
+  "note": "The approval step and the project-only scope are from code read; the exact on-screen review prompt was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "In a project folder, create a .mcp.json file with one server entry (or run agi init, which creates mcp.json).",
+   "Start agi from that folder in a terminal and approve the project servers when asked (the code says Run /trust grant in agi).",
+   "Type /mcp in the chat screen and check the server appears under the project scope.",
+   "Start agi from a different folder and check the server does not appear."
+  ],
+  "where": "Put a .mcp.json file in the project folder, then type \"/mcp\" in agi started from that folder"
+ },
+ "S58.16": {
+  "labels": [],
+  "needs": "a server on a private network",
+  "note": "Searched apps/cli/src/mcp for private network, relay, tunnel and bridge wording; only a URL check (apps/cli/src/mcp/registry.rs validate_remote_url) and unrelated sandbox text were found, and no private-network connector route was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S58.27": {
+  "labels": [],
+  "needs": "an in-development server on localhost",
+  "note": "No developer-mode flow found; searched for developer mode, dev mode and localhost. The nearest path is agi mcp add <name> --url http://localhost:<port>, which validate_remote_url in apps/cli/src/mcp/registry.rs accepts, but that is not a dedicated developer-mode flow.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

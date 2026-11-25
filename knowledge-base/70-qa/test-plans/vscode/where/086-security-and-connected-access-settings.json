@@ -1,0 +1,128 @@
+{
+ "S86.08": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Remote Control"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Disconnect phone"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Remote Control"
+   }
+  ],
+  "needs": "a paired phone (Mobile app) and a signed-in account; a second paired device is not shown in this panel",
+  "note": "The VS Code panel lists only the one connected phone and offers Disconnect, not a list of all paired devices; browser-to-desktop pairing was not found in this feature. Web Settings > Account > Linked devices (Unlink device) covers linked CLI, VS Code, Chrome and desktop devices, not phones.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P and run Code: Remote Control. The panel titled Remote Control opens.",
+   "If a phone is paired, look for the line Connected to {phone} and the button Disconnect phone. If none is paired, you see Pair a phone and a QR code.",
+   "Click Disconnect phone. A dialog asks Disconnect {phone}? with the button Disconnect phone; confirm it.",
+   "Check that the panel no longer shows Connected to {phone} and returns to the pairing state, to compare with Expected."
+  ],
+  "where": "Command palette > Code: Remote Control (or type /remote-control in the chat box). The Remote Control panel shows Pair a phone, or Connected to {phone} with Disconnect phone."
+ },
+ "S86.09": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "More actions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "text": "Sign out"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Sign Out of AGI Cloud"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account",
+  "note": "Sign out runs at once with no confirmation dialog; if the AGI CLI on this machine stays signed in, a warning message appears.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud from the sidebar so the account row shows your account.",
+   "Click the More actions button in the sidebar header.",
+   "Click Sign out in the menu, below the account name.",
+   "Look at the menu again: the account name should read Not signed in and the item should now read Sign in, to compare with Expected."
+  ],
+  "where": "More actions (icon in the sidebar header) > Sign out, in the account row at the bottom of the menu. Also Command palette > Code: Sign Out of AGI Cloud."
+ },
+ "S86.23": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Permissions"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Saved approvals"
+   },
+   {
+    "file": "packages/ui/i18n/locales/en/vscode.json",
+    "text": "Always allowed"
+   }
+  ],
+  "needs": "a saved approval (made by choosing Always allow on an approval prompt) and a signed-in CLI",
+  "note": "If the CLI offers permission rules, the picker title is Code, Permissions and shows a permissions view instead of Saved approvals, so the exact screen the tester sees may differ; the remove-confirmation wording was read from code only.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P and run Code: Permissions, or type /permissions in the chat box.",
+   "Look for the picker titled Saved approvals with rows marked Always allowed or Always denied. If none are saved, the picker says No approvals are saved yet.",
+   "To have one to remove, first choose Always allow on an approval prompt in chat, then reopen Code: Permissions.",
+   "Click the remove action on a row and confirm Remove this saved approval?, then check the row is gone, to compare with Expected."
+  ],
+  "where": "Command palette > Code: Permissions (or type /permissions in the chat box). The picker opens with the title Saved approvals."
+ },
+ "S86.24": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Choose Agent Mode"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/developer-session.ts",
+    "text": "Bypass permissions"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/settings/settingsWebviewContent.ts",
+    "text": "Agent mode"
+   }
+  ],
+  "needs": "a workspace folder open and trusted; Bypass permissions needs the separate risk confirmation",
+  "note": "Expected says ask every time, auto-approve safe, autonomous; the code offers Ask, Auto, Plan and Bypass permissions, and no mode is labelled autonomous, so the mapping is unknown.",
+  "reachable": "yes",
+  "steps": [
+   "Press Cmd+Shift+P and run Code: Choose Agent Mode.",
+   "Pick Ask, then send a chat request that edits a file or runs a command.",
+   "Check the agent asks for approval before it acts.",
+   "Repeat with Auto (ordinary workspace edits run without prompting) and then Bypass permissions, which first asks for a risk confirmation; compare with Expected."
+  ],
+  "where": "Command palette > Code: Choose Agent Mode, or Code: Open Settings > Agent mode. Mode names are Ask, Auto, Plan and Bypass permissions."
+ },
+ "S86.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+    "text": "Turn on Advanced Account Security"
+   },
+   {
+    "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+    "text": "Recovery keys"
+   }
+  ],
+  "needs": "a web account with at least two passkeys or security keys and access to the email on the account",
+  "note": "The VS Code app has no hardened-mode control; this is on the web account settings. The Settings > Security path comes from the support page apps/web/content/support/account-security.md, not from the navigation code, which was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "In the web app, sign in and open Settings, then the Security section.",
+   "Find the Advanced Account Security panel.",
+   "Click Turn on Advanced Account Security and follow its steps (passkeys or security keys, a code emailed to you, and recovery keys).",
+   "Once on, sign in again and check that a password or email code alone no longer gets you in, to compare with Expected."
+  ],
+  "where": "Web app (not inside VS Code): Settings > Security > Turn on Advanced Account Security (panel titled Advanced Account Security)."
+ }
+}

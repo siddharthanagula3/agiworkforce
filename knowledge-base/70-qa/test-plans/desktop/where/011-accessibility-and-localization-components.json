@@ -1,0 +1,390 @@
+{
+ "S11.01": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
+    "text": "Copy message"
+   }
+  ],
+  "needs": "a screen reader (VoiceOver)",
+  "note": "The plan gives no code location; the only label I checked was the Copy message fallback, and I did not survey all controls.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver (Cmd+F5) and move through the chat with VO+Arrow keys.",
+   "Stop on the Copy message button under a reply and listen for its spoken name, compared with Expected."
+  ],
+  "where": ""
+ },
+ "S11.02": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Agent activity"
+   }
+  ],
+  "needs": "a screen reader (VoiceOver)",
+  "note": "Heading markup is inner structure; I only checked the Agent activity section label.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver and open the VO rotor (VO+U), then choose Headings.",
+   "Open a chat with tool activity and check for a top heading and nested section headings, compared with Expected."
+  ],
+  "where": ""
+ },
+ "S11.03": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "The Account menu trigger label was not confirmed; the Keyboard shortcuts item is in its menu.",
+  "reachable": "yes",
+  "steps": [
+   "Click outside any field, press Tab repeatedly and watch focus move to each control.",
+   "Open the Account menu and use the Down and Up arrow keys to move between items.",
+   "Press Escape and check the menu closes and focus returns to its button."
+  ],
+  "where": "Any screen after sign-in > press Tab to move through controls, use arrow keys in open menus, press Escape to close them; press Cmd+K (Ctrl+K on Windows) to open the command palette"
+ },
+ "S11.04": {
+  "labels": [],
+  "needs": "none",
+  "note": "Focus styling is a CSS rule, not a control.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On a chat screen, press Tab one time at a time.",
+   "Check that the focused control shows a clear ring or outline each time, compared with Expected."
+  ],
+  "where": ""
+ },
+ "S11.05": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "I confirmed the menu item text but not that it opens a dialog; the Account menu trigger label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Account menu and choose Keyboard shortcuts.",
+   "Press Tab several times and check focus stays inside the dialog.",
+   "Press Escape and check the dialog closes."
+  ],
+  "where": "Account menu > Keyboard shortcuts (opens from the Account menu on any screen)"
+ },
+ "S11.06": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "Same caveat as S11.05 about the dialog and trigger label.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Account menu button and note which control has focus.",
+   "Open Keyboard shortcuts, then close it with Escape.",
+   "Check focus returned to the Account menu button, compared with Expected."
+  ],
+  "where": "Account menu > Keyboard shortcuts, then close it"
+ },
+ "S11.07": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Agent activity"
+   }
+  ],
+  "needs": "a screen reader (VoiceOver) and a signed-in account",
+  "note": "The announcement is a polite live region; I did not confirm which events are announced.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver and send a message that uses a tool.",
+   "Keep focus in the composer and listen for a short spoken status when the reply or tool step finishes, compared with Expected."
+  ],
+  "where": ""
+ },
+ "S11.08": {
+  "labels": [],
+  "needs": "a screen reader (VoiceOver) and a signed-in account",
+  "note": "Behaviour is in the streaming announcer component; not verified live.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on VoiceOver and send a question that gets a long streamed reply.",
+   "Listen while the reply streams and check it is spoken in short chunks or once at the end, not word by word, compared with Expected."
+  ],
+  "where": ""
+ },
+ "S11.09": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "This tool requires approval before execution."
+   }
+  ],
+  "needs": "a signed-in account where a tool asks for approval",
+  "note": "The Allow and Deny labels come from a shared constant I did not open; how to trigger an approval depends on the account's tool approval setting.",
+  "reachable": "yes",
+  "steps": [
+   "Send a request that asks the AI to use a tool that needs approval.",
+   "Look at the tool card and read the warning line about approval.",
+   "Turn on VoiceOver and check the running, done or waiting state is spoken, and that the Allow and Deny buttons have names, compared with Expected."
+  ],
+  "where": "Chat > send a request that needs a tool approval > watch the tool card in the reply"
+ },
+ "S11.10": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
+    "text": "Copy message"
+   }
+  ],
+  "needs": "a touch screen or phone-width browser to check the touch case",
+  "note": "The code shows the row is always visible on touch devices; the tap-to-show path was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for a reply.",
+   "Move the pointer over the reply and look for the action row with Copy message.",
+   "On a touch screen (or phone width), tap the reply and check the action row is always visible, compared with Expected."
+  ],
+  "where": "Chat > send a message > hover over the reply > Copy message button in the row under it"
+ },
+ "S11.11": {
+  "labels": [],
+  "needs": "none",
+  "note": "Not found in time: I did not open apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx or the drag handling in ArtifactsPanel.tsx to get the visible menu words.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S11.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Chat text size"
+   },
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Appearance"
+   }
+  ],
+  "needs": "none",
+  "note": "The app control offers Small, Default and Large only; the 200% OS text setting is not part of this control.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Set Chat text size to Large.",
+   "Look at the chat text and check it grows without being cut off, compared with Expected."
+  ],
+  "where": "Settings > Appearance > Chat text size"
+ },
+ "S11.13": {
+  "labels": [],
+  "needs": "none",
+  "note": "Zoom keys for the Electron window were not verified in the code.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Zoom the app window in (the browser zoom keys, if the app supports them).",
+   "Check that at high zoom the chat shows one column and does not scroll sideways, compared with Expected."
+  ],
+  "where": ""
+ },
+ "S11.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Motion"
+   },
+   {
+    "file": "apps/web/features/settings/sections/AppearanceSection.tsx",
+    "text": "Reduced"
+   }
+  ],
+  "needs": "none (optionally turn on Reduce motion in the operating system)",
+  "note": "The OS setting also applies through System, per the code comment.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose Appearance.",
+   "Under Motion, choose Reduced.",
+   "Send a chat message and watch the reply animations and any looping indicators, compared with Expected."
+  ],
+  "where": "Settings > Appearance > Motion > Reduced"
+ },
+ "S11.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceChatDock.tsx",
+    "text": "In this chat"
+   },
+   {
+    "file": "apps/web/features/chat/components/Voice/VoiceChatDock.tsx",
+    "text": "Captions"
+   }
+  ],
+  "needs": "a microphone and a signed-in account",
+  "note": "The button that opens the In this chat menu during a call was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click the Start voice mode button in the chat composer and allow the microphone.",
+   "Open the in-call menu titled In this chat and turn on Captions.",
+   "Speak a sentence and check that caption lines appear in the captions panel, compared with Expected."
+  ],
+  "where": "Start voice mode (composer button) > voice call screen > the menu with In this chat > Captions"
+ },
+ "S11.16": {
+  "labels": [],
+  "needs": "a microphone and a signed-in account",
+  "note": "Code shows each voice turn is written into the chat as a message.",
+  "reachable": "yes",
+  "steps": [
+   "Start voice mode and allow the microphone.",
+   "Say two or three sentences and then end the call.",
+   "Open the same chat and check the spoken turns appear as readable text, compared with Expected."
+  ],
+  "where": "Start voice mode > speak > end the call > the conversation in the chat"
+ },
+ "S11.17": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "The chart's name and table labels are built from the chart title, so no fixed visible words were found.",
+  "reachable": "yes",
+  "steps": [
+   "Ask the AI for a bar chart of a short list of numbers.",
+   "Find the chart card in the reply and check it has a title.",
+   "Turn on VoiceOver and check the chart name and the data table are read, compared with Expected."
+  ],
+  "where": "Chat > ask for a chart (for example a bar chart of sample numbers) > the chart card in the reply"
+ },
+ "S11.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+    "text": "Display Language"
+   }
+  ],
+  "needs": "none",
+  "note": "Navigation group name General and the Arabic menu entry were not directly confirmed in the picker code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and choose General.",
+   "Under Display Language, choose Arabic (or another right-to-left language).",
+   "Look at the whole screen and check menus, text and spacing mirror to the right, compared with Expected."
+  ],
+  "where": "Settings > General > Display Language > Arabic"
+ },
+ "S11.20": {
+  "labels": [],
+  "needs": "none",
+  "note": "Direction is set per paragraph in code; not verified visually.",
+  "reachable": "yes",
+  "steps": [
+   "Type an English sentence, press Shift+Enter, then type an Arabic sentence.",
+   "Send the message.",
+   "Check each paragraph in the reply bubble runs in its own direction, compared with Expected."
+  ],
+  "where": "Chat composer > type a line in English, a line in Arabic, then send"
+ },
+ "S11.21": {
+  "labels": [],
+  "needs": "a Japanese, Chinese or Korean input method",
+  "note": "Inner keyboard behaviour; the composer checks for composition before sending.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Add a Japanese (or Chinese or Korean) input method on the Mac and switch to it.",
+   "In the chat composer, type a word and press Enter to confirm a conversion candidate.",
+   "Check the message is not sent and the text stays in the composer, compared with Expected."
+  ],
+  "where": ""
+ },
+ "S11.22": {
+  "labels": [],
+  "needs": "none (a passkey or linked device helps)",
+  "note": "Dates use the browser locale; the exact visible navigation label was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to the section with Passkeys or linked devices.",
+   "Look at the dates shown next to a device or passkey.",
+   "Change Display Language in General, return and compare the date format with Expected."
+  ],
+  "where": "Settings > the section that lists Passkeys and linked devices (exact navigation label not confirmed)"
+ },
+ "S11.23": {
+  "labels": [],
+  "needs": "none",
+  "note": "Money is formatted with the browser locale; visible price labels were not extracted.",
+  "reachable": "yes",
+  "steps": [
+   "Open the pricing page of the web app.",
+   "Read the plan prices and note the currency symbol and number format.",
+   "Compare with Expected (right currency symbol and the user's number format)."
+  ],
+  "where": "Pricing page (web app /pricing) for plan prices"
+ },
+ "S11.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Every {{count}} hour"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The Sidebar > Scheduled path was taken from the request example, not confirmed in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Create a scheduled task with a repeat interval of 1 and then 2 hours.",
+   "Read the schedule card label.",
+   "Check singular and plural forms read correctly, compared with Expected."
+  ],
+  "where": "Schedules (Sidebar > Scheduled) > New task > set the repeat to Every 2 hours (or Every 1 minute) and save"
+ },
+ "S11.25": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/errors.json",
+    "text": "You appear to be offline. Check your connection."
+   }
+  ],
+  "needs": "a way to go offline and, for other languages, Settings > General > Display Language",
+  "note": "The message is translated through the errors namespace; other languages were not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Turn off the Mac's Wi-Fi.",
+   "Send a chat message.",
+   "Read the error and compare it with Expected (in the chosen language)."
+  ],
+  "where": "Turn off Wi-Fi, then send a message in Chat; read the error shown in the chat"
+ },
+ "S11.26": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Keyboard shortcuts"
+   }
+  ],
+  "needs": "none",
+  "note": "The Account menu trigger label was not confirmed; the hint is built by shortcutLabel in packages/ui/ui/src/platformKeys.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Account menu and look at the Keyboard shortcuts item.",
+   "Read the hint on its right and compare it with Expected (command symbol on Mac, Ctrl elsewhere)."
+  ],
+  "where": "Account menu > Keyboard shortcuts (the shortcut hint on the right of the item)"
+ },
+ "S11.27": {
+  "labels": [],
+  "needs": "live-web",
+  "note": "The plan gives no code location (Code: unverified, Where to find it: not written yet). One search of apps/desktop for translation, i18n, locale, long-label, text-overflow, line-clamp and truncate found translation plumbing (apps/desktop/src/i18n/index.ts, apps/desktop/src/providers/I18nProvider.tsx) but no long-label or truncation control tied to this item, so no visible screen or path could be confirmed. The shared chat screens live in apps/web and packages/ui, which were not searched.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

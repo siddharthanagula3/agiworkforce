@@ -1,0 +1,471 @@
+{
+ "S76.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Capabilities"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Text only"
+   }
+  ],
+  "needs": "none",
+  "note": "Text input is not listed as its own item; the only visible sign is the absence of a chip and the Text only label, and routing to text-only handling was not confirmed in the UI.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the model name button in the composer footer (its label ends in Change model).",
+   "In the Models dialog, click the About button on any model row.",
+   "Read the Capabilities line on the card.",
+   "Compare: every model accepts text, so text input has no chip of its own; a model with no other chip shows Text only."
+  ],
+  "where": "Models picker > About <model name> > Capabilities (text-only models show Text only)"
+ },
+ "S76.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Capabilities"
+   }
+  ],
+  "needs": "none",
+  "note": "No separate text-output control or chip exists; text output is shown only by replies appearing in the chat.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click the model name button in the composer footer.",
+   "Click About on a model row.",
+   "Read the Capabilities line and check that a chat reply comes back as text."
+  ],
+  "where": "Models picker > About <model name> > Capabilities (text output is implied for every model)"
+ },
+ "S76.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Vision"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a picture file to upload, a model without Vision and one with Vision",
+  "note": "The refusal alert text was found in ChatComposerNew.tsx; the exact send-blocking behaviour was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model name button in the composer footer and click About on a model without a Vision chip.",
+   "Close the picker, click More composer options and choose Add photos & files, then pick a JPG or PNG file.",
+   "Click Send or look at the composer alert.",
+   "Compare: the alert should read The selected model can't read the attached image. Switch to Auto, choose an image-capable model, or remove the image. Switch to a model with the Vision chip and the alert should not appear."
+  ],
+  "where": "Composer > More composer options > Add photos & files, then pick a picture; Models > About <model name> > Capabilities > Vision"
+ },
+ "S76.04": {
+  "labels": [],
+  "needs": "several picture files to upload",
+  "note": "Per-request image count limits are enforced in apps/web/app/api/llm/v1/chat/completions/lib/media-input.ts; no visible image-count message was found in the web composer.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Click More composer options and choose Add photos & files.",
+   "Select several pictures in one go and click Send.",
+   "Compare: the request should go through or fail with a message about the image limit."
+  ],
+  "where": "Composer > Add photos & files with several pictures; the check runs when the request is sent"
+ },
+ "S76.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "The selected model can't read the attached document. Switch to Auto, choose a document-capable model, or remove the file."
+   }
+  ],
+  "needs": "a PDF file to upload",
+  "note": "The alert is shown for models without document support; whether a PDF is sent natively to a document-capable model was not checked in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model name button and pick a model that cannot read documents.",
+   "Click More composer options and choose Add photos & files, then pick a PDF.",
+   "Click Send or look at the composer alert.",
+   "Compare: the alert should read The selected model can't read the attached document. Switch to Auto, choose a document-capable model, or remove the file. Switching to a document-capable model should remove the alert."
+  ],
+  "where": "Composer > More composer options > Add photos & files, then pick a PDF file"
+ },
+ "S76.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Audio in"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Capabilities"
+   }
+  ],
+  "needs": "none",
+  "note": "Only the chip was found; no audio file attach control was located in the composer.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model name button in the composer footer.",
+   "Click About on a model row.",
+   "Look at the Capabilities chips on the card.",
+   "Compare: a model that accepts audio input shows an Audio in chip; other models do not."
+  ],
+  "where": "Models picker > About <model name> > Capabilities > Audio in"
+ },
+ "S76.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/components/web-settings-navigation.ts",
+    "text": "Dictation"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceInputButton.tsx",
+    "text": "Start voice input"
+   }
+  ],
+  "needs": "a microphone; a Free account may have dictation limits",
+  "note": "Privacy copy says recordings go to OpenAI for transcription; the choice of transcription model is not shown on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click Voice.",
+   "Turn on the Dictation switch and check Dictation language.",
+   "Close Settings, click the microphone button labelled Start voice input in the composer, and speak.",
+   "Compare: the spoken words should be added to the message text after transcription."
+  ],
+  "where": "Settings > Voice > Dictation; then the composer microphone button Start voice input"
+ },
+ "S76.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a microphone and a signed-in account",
+  "note": "The realtime model name is not shown on screen; the session route is in apps/web/app/api/voice/live/sessions/route.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Click the button labelled Start voice mode in the composer.",
+   "Allow microphone access when asked.",
+   "Speak a short sentence and wait for a reply.",
+   "Compare: a live voice session should start and show the transcript turns of your speech."
+  ],
+  "where": "Composer > Start voice mode (icon button with a waveform)"
+ },
+ "S76.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Read message aloud"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "More message actions"
+   }
+  ],
+  "needs": "a speaker and a browser with built-in voices",
+  "note": "Privacy copy says Read aloud uses the browser's built-in voices, not a registry-chosen model; this may differ from Expected.",
+  "reachable": "yes",
+  "steps": [
+   "Get a text reply from the assistant.",
+   "Click the More message actions button under the reply.",
+   "Click Read message aloud.",
+   "Compare: the reply should be read aloud, and the menu item should change to Stop reading message while speaking."
+  ],
+  "where": "Assistant reply > More message actions > Read message aloud"
+ },
+ "S76.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+    "text": "Start voice mode"
+   }
+  ],
+  "needs": "a microphone, speakers and a signed-in account",
+  "note": "The speech-to-speech model is not named on screen; confirm the spoken reply in the live session.",
+  "reachable": "yes",
+  "steps": [
+   "Click Start voice mode in the composer.",
+   "Allow the microphone and ask a question out loud.",
+   "Listen for the spoken answer.",
+   "Compare: the reply should be spoken back during the live session, not only written in the chat."
+  ],
+  "where": "Composer > Start voice mode, then speak and listen for the spoken reply"
+ },
+ "S76.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "More composer options"
+   }
+  ],
+  "needs": "none; a plan may limit image creation",
+  "note": "Image output is also listed as an Image out chip on each model card in the Models picker.",
+  "reachable": "yes",
+  "steps": [
+   "Click More composer options in the composer.",
+   "Click Create image.",
+   "Type a short picture prompt and send it.",
+   "Compare: an image should be generated; if the chosen model cannot make images, the image mode should not start."
+  ],
+  "where": "Composer > More composer options > Create image"
+ },
+ "S76.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create image"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Add photos & files"
+   }
+  ],
+  "needs": "a picture file to upload",
+  "note": "The warning Image mode takes images only was found in ChatComposerNew.tsx; which image models accept edits is not shown in the picker.",
+  "reachable": "yes",
+  "steps": [
+   "Click More composer options and choose Create image.",
+   "Click More composer options again and choose Add photos & files, then pick a picture.",
+   "Type an edit instruction and send.",
+   "Compare: the edited picture should come back; the composer should warn if the file is not a picture."
+  ],
+  "where": "Composer > More composer options > Create image, then Add photos & files to attach a picture"
+ },
+ "S76.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+    "text": "Create video"
+   }
+  ],
+  "needs": "none; a plan may limit video creation",
+  "note": "No duration or size control was located in the composer code reviewed; check the screen after choosing Create video.",
+  "reachable": "yes",
+  "steps": [
+   "Click More composer options and choose Create video.",
+   "Type a short video prompt and check the duration or size controls.",
+   "Send the request.",
+   "Compare: the video should match the duration and size offered for the chosen model."
+  ],
+  "where": "Composer > More composer options > Create video"
+ },
+ "S76.19": {
+  "labels": [],
+  "needs": "a finished generated video",
+  "note": "No audio on/off control was found; the effect is only visible in the finished video file.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Create a short video with Create video.",
+   "Download or open the finished video.",
+   "Compare: the video should have a sound track only if the model that made it supports audio."
+  ],
+  "where": "Generated video file after Composer > More composer options > Create video"
+ },
+ "S76.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Tools"
+   }
+  ],
+  "needs": "none",
+  "note": "The refusal or rerouting of tool turns to models without Tools was not confirmed in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model name button in the composer footer.",
+   "Click About on a model row.",
+   "Look for the Tools chip in Capabilities.",
+   "Compare: a model with function calling shows Tools; a model without it does not."
+  ],
+  "where": "Models picker > About <model name> > Capabilities > Tools"
+ },
+ "S76.22": {
+  "labels": [],
+  "needs": "a Connector or tool that the model can use",
+  "note": "No visible setting for parallel tool calls was found.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask a question that needs two tools at once, such as a search plus a file lookup.",
+   "Watch the tool steps shown under the reply.",
+   "Compare: the tool steps should run together when the model supports parallel tool calls."
+  ],
+  "where": "Chat reply that uses several tools in one step (effect seen in the reply)"
+ },
+ "S76.23": {
+  "labels": [],
+  "needs": "a Connector or tool that the model can use",
+  "note": "The only visible label is the Tools chip on the model card, which is function calling rather than agentic rounds.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Ask a question that needs a search, then a follow-up tool use, such as a file lookup.",
+   "Watch the reply for several tool rounds before the final answer.",
+   "Compare: the model should use more than one tool round when needed."
+  ],
+  "where": "Chat reply that calls tools over several rounds (effect seen in the reply)"
+ },
+ "S76.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Reasoning effort"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "General"
+   }
+  ],
+  "needs": "a Free or paid account; a model with reasoning effort levels",
+  "note": "The Off note text is Off is not supported by this model in ComposerFooter.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the model picker from the composer footer and pick a model that supports reasoning effort.",
+   "Click the Reasoning effort control in the composer footer and look at the levels offered.",
+   "Open Settings > General and find Reasoning effort.",
+   "Compare: only the levels that the chosen model supports should appear; Off should show a note if the model cannot turn reasoning off."
+  ],
+  "where": "Composer footer > Reasoning effort control; Settings > General > Reasoning effort"
+ },
+ "S76.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Context ceiling"
+   }
+  ],
+  "needs": "none",
+  "note": "Trimming or refusing over-long requests was not confirmed in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model name button in the composer footer.",
+   "Click About on a model row.",
+   "Read the Context ceiling value in the grid of facts.",
+   "Compare: the value should match the model's context window; a very long chat should be trimmed or refused."
+  ],
+  "where": "Models picker > About <model name> > Context ceiling"
+ },
+ "S76.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Output ceiling"
+   }
+  ],
+  "needs": "none",
+  "note": "The effect on long replies was not confirmed in the UI.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model name button in the composer footer.",
+   "Click About on a model row.",
+   "Read the Output ceiling value.",
+   "Compare: the value should match the model's output limit, and a very long reply should stop at that size."
+  ],
+  "where": "Models picker > About <model name> > Output ceiling"
+ },
+ "S76.31": {
+  "labels": [],
+  "needs": "none",
+  "note": "No streaming on/off control was found; the transport choice is inside the request path.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Send a long question to a model.",
+   "Watch the reply text while it is still arriving.",
+   "Compare: the text should appear piece by piece rather than all at once."
+  ],
+  "where": "Chat reply as it is written (effect seen while the answer arrives)"
+ },
+ "S76.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Switching models here starts a new prompt cache"
+   }
+  ],
+  "needs": "a chat with at least one reply",
+  "note": "The cache class per route is not shown; only the switch warning is visible.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message and wait for a reply in a chat.",
+   "Click the model name button in the composer footer and pick a different model.",
+   "Look at the line just above the composer footer.",
+   "Compare: the line Switching models here starts a new prompt cache should appear once there are earlier turns."
+  ],
+  "where": "Composer, after at least one reply in the chat: switch model with the model name button"
+ },
+ "S76.34": {
+  "labels": [],
+  "needs": "a workspace admin account",
+  "note": "Searched for region, residency and countries; the only match was Allowed countries in apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx, which is not shown as model or provider residency in the picker.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S76.35": {
+  "labels": [
+   {
+    "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+    "text": "Zero data retention only"
+   },
+   {
+    "file": "apps/web/lib/services/workspace-posture-service.ts",
+    "text": "Workspace policy"
+   }
+  ],
+  "needs": "a workspace admin account",
+  "note": "The admin page path from the sidebar was not confirmed; the routing effect is inner behaviour and is not visible on screen.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Workspace policy page (the link is labelled Workspace policy; address /workspace/policy).",
+   "Find the Zero data retention only switch.",
+   "Turn it on and save.",
+   "Compare: routes that keep data should be excluded for chats in this workspace; this routing effect is not shown on the page itself."
+  ],
+  "where": "Workspace policy page (Workspace policy link) > Zero data retention only"
+ },
+ "S76.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Unavailable right now"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+    "text": "Upgrade to use"
+   }
+  ],
+  "needs": "none; the Leaving text appears only in the warning window before retirement",
+  "note": "Retired models are excluded from the list in routing code, but the picker label for them was not located.",
+  "reachable": "yes",
+  "steps": [
+   "Click the model name button in the composer footer to open the Models dialog.",
+   "Look at the status text on each model row.",
+   "Compare: a model with a scheduled retirement shows Leaving <date>; a model that is down shows Unavailable right now, and it cannot be picked."
+  ],
+  "where": "Models picker: model row status text (Leaving <date> or Unavailable right now)"
+ },
+ "S76.38": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+    "text": "Switching models here starts a new prompt cache"
+   }
+  ],
+  "needs": "a Free account or a paid account, and a chat with at least one reply",
+  "note": "Expected asks for per-route cache class, retention, price and routing rank. The Code line cites ComposerFooter.tsx:1571 (the catalogue open branch, no route text) and auto.ts:1099 and 1169 (route rejection reasons and cache-affinity ranking, internal only). Searched for route, cacheClass and cache text in apps/web, apps/desktop, packages/ui and packages/ai; the route data lives in the generated model registry (packages/ai/model-registry), not in any visible control. The plan note says \"not written yet\".",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Sign in and open a chat that already has at least one reply.",
+   "Open the model picker in the composer footer and look at its bottom area.",
+   "Check that the line \"Switching models here starts a new prompt cache\" is shown, and that it is absent on a new empty chat. This line is about cache reset on model switch, not per-route differences; the route ranking itself has no visible effect in the UI."
+  ],
+  "where": "No screen shows route-specific capabilities, cache class, retention or price. The only related visible text is a line in the chat model picker: \"Switching models here starts a new prompt cache\", shown after a chat has at least one assistant reply."
+ }
+}

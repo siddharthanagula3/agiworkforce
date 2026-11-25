@@ -1,0 +1,523 @@
+{
+ "S65.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Any app"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Computer use"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Settings\u2026"
+   }
+  ],
+  "needs": "a Mac with the Desktop app (Electron host); no guided wizard found",
+  "note": "Code shows a toggle plus permission rows, not a guided multi-step setup; the Expected 'guided' part looks different from the code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 from the app menu.",
+   "Under Desktop app, click Computer use.",
+   "Turn on the switch labelled Any app.",
+   "Look for the rows Accessibility and Screen Recording with Open System Settings buttons and compare with Expected: the permissions are shown and linked, but no step-by-step wizard was found in the code."
+  ],
+  "where": "Settings\u2026 (app menu) > Desktop app > Computer use > Any app"
+ },
+ "S65.02": {
+  "labels": [
+   {
+    "file": "packages/contracts/local-runtime/src/desktop-privacy.ts",
+    "text": "Accessibility"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopPermissionsSection.tsx",
+    "text": "Open System Settings"
+   },
+   {
+    "file": "packages/contracts/local-runtime/src/desktop-privacy.ts",
+    "text": "Computer use: moving the pointer, clicking and typing"
+   }
+  ],
+  "needs": "a Mac with the Desktop app",
+  "note": "The same rows also appear under Desktop app > Permissions (SYSTEM_HINT text in DesktopPermissionsSection.tsx).",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 and go to Desktop app > Computer use.",
+   "Turn on Any app.",
+   "Read the Accessibility and Screen Recording rows: each shows what it is for and a status such as Not asked yet or Allowed.",
+   "Where the status needs action, click Open System Settings for that row and compare with Expected: each permission has a purpose line."
+  ],
+  "where": "Settings\u2026 (app menu) > Desktop app > Computer use (with Any app on) > Accessibility and Screen Recording rows"
+ },
+ "S65.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Allowed apps"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopPermissionsSection.tsx",
+    "text": "Always allowed"
+   }
+  ],
+  "needs": "a Mac with the Desktop app and one installed app to test with",
+  "note": "The list cannot add an app directly; an app is added only through the permission dialog during a task. The session-allow button label was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 and go to Desktop app > Computer use, with Any app on.",
+   "Ask AGI in chat to work in an app, for example TextEdit, while Computer use is on.",
+   "When the permission dialog appears, choose the allow option it offers (Deny is the refuse button).",
+   "Go back to Computer use and look under Allowed apps for that app; each row offers Remove, and an empty list reads None yet."
+  ],
+  "where": "Settings\u2026 (app menu) > Desktop app > Computer use > Allowed apps"
+ },
+ "S65.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Refused apps"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RefuseAppPicker.tsx",
+    "text": "Add app"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RefuseAppPicker.tsx",
+    "text": "Search apps"
+   }
+  ],
+  "needs": "a Mac with the Desktop app and an installed app to refuse",
+  "note": "Refused rows show Always refused or Refused until you quit Desktop; Ask again restores them.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 and go to Desktop app > Computer use.",
+   "Under Refused apps, click Add app (only shown when the Desktop can refuse apps).",
+   "Type in Search apps and pick an app in Installed apps.",
+   "Check that the app now appears under Refused apps, then ask AGI in chat to control it and compare with Expected: it should not run."
+  ],
+  "where": "Settings\u2026 (app menu) > Desktop app > Computer use > Refused apps > Add app"
+ },
+ "S65.06": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/activity-kinds.ts",
+    "text": "Looked at display"
+   }
+  ],
+  "needs": "a Mac with two displays and a computer-use task",
+  "note": "The display choice is a tool parameter the agent sends, not a control in the UI; the id must come from a previous screenshot listing.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "On a Mac with two displays, with Computer use on, ask AGI in chat to take a screenshot, then ask it to look at the second display.",
+   "Open the activity under the reply and check the step reads Looked at display 2 (the number is passed by the agent).",
+   "Compare with Expected: the screenshot should come from the chosen display."
+  ],
+  "where": "Effect seen in the chat activity: Looked at display N"
+ },
+ "S65.07": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
+    "text": "Screen after:"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/lib/activity-kinds.ts",
+    "text": "Looked at the screen"
+   }
+  ],
+  "needs": "a Desktop app with computer use on and an app to act in",
+  "note": "A picture appears only when the step returns one; I did not confirm the exact live timing.",
+  "reachable": "yes",
+  "steps": [
+   "With Computer use on (Settings\u2026 > Desktop app > Computer use > Any app), send a chat request that makes AGI click or look at the screen.",
+   "While it runs, open the activity shown under the reply.",
+   "Look for each screen step card with a picture of the screen and the caption Screen after: followed by the action.",
+   "Compare with Expected: the picture should match what the agent saw."
+  ],
+  "where": "Chat, under the reply: activity step cards with a screenshot"
+ },
+ "S65.09": {
+  "labels": [],
+  "needs": "a Mac with the Desktop app",
+  "note": "Searched ComputerUseSettings.tsx and ComputerUseControlBar.tsx: they show the phase text but no app name. The app name is only in step text (In front: <app>) in apps/web/features/desktop-host/lib/device-steps.ts, which the model reads. No on-screen app label found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S65.10": {
+  "labels": [],
+  "needs": "a Mac with the Desktop app",
+  "note": "Searched ComputerUseSettings.tsx, ComputerUseControlBar.tsx and the step text in device-steps.ts: no window label is shown to the user. The window is read natively in apps/desktop/electron/native/macos/agi-input.swift, but no UI text using it was found.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S65.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Read the clipboard"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Local access"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "a Desktop app with computer use on",
+  "note": "The prompt text is set in apps/desktop/electron/runtime/computerUseSteps.ts; the dialog button labels were not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Computer use (Settings\u2026 > Desktop app > Computer use > Any app).",
+   "In chat, ask AGI to paste text into an app with Command+V.",
+   "When the dialog appears, read its reason about the clipboard and choose Deny or allow.",
+   "Open Settings\u2026 > Capabilities > Local access > Permissions and look for Read the clipboard; compare with Expected: it needs its own answer."
+  ],
+  "where": "Chat (computer use on): ask AGI to copy or paste with the keyboard; then Settings\u2026 > Capabilities > Local access > Permissions"
+ },
+ "S65.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Add a folder"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Remove access"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/LocalAccessSection.tsx",
+    "text": "Local access"
+   }
+  ],
+  "needs": "a Mac with the Desktop app and a test folder",
+  "note": "Local access is a Desktop-only section shown under Capabilities.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 and click Capabilities, then find Local access.",
+   "Under Folders, click Add a folder and choose a folder in the picker.",
+   "Check the folder is listed under Folders.",
+   "Click Remove on that folder, confirm Remove access in the dialog, and compare with Expected: the folder is no longer listed."
+  ],
+  "where": "Settings\u2026 (app menu) > Capabilities > Local access > Folders > Add a folder"
+ },
+ "S65.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Any app"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Desktop app"
+   },
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Computer use"
+   }
+  ],
+  "needs": "a Desktop app and an installed app to open",
+  "note": "A missing app gives an error that names it; the exact wording was not captured here.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Settings\u2026 > Desktop app > Computer use > Any app.",
+   "In chat, ask AGI to open TextEdit.",
+   "Allow the permission prompt if one appears.",
+   "Look for the TextEdit window opening on the Mac and compare with Expected."
+  ],
+  "where": "Chat (computer use on): ask AGI to open an app, for example TextEdit"
+ },
+ "S65.14": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/activity-kinds.ts",
+    "text": "Clicked"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Any app"
+   }
+  ],
+  "needs": "a Desktop app with computer use on and TextEdit",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Settings\u2026 > Desktop app > Computer use > Any app, and open TextEdit.",
+   "In chat, ask AGI to click the New Document button and type a short word.",
+   "Open the activity under the reply and look for the step lines Clicked at ... and Typed.",
+   "Compare with Expected: the text should appear in the app."
+  ],
+  "where": "Chat (computer use on): send a request to click and type in an app, then the activity under the reply"
+ },
+ "S65.15": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/activity-kinds.ts",
+    "text": "Scrolled at"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Any app"
+   }
+  ],
+  "needs": "a Desktop app with computer use on and a scrollable window",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Computer use and open a long page or document in an app.",
+   "In chat, ask AGI to scroll down in that window.",
+   "Open the activity under the reply and look for the step line Scrolled at ...",
+   "Compare with Expected: the window should scroll."
+  ],
+  "where": "Chat (computer use on): ask AGI to scroll in an app, then the activity under the reply"
+ },
+ "S65.16": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/activity-kinds.ts",
+    "text": "Dragged from"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Any app"
+   }
+  ],
+  "needs": "a Desktop app with computer use on and a draggable item",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Computer use and open an app with a draggable item.",
+   "In chat, ask AGI to drag the item to another place.",
+   "Open the activity under the reply and look for the step line Dragged from ... to ...",
+   "Compare with Expected: the item should move."
+  ],
+  "where": "Chat (computer use on): ask AGI to drag an item, then the activity under the reply"
+ },
+ "S65.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseControlBar.tsx",
+    "text": "Paused. You have the screen."
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseControlBar.tsx",
+    "text": "Hand back"
+   }
+  ],
+  "needs": "a Desktop app with computer use on",
+  "note": "The bar's placement on screen was not verified in the code read.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a computer-use task in chat with Computer use on.",
+   "While AGI is working, move the mouse or type.",
+   "Look for the bar text Paused. You have the screen. with the hint It paused when you moved the pointer or typed.",
+   "Compare with Expected: AGI should stop instead of fighting for the mouse. Then click Hand back to continue."
+  ],
+  "where": "The Computer use bar: Paused. You have the screen."
+ },
+ "S65.20": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Stop Computer Use"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "File"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseControlBar.tsx",
+    "text": "Stop"
+   }
+  ],
+  "needs": "a Desktop app with computer use on",
+  "note": "Escape is the stop key (COMPUTER_USE_STOP_SHORTCUT); the Stop button also appears in Settings > Desktop app > Computer use.",
+  "reachable": "yes",
+  "steps": [
+   "Start a computer-use task in chat with Computer use on.",
+   "While AGI is working, press Escape, or open the File menu and click Stop Computer Use.",
+   "Look for the Computer use bar to disappear, or the Stop button to turn off, and check the chat stops.",
+   "Compare with Expected: all computer control should end at once."
+  ],
+  "where": "Press Escape while AGI is active, or File > Stop Computer Use"
+ },
+ "S65.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Take over"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Take Over Screen Control"
+   }
+  ],
+  "needs": "a Desktop app with computer use on",
+  "note": "The same Take over button is in Settings > Desktop app > Computer use.",
+  "reachable": "yes",
+  "steps": [
+   "Start a computer-use task while AGI is active.",
+   "Click Take over on the Computer use bar (or File > Take Over Screen Control).",
+   "Look for the text Paused. You have the screen. and the button now reading Hand back.",
+   "Compare with Expected: AGI should hold still while you use the mouse."
+  ],
+  "where": "Computer use bar > Take over, or File > Take Over Screen Control"
+ },
+ "S65.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ControlBar.tsx",
+    "text": "Hand back"
+   },
+   {
+    "file": "apps/desktop/electron/appMenu.ts",
+    "text": "Hand Back Screen Control"
+   }
+  ],
+  "needs": "a Desktop app with a paused computer-use task",
+  "note": "The Hand the screen back? dialog is in apps/desktop/electron/runtime/computerUseSteps.ts; I did not confirm which click opens it.",
+  "reachable": "yes",
+  "steps": [
+   "While AGI is paused, click Hand back on the Computer use bar (or File > Hand Back Screen Control).",
+   "If a dialog titled Hand the screen back? appears, click Hand back in it.",
+   "Look for the bar to return to AGI is using your computer.",
+   "Compare with Expected: AGI should continue the task."
+  ],
+  "where": "Computer use bar > Hand back, or File > Hand Back Screen Control"
+ },
+ "S65.23": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/runtime/computerUseSteps.ts",
+    "text": "Check this step"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow once"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a Desktop app with computer use on and a test app",
+  "note": "The review text comes from the agent or a password-field check (computerUseSteps.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Computer use and open a test app with a password field or a message box.",
+   "In chat, ask AGI to type a password or send a short message.",
+   "When the dialog titled Check this step appears, read the message that starts Desktop wants to.",
+   "Click Deny and check the step does not run, then repeat and choose Allow once and compare with Expected."
+  ],
+  "where": "Chat (computer use on): ask AGI to type into a password field or send a message"
+ },
+ "S65.25": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/lib/activity-kinds.ts",
+    "text": "Clicked"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/lib/activity-kinds.ts",
+    "text": "Looked at the screen"
+   }
+  ],
+  "needs": "a Desktop app with computer use on",
+  "note": "There is no separate receipt screen; success or failure display in the activity was not fully confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Run a computer-use task in chat with Computer use on.",
+   "Open the activity under the reply.",
+   "Look for one line per action, such as Clicked, Scrolled at or Looked at the screen, and any error line.",
+   "Compare with Expected: each action should be recorded and show whether it worked."
+  ],
+  "where": "Chat, activity under the reply: the step lines"
+ },
+ "S65.26": {
+  "labels": [
+   {
+    "file": "apps/desktop/electron/runtime/applicationControl.ts",
+    "text": "Finder can open, move and delete any file you can, so controlling it reaches every file on this computer."
+   },
+   {
+    "file": "apps/desktop/electron/runtime/applicationControl.ts",
+    "text": "System Settings changes how this computer is set up, including its privacy and security settings."
+   }
+  ],
+  "needs": "a Desktop app with computer use on",
+  "note": "Missing apps give No app called ... is installed. The refusal for a blocked app is written for the model, so the chat wording may vary.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on Computer use with Any app.",
+   "In chat, ask AGI to control Finder or System Settings.",
+   "When the permission dialog appears, read the reason text about what the app can reach.",
+   "Compare with Expected: the product should say why it cannot or should not control that app."
+  ],
+  "where": "Chat (computer use on): ask AGI to control Finder or System Settings"
+ },
+ "S65.27": {
+  "labels": [],
+  "needs": "a cloud task with a linked computer that is offline",
+  "note": "Found the wait notice Waiting for <computer> to come online in apps/web/lib/device-steps/device-clearance-step.ts and the wait limit in apps/web/lib/workflows/cloud-agent-workflow.ts, but did not find the screen that shows it. Searched those files only.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S65.28": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/ComputerUseSettings.tsx",
+    "text": "Allowed apps"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/DesktopPermissionsSection.tsx",
+    "text": "Remove"
+   }
+  ],
+  "needs": "a Desktop app with an app already allowed",
+  "note": "The wording AGI uses after a revoke comes from the model; the code text asks the user to allow the app.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings\u2026 and go to Desktop app > Computer use.",
+   "Under Allowed apps, click Remove on an app.",
+   "Ask AGI in chat to control that app again.",
+   "Compare with Expected: AGI should stop and say how to allow it again, with Ask again or the permission prompt."
+  ],
+  "where": "Settings\u2026 (app menu) > Desktop app > Computer use > Allowed apps > Remove"
+ },
+ "S65.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Pair a phone"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Copy link for a browser"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+    "text": "Remote Control"
+   }
+  ],
+  "needs": "a paid plan, a second device, and the Desktop app",
+  "note": "Code says Remote Control comes with paid plans. The owner's notes say it is hidden in v1 (2026-11-14), so check the build before testing.",
+  "reachable": "yes",
+  "steps": [
+   "In the Desktop app, open Settings\u2026 > Capabilities > Remote Control and click Pair a phone.",
+   "Click Copy link for a browser.",
+   "On another device, open that link, paste it in the box on the page, and send a task.",
+   "Compare with Expected: the task should run on your own Mac."
+  ],
+  "where": "Settings\u2026 (app menu) > Capabilities > Remote Control > Pair a phone, then Copy link for a browser"
+ }
+}

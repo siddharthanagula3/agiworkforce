@@ -1,0 +1,219 @@
+{
+ "S7.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a signed-in account (the greeting only shows when signed in)",
+  "note": "The greeting is hidden when signed out; the empty area is centred by CSS in apps/extension/src/side_panel.ts (#sp-empty, flex centred).",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel with Command+Shift+K (Chrome shortcut \"Open AGI side panel\").",
+   "If a chat already has messages, click the \"New chat\" icon in the header.",
+   "Look at the empty chat: the greeting heading and the \"How can I help you today?\" box should sit in the middle of the open area, not at the top with an empty transcript above."
+  ],
+  "where": "Side panel > header icon \"New chat\" (or open the side panel with Command+Shift+K on a fresh start)"
+ },
+ "S7.02": {
+  "labels": [],
+  "needs": "a chat with a long reply",
+  "note": "The column width is set by --sp-reading-column (768px) in apps/extension/src/side_panel.css and by #sp-messages padding in apps/extension/src/side_panel.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel with Command+Shift+K and open a chat with a long written reply.",
+   "Widen the Chrome side panel by dragging its left edge as far as it goes.",
+   "Look at the reply text: it should stay in a column that is centred and stops at a readable width instead of stretching to the full window."
+  ],
+  "where": "Side panel > any chat that has a written reply"
+ },
+ "S7.03": {
+  "labels": [],
+  "needs": "a file or table to view",
+  "note": "Not found. Searched apps/extension/src for full width, data analysis, spreadsheet, wide layout and fullWidth: only a CSV/XLSX export helper (apps/extension/src/features/side-panel/artifactPanel.ts) and unrelated matches. No full-width data layout exists in the code.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S7.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open AGI side panel"
+   }
+  ],
+  "needs": "a Chrome window with a normal web page open",
+  "note": "The split is Chrome's own side panel. Clicking the toolbar icon does not open it in code (openPanelOnActionClick is false in apps/extension/src/background.ts); the in-page \"Open in side panel\" button also works.",
+  "reachable": "yes",
+  "steps": [
+   "Open an ordinary web page (https) in a Chrome tab.",
+   "Press Command+Shift+K to open the AGI side panel.",
+   "Look at the window: the AGI side panel should sit beside the web page, with the page still visible next to the conversation."
+  ],
+  "where": "Command+Shift+K (Chrome shortcut named \"Open AGI side panel\"), with a normal web page open"
+ },
+ "S7.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Close recent chats"
+   }
+  ],
+  "needs": "a signed-in account to see saved chats",
+  "note": "The secondary navigation is an overlay sheet (apps/extension/src/side_panel.ts, #sp-recents), not a side column; it opens and closes.",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI side panel and click the clock icon in the header (title \"Recent chats\").",
+   "The Recent chats sheet opens over the chat. Click the X button labelled \"Close recent chats\".",
+   "Click the clock icon again and check that the list opens again and the chat behind it is back in view after closing."
+  ],
+  "where": "Side panel > header clock icon \"Recent chats\""
+ },
+ "S7.17": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Close"
+   }
+  ],
+  "needs": "a chat that contains an image",
+  "note": "The viewer handles images only; the code has no video viewer. The X button has no visible text, only the label \"Close\".",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat reply that contains an image (for example one an image tool made or one you attached).",
+   "Click the image. A dark full-screen view with the picture should open.",
+   "Press Escape, click the X at the top right, or click the dark background, and check that you are back at the chat."
+  ],
+  "where": "Side panel > chat reply that shows an image > click the image"
+ },
+ "S7.18": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/launcher.ts",
+    "text": "Ask AGI"
+   }
+  ],
+  "needs": "an approved website; the \"Page assistant overlay\" setting is on by default",
+  "note": "Expected says a small always-on-top window floats over other apps; the code draws a fixed button inside the web page (apps/extension/src/features/content/in-page-panel/launcher.ts) and hides it while the side panel is open (apps/extension/src/inPagePanel/setup.ts). The setting is \"Page assistant overlay\" under Extension settings > Options.",
+  "reachable": "yes",
+  "steps": [
+   "Open an https web page on a site you have approved for AGI (AGI asks when needed).",
+   "Look at the bottom right of the page for the round AGI button; hover it to see \"Ask AGI\".",
+   "Switch to another app and check: the button only exists inside that web page and does not float over other apps as its own window."
+  ],
+  "where": "Any approved web page (https) > round AGI button at the bottom right of the page (hover tooltip \"Ask AGI\")"
+ },
+ "S7.19": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/panel.ts",
+    "text": "Ask one question about this page\u2026"
+   },
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/panel.ts",
+    "text": "Open in side panel"
+   }
+  ],
+  "needs": "an approved website",
+  "note": "The panel is one prompt at a time with no saved chats, per the Settings text \"One prompt and response at a time.\"",
+  "reachable": "yes",
+  "steps": [
+   "Open an approved web page and click the round AGI button.",
+   "Look at the panel titled \"AGI page assistant\": it shows a single question box with \"Ask one question about this page\u2026\" and an \"Open in side panel\" button.",
+   "Ask one question and check there is no conversation list or sidebar and that only one prompt and response show at a time."
+  ],
+  "where": "Any approved web page > click the round AGI button > \"AGI page assistant\" panel"
+ },
+ "S7.20": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "a chat with enough messages to scroll",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a long reply in the AGI side panel.",
+   "Look at the box \"How can I help you today?\" at the bottom of the panel.",
+   "Scroll the reply up and down and check the box stays at the bottom while only the reply moves."
+  ],
+  "where": "Side panel > any chat"
+ },
+ "S7.21": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How can I help you today?"
+   }
+  ],
+  "needs": "none",
+  "note": "The box grows by CSS (field-sizing: content, max-height 120px in apps/extension/src/side_panel.ts); there is no separate larger editor in the code.",
+  "reachable": "yes",
+  "steps": [
+   "Click the message box at the bottom of the side panel.",
+   "Type a long prompt, pressing Return for new lines so it goes several lines long.",
+   "Check that the box grows taller as lines are added, and that after it reaches its limit it scrolls inside instead of growing further."
+  ],
+  "where": "Side panel > click the box \"How can I help you today?\""
+ },
+ "S7.22": {
+  "labels": [],
+  "needs": "a chat long enough to scroll",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat long enough to scroll.",
+   "Scroll the reply area with the mouse wheel or trackpad.",
+   "Check that the header, the side panel controls and the message box do not move while the reply scrolls."
+  ],
+  "where": "Side panel > any long chat"
+ },
+ "S7.23": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Preview"
+   }
+  ],
+  "needs": "a chat reply that creates an artifact",
+  "note": "The header is a separate block above the scrolling body (apps/extension/src/features/side-panel/artifactPanel.ts), so it stays put by layout. The header also has an \"open on web\" button, which Expected does not list.",
+  "reachable": "yes",
+  "steps": [
+   "Ask for something that creates an artifact (for example a short web page or code file) and wait for the artifact card.",
+   "Click \"Open\" on the card; the artifact panel opens above the chat with its header.",
+   "Scroll the artifact body and check that the header with \"Preview\", \"Code\" and the copy, download and close buttons stays in place."
+  ],
+  "where": "Side panel > a reply with an artifact card > \"Open\" on the card"
+ },
+ "S7.25": {
+  "labels": [],
+  "needs": "a narrow Chrome side panel",
+  "note": "Not found. The only width rules are padding changes at 390px and 340px in apps/extension/src/side_panel.ts. The artifact panel always stacks above the chat and Recent chats is always an overlay, so there is no side-by-side panel to stack.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S7.29": {
+  "labels": [],
+  "needs": "a Chrome side panel you can resize",
+  "note": "Not found. Searched apps/extension/src for min-width, max-width and resize handles: no minimum or maximum width for the panel. The side panel width is set by Chrome, and manifest.json sets none.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

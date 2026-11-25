@@ -1,0 +1,612 @@
+{
+ "S63.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Start from a template"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "New task"
+   }
+  ],
+  "needs": "a Basic or higher paid plan (the create controls are hidden otherwise) and at least one existing routine, because the gallery panel only shows when the list is not empty",
+  "note": "The gallery panel is rendered only when galleryOpen is true and the routine list is not empty; with no routines the empty state shows Create Your First Schedule instead. Whether the gallery can be reopened at any time was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled in the sidebar.",
+   "Click the chevron beside New task (its label is More ways to create a task).",
+   "Click Start from a template.",
+   "Look for the Start from a template panel with a grid labelled Schedule templates, and check you can browse several templates."
+  ],
+  "where": "Sidebar > Scheduled > More ways to create a task (chevron beside New task) > Start from a template"
+ },
+ "S63.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Task Instructions"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Create Schedule"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "New task"
+   }
+  ],
+  "needs": "a Basic or higher paid plan; a Free account sees Scheduled tasks are available on Basic and higher plans.",
+  "note": "The earlier in-app check was blocked by plan (E054), so creation was not exercised.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled in the sidebar.",
+   "Click New task, or choose Create from scratch from the chevron menu.",
+   "In the Create Schedule dialog, type your instructions in Task Instructions and enter a Schedule Name.",
+   "Click Create Schedule and check that the new routine appears in the list with its name and prompt."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch, then fill Task Instructions and click Create Schedule"
+ },
+ "S63.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Run this on a schedule"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and a finished chat reply",
+  "note": "The menu's trigger button text was not confirmed; only the menu item label was found.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and wait for an assistant reply to finish.",
+   "Open the more-actions menu on that reply (its trigger label was not confirmed in code).",
+   "Click Run this on a schedule.",
+   "Check that the Create Schedule dialog opens pre-filled from that reply, then save it and look for the new routine under Scheduled."
+  ],
+  "where": "Chat > an assistant reply's more-actions menu > Run this on a schedule"
+ },
+ "S63.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Schedule Name"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Description"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Save Changes"
+   }
+  ],
+  "needs": "a Basic or higher paid plan",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Type a value in Schedule Name and an optional value in Description.",
+   "Click Create Schedule.",
+   "Click the edit (pencil) button on the routine, change Schedule Name or Description, click Save Changes, and check the card shows the new values."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch (Schedule Name and Description fields); to edit later, Scheduled > Edit <routine name>"
+ },
+ "S63.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Task Instructions"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Save Changes"
+   }
+  ],
+  "needs": "a Basic or higher paid plan",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Type several lines in Task Instructions, including a line break.",
+   "Click Create Schedule, then open the routine's edit (pencil) button.",
+   "Check that the Task Instructions text is shown and editable, and that Save Changes stores the change."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch (Task Instructions box); edit later with Scheduled > Edit <routine name>"
+ },
+ "S63.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleAccessFields.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a Basic or higher paid plan; a project may be needed for project-file sources (the code passes a hasProject flag)",
+  "note": "Which source options appear depends on whether a project is selected; the exact option labels were not extracted.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Find the Sources group in the form.",
+   "Tick and untick the source options offered.",
+   "Click Create Schedule and open Edit on the routine to check the same sources are still ticked."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch > Sources"
+ },
+ "S63.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleAccessFields.tsx",
+    "text": "Connectors"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleAccessFields.tsx",
+    "text": "Reading your connectors\u2026"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and at least one connected connector account to see options",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Find the Connectors group in the form; wait for Reading your connectors\u2026 to finish.",
+   "Tick the connectors the run may use and untick others.",
+   "Click Create Schedule and reopen Edit to check the selection is kept."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch > Connectors"
+ },
+ "S63.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Run as agent"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and at least one custom agent; the field appears only when agents exist",
+  "note": "The field is hidden when no agent options exist.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Open the Run as agent dropdown.",
+   "Choose an agent and read the description that appears under it.",
+   "Click Create Schedule, then check the routine card or Edit dialog shows the chosen agent."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch > Run as agent"
+ },
+ "S63.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Frequency"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "One Time"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Run At"
+   }
+  ],
+  "needs": "a Basic or higher paid plan",
+  "note": "The earlier in-app check was blocked by plan (E054).",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Set Frequency to One Time.",
+   "Set Run At to a future date and time.",
+   "Click Create Schedule and check the card's Next Run shows that time."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch > Frequency > One Time, then Run At"
+ },
+ "S63.12": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Frequency"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Repeat Every"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Daily"
+   }
+  ],
+  "needs": "a Basic or higher paid plan; a long wait is needed to see a scheduled fire",
+  "note": "The firing itself is a server cron route (apps/web/app/api/cron/run-schedules/route.ts) with no screen; the tester sees it through Next Run and Last Run.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Set Frequency to Daily, Weekly or Monthly, and set Repeat Every where shown.",
+   "Click Create Schedule and read the Next Run value on the card.",
+   "Wait for a due time, or use Run now, then check Last Run and the run history update."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch > Frequency > Daily (or Weekly, Monthly, Interval)"
+ },
+ "S63.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Time Zone"
+   }
+  ],
+  "needs": "a Basic or higher paid plan",
+  "note": "Suggestions come from a datalist; the helper text says daylight saving follows the chosen zone.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Click Time Zone and type a city or region such as the zone you want.",
+   "Pick a zone from the suggestions, set a time, and click Create Schedule.",
+   "Open the routine card and compare the Time Zone and Next Run values with the zone you chose."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch > Time Zone"
+ },
+ "S63.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Custom Cron"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Cron Expression"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Only Run During"
+   }
+  ],
+  "needs": "a Basic or higher paid plan",
+  "note": "The Recurrence Rule field was located but its inner behaviour was not read; run windows are the Only Run During setting.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Open Frequency and choose Custom Cron, then type a value in Cron Expression.",
+   "Try Recurrence Rule, then Interval with Repeat Every.",
+   "Open When It May Run, And What Happens If It Fails and set Only Run During; then check each saved routine's Next Run and Timing."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch > Frequency > Custom Cron, Recurrence Rule or Interval; Only Run During is under When It May Run, And What Happens If It Fails"
+ },
+ "S63.15": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "When An Event Happens"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Add trigger"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Gmail"
+   }
+  ],
+  "needs": "a Basic or higher paid plan, the matching connector account for the source, and an outside account for the event source",
+  "note": "A trigger is added from the routine card, not from the create form; the Frequency option When An Event Happens is the form-side choice.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and open a routine with the History button (title Run History).",
+   "Scroll to the Triggers for section and click Add trigger.",
+   "Choose a source such as Gmail, GitHub, Slack or Google Calendar, then fill its fields and click Add trigger to save.",
+   "Send or simulate an event from that source and check the routine appears in its run history."
+  ],
+  "where": "Sidebar > Scheduled > routine card > History button (title Run History) > Triggers for <routine name> > Add trigger"
+ },
+ "S63.16": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/TriggerConditionsEditor.tsx",
+    "text": "Only when"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Event types"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Ignore repeats for (seconds)"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and an event source connected to send events",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a routine's History (title Run History) and click Add trigger.",
+   "Set Event types and the Ignore repeats for (seconds) value.",
+   "Under Only when, add a condition: pick a field, a comparison and a value.",
+   "Save the trigger, then send an event that matches and one that does not, and check only the matching one starts a run."
+  ],
+  "where": "Sidebar > Scheduled > routine card > History button > Triggers for <routine name> > Add trigger > Only when and Event types"
+ },
+ "S63.17": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Anything else (signed webhook)"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Regenerate secret"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
+    "text": "Add trigger"
+   }
+  ],
+  "needs": "a Basic or higher paid plan, a command-line tool or script that can sign a POST (the panel shows an openssl example)",
+  "note": "The secret is shown in the panel after creation; its exact on-screen text was not found.",
+  "reachable": "yes",
+  "steps": [
+   "Open a routine's History (title Run History), click Add trigger.",
+   "Choose Anything else (signed webhook) and click Add trigger to save.",
+   "Copy the URL and signing secret shown after saving (the exact display text was not extracted).",
+   "Send a signed POST to the URL and check a run starts; then click Regenerate secret and check the old secret is rejected."
+  ],
+  "where": "Sidebar > Scheduled > routine card > History button > Triggers for <routine name> > Add trigger > Anything else (signed webhook)"
+ },
+ "S63.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run now"
+   }
+  ],
+  "needs": "a Basic or higher paid plan",
+  "note": "Run now is disabled when canRun is false; the conditions were not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and open the More actions menu on a routine card.",
+   "Click Run now.",
+   "Wait for the run to finish, then open the History button (title Run History).",
+   "Check the newest run in the list shows a status and open View Output to see the result."
+  ],
+  "where": "Sidebar > Scheduled > More actions for <routine name> > Run now"
+ },
+ "S63.20": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Next Run"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Time Zone"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and a routine that has a future run",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and find a routine card.",
+   "Read the Next Run row and the Timing row.",
+   "Compare the next-run time with the routine's Time Zone row.",
+   "Use Edit to change the timing, save, and check Next Run changes."
+  ],
+  "where": "Sidebar > Scheduled > each routine card (Next Run row)"
+ },
+ "S63.21": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Last Run"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and a routine that has run at least once, ideally one that failed",
+  "note": "Whether the card row itself shows a failure, or only the history does, was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and find a routine that has run.",
+   "Read the Last Run row.",
+   "Open History (title Run History) and check the latest run's status badge.",
+   "Compare the failed status shown there with Last Run."
+  ],
+  "where": "Sidebar > Scheduled > each routine card (Last Run row)"
+ },
+ "S63.22": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run History"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "No runs recorded yet."
+   }
+  ],
+  "needs": "a Basic or higher paid plan and a routine with past runs",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and click the History button on a routine (its aria label is View History for <name>).",
+   "Read the Run History heading and the list of runs.",
+   "Check each row's status badge and time.",
+   "Click Load more if it appears and check older runs load."
+  ],
+  "where": "Sidebar > Scheduled > History button (title Run History) on a routine card"
+ },
+ "S63.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "View Output"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and a run that produced output",
+  "note": "View Output appears only when the run has result text; latest result also opens from a separate card control.",
+  "reachable": "yes",
+  "steps": [
+   "Open a routine's History (title Run History).",
+   "Click a run row's View Output disclosure.",
+   "Read the output text under it.",
+   "Compare the text with the run's status and time shown on the row."
+  ],
+  "where": "Sidebar > Scheduled > History button > a run row > View Output"
+ },
+ "S63.24": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Paused"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Schedule paused."
+   }
+  ],
+  "needs": "a Basic or higher paid plan",
+  "note": "The switch has no visible text; its accessible name is Pause <name> or Resume <name>.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and find a routine card.",
+   "Click its switch to pause, which turns the card to Paused.",
+   "Read the message that appears (Schedule paused.).",
+   "Click the switch again to resume and check the card no longer shows Paused and the message is Schedule resumed."
+  ],
+  "where": "Sidebar > Scheduled > the switch on a routine card (pause or resume)"
+ },
+ "S63.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Edit Schedule"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Save Changes"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and an existing routine",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and click the Edit button on a routine card.",
+   "In the Edit Schedule dialog, change Schedule Name, a timing field or Task Instructions.",
+   "Click Save Changes.",
+   "Check the dialog closes, the message Schedule updated. appears and the card shows the new values."
+  ],
+  "where": "Sidebar > Scheduled > Edit <routine name> (pencil button, title Edit Schedule)"
+ },
+ "S63.27": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Delete"
+   },
+   {
+    "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
+    "text": "Delete Schedule?"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and an existing routine",
+  "note": "The confirm button's exact text was not extracted.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and open the More actions menu on a routine card.",
+   "Click Delete.",
+   "Read the Delete Schedule? confirmation and click the confirm button.",
+   "Check the routine disappears from the list and no longer shows a next run."
+  ],
+  "where": "Sidebar > Scheduled > More actions for <routine name> > Delete"
+ },
+ "S63.29": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Share"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and a second account or private window to view the shared link",
+  "note": "The share dialog title is built from the routine name; the copy button label and how a recipient makes their own copy were not found in the read files.",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled and open the More actions menu on a routine card.",
+   "Click Share.",
+   "In the Share dialog, create the share link and copy it.",
+   "Open the link in a private window or as a second account and check a preview of the routine is shown (its copy action was not found)."
+  ],
+  "where": "Sidebar > Scheduled > More actions for <routine name> > Share"
+ },
+ "S63.31": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Execution Limits"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Credit Cap"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleForm.tsx",
+    "text": "Maximum Runs"
+   }
+  ],
+  "needs": "a Basic or higher paid plan and enough credits to reach the cap",
+  "note": "The cap pauses the routine after current credits are used; a run already started finishes (helper text in the form).",
+  "reachable": "yes",
+  "steps": [
+   "Click Scheduled, then New task, then Create from scratch.",
+   "Open the Execution Limits section and enter a value in Credit Cap or Maximum Runs.",
+   "Click Create Schedule and open Edit on the routine to check the value is kept.",
+   "Run the routine until the cap is reached and check it pauses once runs use the credits."
+  ],
+  "where": "Sidebar > Scheduled > New task > Create from scratch > Execution Limits > Credit Cap (or Maximum Runs)"
+ },
+ "S63.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "Waiting for your approval"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "a schedule whose run needs a tool approval (for example one that uses a tool requiring approval)",
+  "note": "The approval card and Approve/Deny buttons are in code, and the resume path is in apps/web/features/schedules/components/SchedulesPage.tsx; the approval pause itself is server-side (scheduled-agent-executor.ts), so whether a real run pauses and resumes was not checked. The card title and Approve label are confirmed in code; the \"Approved.\" message is built from SchedulesPage.tsx and the outcome text varies.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click \"Scheduled\" in the sidebar.",
+   "Find a schedule whose run needs a tool approval. Its card may show a paused note: \"Paused: a run needed your approval. Approve or deny it in Run History\".",
+   "Click the Run History icon on that schedule's card (title \"Run History\").",
+   "In the run list, find the run with the \"Waiting for your approval\" card and read the tool name listed under it.",
+   "Click \"Approve\" (or \"Deny\") on that card.",
+   "Check that the run continues and the status changes from waiting to a finished state, and that a message says \"Approved.\" appeared."
+  ],
+  "where": "Scheduled > (open a schedule's card) > Run History (the clock icon, title \"Run History\") > run row showing \"Waiting for your approval\" > Approve"
+ },
+ "S63.33": {
+  "labels": [
+   {
+    "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+    "text": "Run History"
+   },
+   {
+    "file": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+    "text": "skipped"
+   },
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Scheduled"
+   }
+  ],
+  "needs": "a schedule that has a missed or skipped run (for example a schedule set to skip missed runs whose run was late)",
+  "note": "The note text is built in packages/contracts/cloud-contracts/src/schedules.ts (for example \"Skipped the run scheduled for ...: it was missed by ... and this schedule skips missed runs.\" and \"Ran late: scheduled for ...\"), so the exact note is dynamic and not a fixed label; the missed-run detection is in apps/web/lib/services/schedule-service.ts. Whether a real run is marked missed was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click \"Scheduled\" in the sidebar.",
+   "Find a schedule that has a run marked as missed or skipped. A schedule with missed runs set to skip shows these.",
+   "Click the Run History icon on that schedule's card (title \"Run History\").",
+   "Find the run row. Its status word is \"skipped\" when the run was skipped.",
+   "Read the grey note under the run row. It says the run was skipped, the scheduled time, and how late it was.",
+   "Compare the note and status with Expected: the history should say that a run was missed or skipped and why."
+  ],
+  "where": "Scheduled > (open a schedule's card) > Run History (the clock icon, title \"Run History\") > run row with the \"skipped\" status and a note above it"
+ }
+}

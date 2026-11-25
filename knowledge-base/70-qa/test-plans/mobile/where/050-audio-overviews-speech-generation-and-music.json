@@ -1,0 +1,73 @@
+{
+ "S50.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Read aloud"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Stop reading aloud"
+   }
+  ],
+  "needs": "a device with sound output; a chat with a finished assistant reply",
+  "note": "The exact way the action row appears on screen (always shown or after a tap) was not verified; read-aloud can also show a 'not available' reason for some account states.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat that already has an assistant reply.",
+   "Find the action row under the assistant reply (Copy, Read aloud, Regenerate response, More message actions).",
+   "Tap Read aloud.",
+   "Look for the reply being spoken aloud, and for the button label changing to Stop reading aloud. Compare with Expected: the reply plays as speech."
+  ],
+  "where": "Chat > any assistant reply > Read aloud (Read aloud button in the reply's action row; it changes to Stop reading aloud while playing)"
+ },
+ "S50.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice-language/index.tsx",
+    "text": "Voice & Language"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Speech language"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/voice-language/index.tsx",
+    "text": "Speaking style"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Voice"
+   }
+  ],
+  "needs": "none (a Free account works; voice-mode list only appears when live voice is available for the account)",
+  "note": "The Settings menu label comes from the shared translation file packages/ui/i18n/locales/en/common.json; the side-menu gesture to open it was not verified; the Voice row on the Voice screen opens the Voice & Language screen, so its selection (voice) is shown there, not on the Voice screen itself.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Tap Voice.",
+   "Tap the Speech language row and pick a language in the sheet, then close it.",
+   "Tap the Voice row to open the Voice & Language screen.",
+   "Look at the Speaking style list and the installed voice list, tap a voice, and compare what is shown as selected with Expected."
+  ],
+  "where": "Settings > Voice > Voice & Language (open the Voice row, then the Voice row again; Speech language is the row above it)"
+ },
+ "S50.03": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Speed"
+   }
+  ],
+  "needs": "a device with sound output; a chat with an assistant reply",
+  "note": "No separate support check for speed was found; the slider is always shown, and the value is passed to the device speech engine in apps/mobile/src/features/voice/services/tts.ts (rate option); the rate for cloud server speech was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side menu and tap Settings.",
+   "Tap Voice.",
+   "Drag the slider labelled Speed to a different value (range 0.5x to 2x, steps of 0.05).",
+   "Tap Read aloud on an assistant reply in a chat, then listen and compare with Expected: the speed of spoken playback changes with the slider."
+  ],
+  "where": "Settings > Voice > Speed (slider with value shown as 0.50x to 2.00x)"
+ }
+}

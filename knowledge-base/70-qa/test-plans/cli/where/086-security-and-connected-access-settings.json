@@ -1,0 +1,131 @@
+{
+ "S86.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Saved provider API keys stay"
+   },
+   {
+    "file": "apps/cli/src/repl/slash_commands.rs",
+    "text": "/logout"
+   }
+  ],
+  "needs": "a signed-in AGI account in the CLI",
+  "note": "The Code line's old evidence moved. The CLI signs out only this machine. The web device list is a separate place, named in apps/cli/src/app_server/account.rs as Settings, Account, Linked devices.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in with agi login so there is an account on this machine.",
+   "In Terminal, run agi logout.",
+   "Read the message printed after the command.",
+   "Compare with Expected: the account should be signed out of this machine. The message should also say that saved provider API keys stay."
+  ],
+  "where": "agi logout (in Terminal), or /logout inside an agi session"
+ },
+ "S86.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Revoke API key"
+   },
+   {
+    "file": "apps/cli/src/cloud/api_keys.rs",
+    "text": "No API keys on this account."
+   }
+  ],
+  "needs": "a signed-in AGI account; a key to revoke (create one in account settings first)",
+  "note": "In the CLI a key cannot be created directly: agi keys create only opens the account settings page in the browser. Creation itself happens in the web app, so check that part there.",
+  "reachable": "yes",
+  "steps": [
+   "In Terminal, run agi keys to see the keys with their masked prefix (ending in an ellipsis).",
+   "If there are no keys, look for the message No API keys on this account.",
+   "To revoke, run agi keys revoke <key id or name>, then answer the prompt. Or add -y to skip it.",
+   "Run agi keys again and compare: the key should be gone. Expected also asks that a key can be created, so run agi keys create and check that the account settings page opens."
+  ],
+  "where": "agi keys (list), agi keys revoke <key id or name> (revoke), agi keys create (opens account settings in the browser)"
+ },
+ "S86.16": {
+  "labels": [
+   {
+    "file": "apps/cli/src/repl/registry.rs",
+    "text": "Use: /trust [status|grant|revoke]"
+   }
+  ],
+  "needs": "a folder you can cd into; the test is per folder",
+  "note": "The CLI trust is for the current folder only. I found no command that lists every folder AGI may read or write, so the list part of Expected is not in the CLI. The Local folders item in the web composer (apps/web/features/chat/components/Composer/ChatComposerNew.tsx) is a different surface and was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Open Terminal, cd into the folder you want to test, and run agi.",
+   "At the prompt type /trust status and read the result.",
+   "Type /trust grant to allow AGI to act in this folder, then /trust status again.",
+   "Type /trust revoke and compare with Expected: access for this folder should be removed and the status should show it."
+  ],
+  "where": "/trust status, /trust grant and /trust revoke inside an agi session, run from the folder in question"
+ },
+ "S86.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/lib.rs",
+    "text": "Show saved approval rules."
+   },
+   {
+    "file": "apps/cli/src/permissions.rs",
+    "text": "Recently denied"
+   }
+  ],
+  "needs": "none",
+  "note": "The in-session /permissions tabs are Recently denied, Allow, Ask and Deny. Removal in-session is /permissions remove <scope> <rule>.",
+  "reachable": "yes",
+  "steps": [
+   "Run agi approvals allow \"git status\" to save a rule to test with.",
+   "Run agi approvals list and find the saved rule under the Allow tab.",
+   "Run agi approvals remove allow \"git status\".",
+   "Run agi approvals list again and compare with Expected: the rule should be gone."
+  ],
+  "where": "agi approvals list (in Terminal), agi approvals remove <allow|ask|deny|session> <rule>, or /permissions inside an agi session"
+ },
+ "S86.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "Default permission mode"
+   },
+   {
+    "file": "apps/cli/src/onboarding.rs",
+    "text": "File edits and safe commands run, unknown and dangerous ones ask"
+   }
+  ],
+  "needs": "a test folder; the first-run prompt appears only when no saved mode exists",
+  "note": "The code has Default, Auto and Plan (and Bypass, reached only by Shift+Tab in the chat), not the three names in Expected (ask every time, auto-approve safe, autonomous). I did not confirm where the current mode name is shown on screen, and I did not confirm how to reopen the first-run prompt after setup.",
+  "reachable": "yes",
+  "steps": [
+   "Remove the saved config or use a new folder so the first-run setup appears, then run agi.",
+   "At the prompt titled Default permission mode, read the three choices: Default, Auto and Plan.",
+   "Pick Auto, then start a chat and ask it to run a safe command such as ls and a dangerous one such as rm on a test file.",
+   "Compare with Expected: safe commands should run without asking while the dangerous one asks. Also press Shift+Tab in chat and check that the mode changes."
+  ],
+  "where": "The Default permission mode prompt on first run of agi (after the trust prompt), or Shift+Tab during an agi chat session to cycle modes"
+ },
+ "S86.26": {
+  "labels": [
+   {
+    "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+    "text": "Advanced Account Security"
+   },
+   {
+    "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
+    "text": "Turn on Advanced Account Security"
+   }
+  ],
+  "needs": "a web account with access to its email and at least two passkeys or security keys",
+  "note": "The Settings sidebar label for Security was not found as a literal; the page heading Security is in apps/web/features/settings/sections/SecuritySection.tsx. The control does not exist in the CLI. The turn-on button appears only after the email code step. It cannot be turned on within 7 days of the email address being set or changed.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to the web app and open Settings, then the Security section.",
+   "Find the card titled Advanced Account Security and read its description: For accounts at higher risk. Sign-in needs a passkey or security key.",
+   "Add at least two passkeys or security keys, then save recovery keys, as the support page describes.",
+   "Enter the code emailed to the account address, then click Turn on Advanced Account Security.",
+   "Compare with Expected: the card should say On since, and other devices should be signed out."
+  ],
+  "where": "Settings > Security > Advanced Account Security (web app, not the CLI)"
+ }
+}

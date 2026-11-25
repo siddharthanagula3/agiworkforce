@@ -2,11 +2,11 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-15
+Last updated: 2026-11-24
 
 Until 2026-09-18 the only rollback in this repository was a step inside the job
-that deployed. It fired on `failure()` of the same run, which covers exactly one
-case: the deploy job noticed its own build was bad and was still alive to say
+that deployed, and that step still exists. It fires on `failure()` of the same
+run, which covers exactly one case: the deploy job noticed its own build was bad and was still alive to say
 so. A build that verified and broke an hour later, a job the runner killed, a
 cancelled run, and any regression found by a human all had no path at all.
 

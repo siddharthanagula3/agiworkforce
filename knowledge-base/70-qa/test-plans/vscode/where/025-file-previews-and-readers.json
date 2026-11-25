@@ -1,0 +1,94 @@
+{
+ "S25.04": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/artifacts/artifactsTree.ts",
+    "text": "Open Artifact"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one code artifact",
+  "note": "The code only covers AI-produced artifacts, not workspace source files; the tab language comes from the artifact's language or type, not from the file on disk.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud if asked. Artifacts belong to that account.",
+   "Press Cmd+Shift+P, type \"Code: Show Artifacts\" and press Enter.",
+   "Pick an artifact that holds source code (its row shows a code type) and press Enter.",
+   "Look at the opened tab: it should show as a read-only text tab with syntax colouring for the code language, the same as Expected."
+  ],
+  "where": "Command palette (Cmd+Shift+P) > Code: Show Artifacts > pick a code artifact"
+ },
+ "S25.20": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Send Selection to a New Chat"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Explain Selection"
+   }
+  ],
+  "needs": "a file open in the editor; a signed-in account to send the chat (not confirmed in the code)",
+  "note": "\"Code: Send Selection to a New Chat\" starts a new chat and resets the current conversation; if a reply is still being written it asks first.",
+  "reachable": "yes",
+  "steps": [
+   "Open any source file in the editor.",
+   "Select a few lines of text with the mouse.",
+   "Right-click the selection and choose \"Code: Send Selection to a New Chat\" (or press Cmd+Shift+Alt+E for \"Code: Explain Selection\").",
+   "Look at the chat composer: it should show a reference to the file and the selected range, with an empty place to type your question. Type a question and send it to compare with Expected."
+  ],
+  "where": "Open a file > select some text > right-click the selection > Code: Send Selection to a New Chat"
+ },
+ "S25.21": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Send Selection to a New Chat"
+   }
+  ],
+  "needs": "a file open in the editor with several lines; a signed-in account to send the chat (not confirmed in the code)",
+  "note": "The code has no page selection; it only handles text ranges in a text editor, so a page of a PDF or a page break is not covered.",
+  "reachable": "yes",
+  "steps": [
+   "Open a long file in the editor.",
+   "Select a range of lines, for example from line 10 to line 20.",
+   "Right-click the selection and choose \"Code: Send Selection to a New Chat\".",
+   "Look at the chat composer: the file reference should carry the selected start and end lines. Type a question about that range and compare with Expected."
+  ],
+  "where": "Open a file > select a range of lines > right-click the selection > Code: Send Selection to a New Chat"
+ },
+ "S25.28": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Copy the content"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Copy Artifact Content"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with at least one artifact",
+  "note": "The copy command copies the whole artifact, not a selected part; no code path copies a selection from a preview tab, so Expected (selected content) is not matched by the code.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud if asked.",
+   "Press Cmd+Shift+P, type \"Code: Show Artifacts\" and press Enter.",
+   "Click the copy icon on an artifact row. Its tooltip reads \"Copy the content\".",
+   "Paste somewhere (Cmd+V). The whole artifact text should appear, and a notice should say it was copied; compare with Expected."
+  ],
+  "where": "Command palette > Code: Show Artifacts > click the copy icon on an artifact row (tooltip Copy the content)"
+ },
+ "S25.29": {
+  "labels": [],
+  "needs": "a signed-in AGI Cloud account with at least one artifact",
+  "note": "No command opens an artifact or file in its native application. I searched apps/extension-vscode/src for revealFileInOS, openPath, openWith, \"Open With\", \"Reveal in\", \"native app\" and \"Open in\". The nearest match is \"Code: Open Published Artifact\" (openPublishedArtifact), which opens the share web page in the browser, not a native app.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

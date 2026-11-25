@@ -1,0 +1,281 @@
+{
+ "S36.01": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a question that needs current web sources (web search must be on for the chat)",
+  "note": "The chip is built from the citation link in packages/ui/unified-chat/src/components/markdown/CitationChip.tsx; the chip text is the site name from the source, so no fixed visible label exists for it.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat from the chat screen.",
+   "Type a question that needs current facts, such as a recent news topic, and send it.",
+   "Wait for the answer to finish.",
+   "Look for a small rounded chip with a site name after a sentence in the answer.",
+   "Compare with Expected: the claim should carry a marker that names its source."
+  ],
+  "where": "Chat screen > ask a question that needs current web sources > read the answer; a small chip with a site name or domain sits right after the claim"
+ },
+ "S36.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a question that needs current web sources; a mouse for hover",
+  "note": "Titles come from the source data; a title may be missing for some sources and the chip then falls back to the site name.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs current web sources and wait for the answer.",
+   "Hover the mouse over a small source chip after a sentence.",
+   "Read the bold line at the top of the tooltip that appears.",
+   "Alternatively, click the globe button titled Research sources in the top bar, then keep the Sources tab selected.",
+   "Compare with Expected: each source should show its title."
+  ],
+  "where": "Answer with web sources > hover a source chip > tooltip shows the source title; or Sources > Research sources panel > Sources tab"
+ },
+ "S36.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a question that needs current web sources",
+  "note": "For search results the domain shown is the publisher's domain, not the routing host, per packages/ui/unified-chat/src/components/markdown/citationPublisher.ts.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs current web sources and wait for the answer.",
+   "Hover a source chip and read the grey line under the title in the tooltip.",
+   "Or click the globe button titled Research sources and open the Sources tab.",
+   "Read the grey line under each source title in the list.",
+   "Compare with Expected: each source should name its publisher or domain."
+  ],
+  "where": "Answer with web sources > hover a source chip > tooltip line under the title; or Research sources panel > Sources tab > line under each title"
+ },
+ "S36.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a question that needs current web sources; a browser that allows new tabs",
+  "note": "A source chip in an answer is also a link that opens the URL in a new tab (CitationChip.tsx), and a source row with no URL cannot be clicked.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs current web sources and wait for the answer.",
+   "Click the globe button titled Research sources at the top of the chat.",
+   "On the Sources tab, click one source row.",
+   "Look for a new browser tab that opens the web address.",
+   "Compare with Expected: the source should open at its own URL (the domain is shown under the title)."
+  ],
+  "where": "Research sources panel > Sources tab > click a source row, which opens in a new tab; or click a source chip in an answer"
+ },
+ "S36.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Published"
+   }
+  ],
+  "needs": "a question that needs current web sources, with sources that have a date",
+  "note": "Not all sources carry a date; the tester may see none. The panel shows the raw publishedDate string and the chip tooltip formats it via citationPublisher.ts, so the two formats can differ.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs current web sources and wait for the answer.",
+   "Click the globe button titled Research sources, then open the Sources tab.",
+   "Read the grey line under a source title for a date next to the domain.",
+   "Compare with Expected: the publication date should show when the source gives one."
+  ],
+  "where": "Research sources panel > Sources tab > grey line under a source title; or hover a source chip and read the tooltip"
+ },
+ "S36.06": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/citationPublisher.ts",
+    "text": "Retrieved"
+   }
+  ],
+  "needs": "a question that needs current web sources",
+  "note": "Retrieved date appears only when the source has a retrieval time; the Retrieved label is also written in apps/web/features/chat/components/research/ResearchPanel.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs current web sources and wait for the answer.",
+   "Click the globe button titled Research sources, then open the Sources tab.",
+   "Read the line that starts with Retrieved under a source.",
+   "Compare with Expected: each cited source should show when it was retrieved."
+  ],
+  "where": "Research sources panel > Sources tab > grey line starting with Retrieved; or hover a source chip and read the tooltip"
+ },
+ "S36.07": {
+  "labels": [],
+  "needs": "a project with at least one indexed knowledge file; a question the file can answer",
+  "note": "The only icons are FileText for project files (packages/ui/unified-chat/src/components/markdown/ProjectFileCitationChip.tsx), Globe for web sources (CitationChip.tsx) and MessagesSquare for past chats (apps/web/features/chat/components/messages/CitationPastChats.tsx). No connector or chat icon was found in the citation chips; icons are not labelled in text.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in a project that has knowledge files, and ask a question the files can answer.",
+   "Wait for the answer and look at the chip after the claim.",
+   "A project-file chip shows a document icon before the file name.",
+   "Hover a web source chip and compare: it shows a favicon or a globe icon instead.",
+   "Compare with Expected: each source shows an icon for its type."
+  ],
+  "where": "Answer that used a project file > look at the icon before the file name in the chip; a web source chip shows a globe icon"
+ },
+ "S36.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   }
+  ],
+  "needs": "a question that needs current web sources where the source gives a snippet",
+  "note": "The code shows the source's own snippet, capped at 180 characters (citationPublisher.ts); it is not verified that this snippet is the exact passage behind each claim.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs current web sources and wait for the answer.",
+   "Hover a source chip and read the grey excerpt in the tooltip.",
+   "Or click the globe button titled Research sources and read the short excerpt under each source.",
+   "Compare with Expected: the excerpt should be the passage that supports the claim."
+  ],
+  "where": "Answer with web sources > hover a source chip > grey excerpt text at the bottom of the tooltip; or Research sources panel > Sources tab > two-line grey text under a source"
+ },
+ "S36.09": {
+  "labels": [],
+  "needs": "a project with a paginated knowledge file (PDF); a question the file can answer",
+  "note": "The page text p. comes from formatProjectFileAnchor in packages/contracts/types/src/project-file-citations.ts; the preview reads the page from the link in apps/web/features/projects/components/SourcesPanel.tsx. The chip is an anchor only when a link exists, otherwise it is a non-clickable note.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in a project with a knowledge file that has pages, such as a PDF.",
+   "Ask a question the file can answer and wait for the answer.",
+   "Look for a chip with the file name and text like p. 3 after it.",
+   "Click the chip.",
+   "Compare with Expected: the file preview should open at that page number."
+  ],
+  "where": "Answer that used a project file > click a project-file chip that shows p. and a page number; the project Sources preview opens at that page"
+ },
+ "S36.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CitationPastChats.tsx",
+    "text": "Previous chats this answer used"
+   }
+  ],
+  "needs": "an account with an earlier saved chat that the answer can recall",
+  "note": "The nav label Previous chats this answer used is an aria label only and is not visible text. The link carries a highlight parameter for the message; whether the page highlights it on arrival was not checked.",
+  "reachable": "yes",
+  "steps": [
+   "Use a chat that has earlier conversations saved, with the past-chat memory feature on.",
+   "Ask a question that refers to something from an earlier chat.",
+   "Look for the chip with a past chat title and a date after the answer.",
+   "Click the chip.",
+   "Compare with Expected: the source chat should open and land on the exact message."
+  ],
+  "where": "Answer that used earlier chats > look for a row of chips above or below the answer with a past chat title and date > click one to open that chat at its message"
+ },
+ "S36.16": {
+  "labels": [],
+  "needs": "a question that needs current web sources",
+  "note": "Placement is done by the markdown renderer in packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx; it depends on the model's output, so the tester may see chips grouped at the end of a paragraph.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs current web sources and wait for the answer.",
+   "Read the answer one sentence at a time.",
+   "Look at where each source chip sits relative to the sentence.",
+   "Hover a chip to see which source it names.",
+   "Compare with Expected: each chip should sit at the claim it supports."
+  ],
+  "where": "Answer with web sources > read a sentence > the source chip sits right after the sentence it supports"
+ },
+ "S36.17": {
+  "labels": [],
+  "needs": "a question that needs current web sources where one claim cites several sources",
+  "note": "The +N text is built in packages/ui/unified-chat/src/components/markdown/CitationChip.tsx, so it has no fixed visible words. Multiple sources depend on the model citing more than one per claim.",
+  "reachable": "yes",
+  "steps": [
+   "Ask a question that needs current web sources and wait for the answer.",
+   "Look for a chip with a site name followed by a plus count such as +1 or +2.",
+   "Hover the chip.",
+   "Read the tooltip, which lists one row per source.",
+   "Compare with Expected: all sources that back this claim should be listed."
+  ],
+  "where": "Answer with web sources > a source chip that shows +N after the site name > hover it to see every source in the tooltip"
+ },
+ "S36.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Report"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a saved research report whose sources were not captured (rare; may need a seeded report)",
+  "note": "The notice text is in ResearchReportView.tsx and shows only when the report has no citations but its text has numbered references. Reaching such a report by a normal run is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Click the globe button titled Research sources at the top of the chat.",
+   "Click the Report tab.",
+   "Open a saved research report.",
+   "Scroll to the bottom under the Sources heading.",
+   "Compare with Expected: where a link is missing, a notice should say the report refers to numbered sources without links, instead of a dead link."
+  ],
+  "where": "Research sources panel > Report tab > open a saved report whose text has numbers like [1] but no captured links; the Sources heading shows the notice"
+ },
+ "S36.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Report"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Markdown"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "PDF"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Word"
+   }
+  ],
+  "needs": "a saved research report with sources",
+  "note": "The Markdown export adds a ## Sources list built in packages/ui/unified-chat/src/lib/research-report.ts; the PDF and Word output was not checked against this.",
+  "reachable": "yes",
+  "steps": [
+   "Click the globe button titled Research sources at the top of the chat.",
+   "Click the Report tab and open a saved research report.",
+   "Click Markdown, PDF or Word in the top bar of the report.",
+   "Open the downloaded file.",
+   "Compare with Expected: the file should keep the numbered citations and the Sources list at the end."
+  ],
+  "where": "Research sources panel > Report tab > open a saved report > click Markdown, PDF or Word in the top bar"
+ }
+}

@@ -1,0 +1,139 @@
+{
+ "S107.04": {
+  "labels": [
+   {
+    "file": "apps/web/app/sitemap-page/page.tsx",
+    "text": "Gallery"
+   },
+   {
+    "file": "apps/web/app/plugins/page.tsx",
+    "text": "Plugins"
+   }
+  ],
+  "needs": "none",
+  "note": "The cited GalleryClient.tsx line numbers no longer hold the quoted code; no visible nav button labelled Gallery was found in the marketing nav, so the sitemap page is the only visible path I could confirm. Plugins page heading is 'Workflow packs, not loose parts.'",
+  "reachable": "yes",
+  "steps": [
+   "Sign out, then open the sitemap page at /sitemap-page in the browser.",
+   "Click Gallery under its list of links.",
+   "Check that the curated examples page opens without signing in.",
+   "Check the example cards and directory content are set by the product team, not by users, and compare with Expected."
+  ],
+  "where": "Open the sitemap page (apps/web route /sitemap-page) > Gallery. Public routes /gallery and /plugins also exist."
+ },
+ "S107.11": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/share/SharedSessionViewer.tsx",
+    "text": "Open in AGI"
+   }
+  ],
+  "needs": "a Free account and a public shared conversation link",
+  "note": "The copy step runs in apps/web/app/chat/from-share/[token]/ContinueSharedSession.tsx; I did not find its visible wording in the render, so the exact on-screen text while copying is unknown.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in, then open a public shared conversation link (/share/<token>).",
+   "Click Open in AGI in the top right of the header.",
+   "Wait for the page /chat/from-share/<token> to create your own conversation.",
+   "Send a new message in your own conversation and check it continues with the copied messages, compare with Expected."
+  ],
+  "where": "Open a shared link (/share/<token>) > Open in AGI"
+ },
+ "S107.12": {
+  "labels": [
+   {
+    "file": "apps/web/app/gallery/GalleryClient.tsx",
+    "text": "Start from scratch"
+   }
+  ],
+  "needs": "none",
+  "note": "The exact button label that sends the wizard prompt was not found; the link from a public example to the wizard is in GalleryClient.tsx, and the template page is apps/web/app/gallery/[templateId]/page.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open the gallery page at /gallery.",
+   "Click an example card or category, then fill in the wizard that opens.",
+   "Submit the wizard, which opens /chat with the prompt added as starterPrompt.",
+   "Check the prompt sits in the composer ready to send, and compare with Expected."
+  ],
+  "where": "Gallery > choose a category card > fill in the creation wizard > send (prompt opens in /chat)"
+ },
+ "S107.13": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/share/SharedSessionViewer.tsx",
+    "text": "Shared by"
+   }
+  ],
+  "needs": "none",
+  "note": "The viewer shows Shared by and the model only; I did not find copied-from, author or version wording in this viewer. The line is shown only when the share has a shared_by value.",
+  "reachable": "yes",
+  "steps": [
+   "Open a public shared conversation link (/share/<token>) while signed out.",
+   "Look under the title for the line Shared by and the model badge.",
+   "Check the message count and Expires line also appear.",
+   "Compare with Expected: publisher and source shown, and check for copied-from or version information."
+  ],
+  "where": "Open a shared link (/share/<token>) > the line under the title that starts with Shared by"
+ },
+ "S107.15": {
+  "labels": [
+   {
+    "file": "apps/web/app/copyright/report/ReportContentLink.tsx",
+    "text": "Report infringement or impersonation"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Report this response"
+   }
+  ],
+  "needs": "a signed-in account for the AI answer report",
+  "note": "The menu that opens Report this response was not confirmed; the AI-answer report goes to /api/content-report and the share-page link goes to the copyright notice form, which feeds a different queue.",
+  "reachable": "yes",
+  "steps": [
+   "Open a public shared conversation link (/share/<token>) and scroll to the bottom.",
+   "Click Report infringement or impersonation and check the notice form opens.",
+   "In a chat, open the menu on an AI answer and click Report this response.",
+   "Check for the toast Reported. Thank you: our trust and safety team will review it., and compare with Expected."
+  ],
+  "where": "A public share page (/share/<token>) > Report infringement or impersonation. For an AI answer: the answer's menu > Report this response."
+ },
+ "S107.20": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/directory/constants.ts",
+    "text": "Submit to the directory"
+   },
+   {
+    "file": "apps/web/app/partners/page.tsx",
+    "text": "List a plugin in the directory"
+   }
+  ],
+  "needs": "a plugin you created in the account",
+  "note": "The panel that holds the directory list was not confirmed by its visible label; the public partners page at /partners describes the submission path. I did not check that the publisher name is shown.",
+  "reachable": "yes",
+  "steps": [
+   "Open a plugin you created, then its detail view.",
+   "Look for the button Submit to the directory under the plugin details.",
+   "Click it and confirm in the dialog that opens.",
+   "Check the plugin shows as submitted and is named, and compare with Expected."
+  ],
+  "where": "Plugins > open a plugin's detail > Submit to the directory"
+ },
+ "S107.23": {
+  "labels": [
+   {
+    "file": "apps/web/features/admin/components/CopyrightNoticeQueuePanel.tsx",
+    "text": "Unpublish"
+   },
+   {
+    "file": "apps/web/features/admin/components/CopyrightNoticeQueuePanel.tsx",
+    "text": "Reject"
+   }
+  ],
+  "needs": "a platform staff account",
+  "note": "The moderation panels are in OperatorDashboardPage.tsx under a tab key 'content' (CopyrightNoticeQueuePanel and ContentTakedownPanel), but I did not find the visible label of that tab, so the path from the dashboard is unknown.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

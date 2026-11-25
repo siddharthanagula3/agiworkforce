@@ -1,0 +1,500 @@
+{
+ "feature": {
+  "id": "F079-05",
+  "aliases": [
+   "project default model",
+   "Default model (project)",
+   "defaultModelId",
+   "default_model_id",
+   "ProjectDefaultModelField",
+   "Choose the model (VS Code button)"
+  ],
+  "summary": "A Managed Cloud project can store a default model. On Web a new chat in that project starts on it once; Mobile shows and applies it for Cloud chats; VS Code shows it and offers a button that opens the picker, but does not switch by itself. The CLI and Chrome have no project default.",
+  "purpose": {
+   "what_it_does": "Stores one model id on the project and uses it as the starting model of new chats in that project. [inferred from ProjectDefaultModelField.tsx and WebChatPage.tsx:2125-2140]",
+   "why_it_exists": "Teams and individuals keep a project on the model that suits its work without choosing each time (brief S79.03).",
+   "who_uses_it": "People with Managed Cloud projects on Web, Desktop, Mobile and VS Code.",
+   "problems_solved": [
+    "Forgetting to change model for a project's chats.",
+    "Starting a project chat on whatever model was last used."
+   ],
+   "use_cases": [
+    "A coding project defaults to a strong code model.",
+    "A notes project defaults to an economy choice.",
+    "A project keeps the Auto model as its default."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web and Desktop: project settings dialog, field 'Default model' (apps/web/features/projects/components/ProjectDefaultModelField.tsx:46-50; used at ProjectSettingsDialog.tsx:336).",
+    "Mobile: project overview line 'Default model: <name>' (apps/mobile/src/features/projects/components/CloudProjectOverview.tsx:70-71); applies in new Cloud chats (apps/mobile/app/(app)/(tabs)/chat.tsx:339-348).",
+    "VS Code: project list shows the model; 'Project default model' quick pick offers 'Use <your model>' or 'No default model'; applying a project shows 'Its default model is <name>.' with a 'Choose the model' button (apps/extension-vscode/src/features/projects/projectActions.ts:320-342, 405-416)."
+   ],
+   "prerequisites": [
+    "A Managed Cloud project; Local and own-key projects are device-owned and not stored in the table (apps/web/db/neon/0053_projects_managed_cloud_contract.sql:1-3).",
+    "Signed in; the model must be allowed by the plan (Web field filters options)."
+   ],
+   "screens_and_controls": [
+    "Web: select with first option 'No default, use the model you last picked'; help text 'New chats in this project start on this model. You can still switch in any chat.' A saved value that is no longer allowed appears as '<name> (not available on your plan)' (ProjectDefaultModelField.tsx:55-78)."
+   ],
+   "journey": [
+    "Open project settings and choose a default model, then save.",
+    "Start a new chat inside the project.",
+    "The picker shows the project's model.",
+    "Send; you can still change the model in that chat."
+   ],
+   "feedback_and_outputs": [
+    "The picker shows the project's model on a new chat.",
+    "VS Code notification text and button."
+   ],
+   "settings": [
+    "Project field defaultModelId; set through the projects API."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web field lists only models the plan allows and drops coming-soon models; Auto rows appear only for non-free tiers that allow them (ProjectDefaultModelField.tsx:21-38).",
+    "Save writes default_model_id through PUT /api/projects/[id] (apps/web/app/api/projects/[id]/route.ts:212) and creation reads it back (apps/web/app/api/projects/route.ts:99).",
+    "On Web, a new chat with no displayed conversation applies the project default once per project and model, only if the model is selectable (apps/web/features/chat/pages/WebChatPage.tsx:2123-2140).",
+    "Mobile reads defaultModelId into project details (apps/mobile/stores/projects/cloudProjectStore.ts:140-152) and shows it as the conversation model when in Cloud mode, no model shown yet, and the account may use it (chat.tsx:339-348).",
+    "VS Code stores and shows the default and offers the picker (projectActions.ts:157, 320-342, 405-416)."
+   ],
+   "incomplete": [
+    "VS Code does not switch the model; it opens the picker on a button press (projectActions.ts:405-416).",
+    "VS Code can only set the project default to the person's own configured model, and refuses a Local one (projectActions.ts:320-342).",
+    "Mobile reads and applies the default but no control to set it was found."
+   ],
+   "disconnected_or_disabled": [
+    "none found."
+   ],
+   "not_available": [
+    "CLI: no project default model.",
+    "Chrome: no project default model.",
+    "Own-key and Local projects: not stored in the cloud table."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "A project can set a default model that new chats in the project use.",
+     "source": "brief S79.03"
+    },
+    {
+     "statement": "Project default privacy mode was cut because it was never read; Cloud projects keep their managed label.",
+     "source": "doc: docs/decisions/wire-or-cut.md:777"
+    }
+   ],
+   "acceptance_criteria": [
+    "Setting a default in a Web project and starting a new chat in it selects that model.",
+    "The field does not list models the plan cannot use, and shows a stale value with '(not available on your plan)'.",
+    "Choosing 'No default' stores null and new chats use the last model picked.",
+    "The default applies once per project and does not override a model the person changes mid-chat.",
+    "On Mobile a Cloud new chat in the project shows the project model if the account may use it.",
+    "VS Code shows the default model name when a project is applied and offers the picker."
+   ],
+   "inferred": [
+    "A downgrade that makes the saved default unavailable should fall back without an error. The Web code simply skips an unselectable model. [inferred from WebChatPage.tsx:2136]"
+   ],
+   "proposed": [
+    "[proposed] Let VS Code switch directly when the default is allowed.",
+    "[proposed] Add a Mobile control to set the default."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "component",
+    "name": "ProjectDefaultModelField",
+    "path": "apps/web/features/projects/components/ProjectDefaultModelField.tsx",
+    "role": "Web select."
+   },
+   {
+    "kind": "component",
+    "name": "ProjectSettingsDialog",
+    "path": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+    "role": "Holds defaultModelId state and saves it (83, 182, 336)."
+   },
+   {
+    "kind": "screen",
+    "name": "WebChatPage new-chat apply",
+    "path": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "role": "Applies the default once (2123-2140)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "PUT /api/projects/[id]",
+    "path": "apps/web/app/api/projects/[id]/route.ts",
+    "role": "Updates default_model_id (line 212)."
+   },
+   {
+    "kind": "endpoint",
+    "name": "POST and GET /api/projects",
+    "path": "apps/web/app/api/projects/route.ts",
+    "role": "Create and list including default_model_id (99, 255-256)."
+   },
+   {
+    "kind": "table",
+    "name": "user_projects.default_model_id",
+    "path": "apps/web/db/neon/0053_projects_managed_cloud_contract.sql",
+    "role": "Column that stores the default."
+   },
+   {
+    "kind": "schema",
+    "name": "project contract",
+    "path": "packages/contracts/cloud-contracts/src/projects.ts",
+    "role": "defaultModelId in project shapes (52, 95)."
+   },
+   {
+    "kind": "other",
+    "name": "project mapping",
+    "path": "apps/web/lib/projects.ts",
+    "role": "Maps default_model_id to defaultModelId (159)."
+   },
+   {
+    "kind": "store",
+    "name": "cloudProjectStore",
+    "path": "apps/mobile/stores/projects/cloudProjectStore.ts",
+    "role": "Mobile project details with defaultModelId."
+   },
+   {
+    "kind": "screen",
+    "name": "mobile chat tab",
+    "path": "apps/mobile/app/(app)/(tabs)/chat.tsx",
+    "role": "Applies the default to a new Cloud chat (314-348)."
+   },
+   {
+    "kind": "component",
+    "name": "CloudProjectOverview",
+    "path": "apps/mobile/src/features/projects/components/CloudProjectOverview.tsx",
+    "role": "Shows 'Default model: ...'."
+   },
+   {
+    "kind": "service",
+    "name": "projectActions",
+    "path": "apps/extension-vscode/src/features/projects/projectActions.ts",
+    "role": "VS Code apply, set and notify (157, 320-420)."
+   },
+   {
+    "kind": "other",
+    "name": "projectPresentation",
+    "path": "apps/extension-vscode/src/features/projects/projectPresentation.ts",
+    "role": "Shows the default model in project rows (line 45)."
+   },
+   {
+    "kind": "hook",
+    "name": "useNewChatDefaultModel",
+    "path": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "role": "Related hook that applies the account default to new chats (used at line 2124)."
+   },
+   {
+    "kind": "store",
+    "name": "useModelStore",
+    "path": "apps/web/shared/stores/model-store.ts",
+    "role": "Receives setSelectedModelId from the apply effect."
+   },
+   {
+    "kind": "test",
+    "name": "projectsView tests",
+    "path": "apps/extension-vscode/src/__tests__/projectsView.test.ts",
+    "role": "VS Code default model flows."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "Person saves a default in project settings; client calls PUT /api/projects/[id] with defaultModelId.",
+     "runs_on": "device and our servers",
+     "evidence": "ProjectSettingsDialog.tsx:182; route.ts:212"
+    },
+    {
+     "what_happens": "Server stores the id in user_projects.default_model_id.",
+     "runs_on": "our servers",
+     "evidence": "0053_projects_managed_cloud_contract.sql:9"
+    },
+    {
+     "what_happens": "On opening a new chat in the project the Web page reads the id from the project store and selects it if selectable.",
+     "runs_on": "device",
+     "evidence": "WebChatPage.tsx:2125-2140"
+    },
+    {
+     "what_happens": "The first message sends the selected model through the normal chat route (see F079-04).",
+     "runs_on": "our servers",
+     "evidence": "request-processor.ts:714"
+    },
+    {
+     "what_happens": "Mobile and VS Code read the same project data and apply or offer it locally.",
+     "runs_on": "device",
+     "evidence": "chat.tsx:339-348; projectActions.ts:405-416"
+    }
+   ],
+   "data": [
+    {
+     "what": "Project default model id",
+     "where_stored": "table:user_projects column default_model_id",
+     "synced": "Yes, to every app that reads projects",
+     "retained_or_deleted": "Kept with the project; goes with the project when deleted [inferred]"
+    }
+   ],
+   "models_and_providers": "Any chat model the plan allows, including Auto rows on paid plans. The server was not seen validating the id against the plan on save: unknown."
+  },
+  "access_and_usage": {
+   "account": "Signed in with Managed Cloud projects.",
+   "permissions": "Project edit permission; shared-project rules not examined.",
+   "subscription": "Field options follow tier (isModelAllowedForTier, getAllowedAutoModesForTier) (ProjectDefaultModelField.tsx:26-36).",
+   "limits_and_metering": "none found for the setting itself.",
+   "flags": "none found.",
+   "model_compatibility": "Coming-soon models are removed from the list.",
+   "provider_restrictions": "none specific.",
+   "local_mode": "Local projects are device-owned and not stored in the cloud table; VS Code refuses a Local model as the project default (projectActions.ts:320-342)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "No default",
+    "behaviour": "First option 'No default, use the model you last picked'; stores null.",
+    "evidence": "ProjectDefaultModelField.tsx:66-67"
+   },
+   {
+    "state": "Saved default no longer allowed",
+    "behaviour": "Field shows '<name> (not available on your plan)'; Web apply skips an unselectable model.",
+    "evidence": "ProjectDefaultModelField.tsx:68-70; WebChatPage.tsx:2136"
+   },
+   {
+    "state": "Existing conversation open",
+    "behaviour": "The apply effect resets and does nothing.",
+    "evidence": "WebChatPage.tsx:2129-2132"
+   },
+   {
+    "state": "Mobile: project details not loaded",
+    "behaviour": "Loads details when in Cloud mode and signed in.",
+    "evidence": "chat.tsx:330-336"
+   },
+   {
+    "state": "VS Code default equals current model",
+    "behaviour": "Shows the plain message with no button.",
+    "evidence": "projectActions.ts:406-409"
+   },
+   {
+    "state": "Save failure, offline, loading",
+    "behaviour": "not examined in the field itself.",
+    "evidence": "not examined"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/extension-vscode/src/__tests__/projectsView.test.ts",
+     "covers": "describe 'project default model with a Local default' (line 176): quick pick shows 'No default model', apply message says 'Its default model is'."
+    },
+    {
+     "path": "apps/web/lib/__tests__/projects.test.ts",
+     "covers": "Project mapping; matched on defaultModelId (details not read)."
+    },
+    {
+     "path": "packages/contracts/cloud-contracts/src/__tests__/managed-cloud-projects-client.test.ts",
+     "covers": "Projects client; matched on defaultModelId (details not read)."
+    },
+    {
+     "path": "apps/mobile/__tests__/NewChatProjectRoundTrip.test.tsx",
+     "covers": "New chat started in a project keeps the project across trips; default model not confirmed."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Set and apply on Web",
+     "steps": [
+      "Open project settings, set a default model, save.",
+      "Start a new chat in that project."
+     ],
+     "expected": "Picker shows the project's model."
+    },
+    {
+     "name": "Stale default",
+     "steps": [
+      "Set a default, then use an account on a lower plan."
+     ],
+     "expected": "Field shows '(not available on your plan)'; new chat uses the last picked model."
+    },
+    {
+     "name": "Clear default",
+     "steps": [
+      "Choose 'No default...' and save."
+     ],
+     "expected": "default_model_id is null; new chats use the last model."
+    },
+    {
+     "name": "VS Code apply",
+     "steps": [
+      "Apply a project that has a default different from the current model."
+     ],
+     "expected": "Notice with 'Choose the model'; pressing it opens the model picker; model does not change by itself."
+    },
+    {
+     "name": "Mobile",
+     "steps": [
+      "Pick a cloud project with a default; start a new Cloud chat."
+     ],
+     "expected": "Model shown is the default when the account may use it."
+    }
+   ],
+   "diagnostics": [
+    "Table user_projects column default_model_id.",
+    "Project API responses (GET /api/projects).",
+    "Mobile cloud project store details."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No default model on CLI or Chrome.",
+    "affects": "CLI, Chrome",
+    "evidence": "brief S79.03 status; no references in apps/cli or apps/extension.",
+    "work_needed": "Decide whether those surfaces read project defaults; Chrome has no projects in this scope."
+   },
+   {
+    "gap": "VS Code does not switch to the default, only offers the picker, and can only set the user's own model.",
+    "affects": "VS Code",
+    "evidence": "projectActions.ts:320-342, 405-416",
+    "work_needed": "Wire a direct switch and a model choice list."
+   },
+   {
+    "gap": "Mobile has no control to set the default.",
+    "affects": "Mobile",
+    "evidence": "only read paths in cloudProjectStore.ts and chat.tsx",
+    "work_needed": "Add a control or record that Web owns it."
+   },
+   {
+    "gap": "No direct test found for ProjectDefaultModelField or the new-chat apply effect.",
+    "affects": "Web",
+    "evidence": "search of web tests for the field name found none",
+    "work_needed": "Add component and page tests."
+   },
+   {
+    "gap": "Server validation of defaultModelId against plan was not found.",
+    "affects": "Web, API",
+    "evidence": "route.ts:212 writes the value as given",
+    "work_needed": "Check and add validation if missing."
+   }
+  ],
+  "depends_on": [
+   "F079-04",
+   "SYS-memory-projects-and-context",
+   "SYS-data-model-and-migrations",
+   "SYS-api-and-contracts",
+   "SYS-subscriptions-entitlements-and-usage",
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:vscode",
+   "mode:cloud",
+   "table:user_projects",
+   "api:PUT /api/projects/[id]",
+   "api:POST /api/projects"
+  ],
+  "relationships": [
+   {
+    "rel": "stores_data_in",
+    "to": "table:user_projects",
+    "evidence": "0053 migration adds default_model_id"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:PUT /api/projects/[id]",
+    "evidence": "route.ts:362 PUT and line 212 field"
+   },
+   {
+    "rel": "exposes_api",
+    "to": "api:POST /api/projects",
+    "evidence": "route.ts:256"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/projects/components/ProjectDefaultModelField.tsx",
+    "evidence": "component at lines 13-80"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:web",
+    "evidence": "ProjectSettingsDialog.tsx:336"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "chat.tsx:339-348"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:vscode",
+    "evidence": "projectActions.ts:405-416"
+   },
+   {
+    "rel": "governed_by_subscription",
+    "to": "SYS-subscriptions-entitlements-and-usage",
+    "evidence": "field options by tier, ProjectDefaultModelField.tsx:26-36"
+   },
+   {
+    "rel": "depends_on",
+    "to": "F079-04",
+    "evidence": "the applied model then travels as a named selection"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/extension-vscode/src/__tests__/projectsView.test.ts",
+    "evidence": "describe at line 176"
+   },
+   {
+    "rel": "blocked_by",
+    "to": "mode:local",
+    "evidence": "Local projects not stored in the cloud table (0053 migration comment)"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:packages/contracts/cloud-contracts/src/projects.ts",
+    "evidence": "defaultModelId schema lines 52 and 95"
+   }
+  ],
+  "unknowns": [
+   "Whether the server rejects a default model the plan cannot use.",
+   "Whether shared (workspace) projects let members change the default.",
+   "How Desktop Electron differs; it loads the hosted web app.",
+   "Whether a test covers the Web apply effect.",
+   "What a Mobile user sees for a default they cannot access."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3",
+   "claim": "Web field lists only models the plan allows and drops coming-soon models; Auto rows appear only for non-free tiers (ProjectDefaultModelField.tsx:21-38)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The plan filter applies only when billing policy is ready; when tier is null every non-coming-soon model is listed. managed_cloud rows need a non-free tier and membership in getAllowedAutoModesForTier.",
+   "evidence": "ProjectDefaultModelField.tsx:21-33 (`if (tier === null) return true`)",
+   "correction": "The field lists every non-coming-soon model until billing policy is ready; after that it lists only plan-allowed models, with Auto rows only for non-free tiers that allow them."
+  },
+  {
+   "section": "3",
+   "claim": "Save writes default_model_id through PUT /api/projects/[id] (route.ts:212) and creation reads it back (projects/route.ts:99)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "PUT line 212 is correct and writes the value as given. route.ts:99 is a SELECT in the list query, not creation. Creation writes it as an INSERT column at lines 198-200.",
+   "evidence": "apps/web/app/api/projects/[id]/route.ts:212; apps/web/app/api/projects/route.ts:99, 198-200",
+   "correction": "POST /api/projects inserts default_model_id (route.ts:198-200); the list query selects it (route.ts:99)."
+  },
+  {
+   "section": "7/2",
+   "claim": "Signed in; the model must be allowed by the plan (Web field filters options)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Plan filtering is client-side only and skipped while billing is not ready. The PUT route adds the value with no plan check.",
+   "evidence": "ProjectDefaultModelField.tsx:27; [id]/route.ts:212",
+   "correction": "The plan limit is a Web UI filter, not enforced on the server; an API client can store any id."
+  },
+  {
+   "section": "8",
+   "claim": "Saved default no longer allowed: field shows '<name> (not available on your plan)'; Web apply skips an unselectable model (ProjectDefaultModelField.tsx:68-70; WebChatPage.tsx:2136)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "Label is correct, but at lines 60-63, not 68-70. The apply effect checks isSelectableModelId, not plan entitlement, so a plan-disallowed but selectable model is still applied.",
+   "evidence": "WebChatPage.tsx:2136; ProjectDefaultModelField.tsx:60-63",
+   "correction": "Web apply skips only models that are not selectable in the model store; it does not check the plan tier, unlike Mobile, which checks isSelectableModelIdForAccess."
+  }
+ ],
+ "missing_facts": [
+  "Mobile applies the default with an entitlement check (isSelectableModelIdForAccess with cloudUnlocked and subscriptionTier) and requires cloud execution mode, while Web checks only selectability: apps/mobile/app/(app)/(tabs)/chat.tsx:339-348 vs apps/web/features/chat/pages/WebChatPage.tsx:2136.",
+  "Web field lists all non-coming-soon models while billing policy is not ready (tier null): apps/web/features/projects/components/ProjectDefaultModelField.tsx:27.",
+  "Desktop has no own implementation: grep found no defaultModelId in apps/desktop/src, apps/cli or apps/extension, so Desktop depends wholly on the hosted web UI. The page marks it 'built' without saying so in section 3."
+ ]
+}

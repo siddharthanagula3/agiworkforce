@@ -1,0 +1,488 @@
+{
+ "feature": {
+  "id": "F086-12",
+  "aliases": [
+   "Phone microphone and camera",
+   "Mobile permissions",
+   "App Permissions",
+   "Permission detail",
+   "S86.20",
+   "S86.21"
+  ],
+  "summary": "On the phone, Settings, Permissions shows whether AGI may use the microphone and the camera, reading the answer from the operating system. If not yet asked, the person can trigger the system prompt; if denied, an Open Settings button leads to the device settings. AGI cannot change device permissions itself.",
+  "purpose": {
+   "what_it_does": "Lists device permissions with their current level and opens a detail screen per permission that reads the system status, offers the system request when undecided and sends the person to device Settings otherwise (apps/mobile/src/features/settings/permissions/Detail.tsx:50-107, 154-167; registry.ts:51-79).",
+   "why_it_exists": "A person must be able to see and change what the app can use. The operating system owns the decision; AGI shows the truth and a path to change it.",
+   "who_uses_it": "Every phone user, especially those using voice input or document scanning.",
+   "problems_solved": [
+    "Voice or camera does nothing and the person does not know why.",
+    "Not knowing what is allowed.",
+    "Stale status after changing it in device Settings."
+   ],
+   "use_cases": [
+    "Check the microphone is allowed before dictating.",
+    "Allow the camera so a document can be scanned.",
+    "After denying by mistake, tap Open Settings and re-enable.",
+    "Return from device Settings and see the new status."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Phone: Settings, Safety and security, 'Permissions', then 'Microphone' or 'Camera' (apps/mobile/src/features/settings/permissions/index.tsx:180-191; apps/mobile/src/features/settings/index.tsx:727).",
+    "Other apps: not applicable; Desktop shows Microphone in its system permission rows under F086-11 (packages/contracts/local-runtime/src/desktop-privacy.ts:3)."
+   ],
+   "prerequisites": [
+    "The phone app. No sign-in or plan requirement found in the permissions code.",
+    "iOS also lists Speech Recognition, Photos & Files, Reminders and Face ID; Notifications and Calendar on both platforms (registry.ts:251-259)."
+   ],
+   "screens_and_controls": [
+    "List row per permission: label, access level label (Never, Ask, While using, Always), accessibility text '<label> permission. Access level: <level>. Tap to manage.' (index.tsx:49; types.ts:20-25; registry.ts:276-284).",
+    "Detail: title, headline (Access Granted, Not Requested, Access Denied), description ('Used for voice input and audio recording.' or 'Used for photo capture and document scanning.'), explanation, one action button, note 'AGI can\u2019t change device permissions for you.' (Detail.tsx:154-167, 254-322; types.ts:27-37; registry.ts:163-189)."
+   ],
+   "journey": [
+    "Open Settings, Safety and security, Permissions.",
+    "Tap Microphone or Camera.",
+    "Read the status.",
+    "If 'Not Requested', tap 'Allow Microphone' or 'Allow Camera' and answer the system prompt.",
+    "If denied, tap 'Open Settings' and change it in the device settings.",
+    "Return to the app; the status refreshes on its own."
+   ],
+   "feedback_and_outputs": [
+    "Headline and colour change when granted (Detail.tsx:222-235).",
+    "Read failure text: 'Could not read this permission from your device. The status shown may be out of date.' (Detail.tsx:27-28, 71-72).",
+    "Request failure text: 'Your device could not process the request. Try again, or open Settings.' (Detail.tsx:29-30, 102-103).",
+    "Alert 'Could not open Settings' if the OS settings page cannot open (Detail.tsx:32-36)."
+   ],
+   "settings": [
+    "The decision itself lives in device Settings; the app stores only the last observed status (apps/mobile/stores/permissionsStore.ts:9-13, 42-61)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Status is read when the screen gains focus and again whenever the app returns to the foreground (Detail.tsx:56-84).",
+    "Microphone status uses the camera module's microphone permission calls; camera status uses its camera permission calls (registry.ts:51-59, 71-79).",
+    "Unrecognised status values are shown as denied; only 'granted' counts as allowed (registry.ts:45-49, 272-274).",
+    "A request is possible only while undecided; otherwise the button opens device Settings (Detail.tsx:155-167).",
+    "A repeat press while a request is running is ignored (Detail.tsx:94-96).",
+    "Last observed status is saved with persisted storage (permissionsStore.ts:42-61).",
+    "iOS usage descriptions for the camera and microphone are declared in the app config (apps/mobile/app.config.js:75-76, 170-173)."
+   ],
+   "incomplete": [
+    "The draft cited detail.tsx; the file is Detail.tsx.",
+    "The OS 'restricted' state (parental or device policy) is not told apart from 'denied' (registry.ts:45-49 maps every non-granted, non-undetermined value to denied).",
+    "Access-level wording (Never, Ask, While using) does not map exactly to what the OS offers; 'Ask' is shown for an unasked permission (registry.ts:276-284)."
+   ],
+   "disconnected_or_disabled": [
+    "none found in the code"
+   ],
+   "not_available": [
+    "Android shows no Speech Recognition, Photos, Reminders or Face ID row (registry.ts:251-259).",
+    "Other apps: not applicable."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "The user can see and change whether AGI may use the microphone.",
+     "source": "S86.20 (knowledge-base/data/area-briefs/086-security-and-connected-access-settings.md)"
+    },
+    {
+     "statement": "The user can see and change whether AGI may use the camera.",
+     "source": "S86.21 (same brief)"
+    },
+    {
+     "statement": "Status is read when the screen opens and again each time the app returns to the foreground.",
+     "source": "apps/mobile/src/features/settings/permissions/Detail.tsx:60-84"
+    },
+    {
+     "statement": "Status is the operating system's answer.",
+     "source": "apps/mobile/src/features/settings/permissions/registry.ts:51-57, 71-77"
+    },
+    {
+     "statement": "A failed read shows a permission read failure message.",
+     "source": "apps/mobile/src/features/settings/permissions/Detail.tsx:71-72"
+    },
+    {
+     "statement": "Dictation requests microphone permission and handles the native state.",
+     "source": "doc: docs/product/requirements.md (row M-VOICE-002, line 1001)"
+    }
+   ],
+   "acceptance_criteria": [
+    "Opening Microphone shows the current OS state: granted, denied or not requested.",
+    "With an undecided state, the button asks for the permission; with a denial, it opens device Settings.",
+    "After changing the permission in device Settings and returning, the screen shows the new state without a restart.",
+    "If the OS call fails, the failure message appears and the button works again.",
+    "Opening an unknown permission route shows 'Unknown permission type.'",
+    "The permission list shows Microphone and Camera on iOS and Android."
+   ],
+   "inferred": [
+    "[inferred] Because the app stores only the last observed status, a stale value can show in the list until the list refreshes (the list screen also reads on open, index.tsx:117-130).",
+    "[inferred] The feature is device-only and needs no account or plan."
+   ],
+   "proposed": [
+    "[proposed] Show 'Restricted by your device' separately from denied.",
+    "[proposed] Say on the Microphone screen that on-device speech recognition on iOS also needs the Speech Recognition permission."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "screen",
+    "name": "PermissionsScreen",
+    "path": "apps/mobile/src/features/settings/permissions/index.tsx",
+    "role": "List of permissions, level labels."
+   },
+   {
+    "kind": "screen",
+    "name": "PermissionDetailScreen",
+    "path": "apps/mobile/src/features/settings/permissions/Detail.tsx",
+    "role": "Status read, request, open Settings."
+   },
+   {
+    "kind": "config",
+    "name": "PERMISSION_REGISTRY",
+    "path": "apps/mobile/src/features/settings/permissions/registry.ts",
+    "role": "Per permission label, description, status and request calls."
+   },
+   {
+    "kind": "config",
+    "name": "permission types and labels",
+    "path": "apps/mobile/src/features/settings/permissions/types.ts",
+    "role": "Status and level vocabulary."
+   },
+   {
+    "kind": "store",
+    "name": "permissionsStore",
+    "path": "apps/mobile/stores/permissionsStore.ts",
+    "role": "Persisted last observed status."
+   },
+   {
+    "kind": "screen",
+    "name": "route settings/permissions",
+    "path": "apps/mobile/app/(app)/settings/permissions/index.tsx",
+    "role": "Route for the list."
+   },
+   {
+    "kind": "screen",
+    "name": "route settings/permissions/[permission]",
+    "path": "apps/mobile/app/(app)/settings/permissions/[permission].tsx",
+    "role": "Route for the detail."
+   },
+   {
+    "kind": "config",
+    "name": "app config usage strings",
+    "path": "apps/mobile/app.config.js",
+    "role": "Camera and microphone purpose text and plugin config."
+   },
+   {
+    "kind": "integration",
+    "name": "expo-camera",
+    "path": "apps/mobile/src/features/settings/permissions/registry.ts",
+    "role": "Reads and requests microphone and camera permission."
+   },
+   {
+    "kind": "service",
+    "name": "settings entry",
+    "path": "apps/mobile/src/features/settings/index.tsx",
+    "role": "Settings row 'Permissions'."
+   },
+   {
+    "kind": "service",
+    "name": "screen titles",
+    "path": "apps/mobile/src/features/settings/screenTitles.ts",
+    "role": "Permissions titles."
+   },
+   {
+    "kind": "test",
+    "name": "PermissionsScreen snapshot",
+    "path": "apps/mobile/src/features/settings/permissions/__tests__/PermissionsScreen.snapshot.test.tsx",
+    "role": "List, detail, stale status, request failure."
+   },
+   {
+    "kind": "test",
+    "name": "PermissionStatusLabel",
+    "path": "apps/mobile/src/features/settings/permissions/__tests__/PermissionStatusLabel.test.tsx",
+    "role": "Level labels."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The person opens the detail screen; the status is read from the operating system.",
+     "runs_on": "device",
+     "evidence": "Detail.tsx:56-75; registry.ts:51-54, 71-74"
+    },
+    {
+     "what_happens": "The status is shown and saved as the last observed value.",
+     "runs_on": "device",
+     "evidence": "Detail.tsx:68-69; permissionsStore.ts:42-61"
+    },
+    {
+     "what_happens": "If undecided, the person taps the button and the system shows its own prompt.",
+     "runs_on": "device",
+     "evidence": "Detail.tsx:94-107; registry.ts:56-59, 76-79"
+    },
+    {
+     "what_happens": "If decided, the button opens the device settings page.",
+     "runs_on": "device",
+     "evidence": "Detail.tsx:32-36, 270"
+    },
+    {
+     "what_happens": "Returning to the foreground triggers a new read.",
+     "runs_on": "device",
+     "evidence": "Detail.tsx:76-79"
+    }
+   ],
+   "data": [
+    {
+     "what": "Last observed status per permission",
+     "where_stored": "store:permissionsStore (persisted device storage)",
+     "synced": "No; device only",
+     "retained_or_deleted": "Kept until app data is cleared"
+    },
+    {
+     "what": "The real permission",
+     "where_stored": "Operating system",
+     "synced": "Not by AGI",
+     "retained_or_deleted": "Controlled by the person in device Settings"
+    }
+   ],
+   "models_and_providers": "No model or provider takes part. The permission gates voice input and photo capture whichever model or local inference engine is used. Which speech engine handles audio is outside this feature."
+  },
+  "access_and_usage": {
+   "account": "No sign-in needed; nothing in the permissions code reads the account.",
+   "permissions": "The operating system holds the permission; AGI cannot change it (Detail.tsx:312-318).",
+   "subscription": "none found in the code.",
+   "limits_and_metering": "none found in the code.",
+   "flags": "none found in the code.",
+   "model_compatibility": "Not applicable.",
+   "provider_restrictions": "none found in the code.",
+   "local_mode": "Works the same in Local mode; nothing leaves the device and no paid plan or sign-in is involved."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "loading",
+    "behaviour": "Starts from the last observed status, then updates after the read.",
+    "evidence": "Detail.tsx:50-52"
+   },
+   {
+    "state": "read failure",
+    "behaviour": "Alert text 'Could not read this permission...'.",
+    "evidence": "Detail.tsx:27-28, 71-72, 270-282"
+   },
+   {
+    "state": "request in progress",
+    "behaviour": "Button text 'Asking for <label> access\u2026', disabled and dimmed.",
+    "evidence": "Detail.tsx:159-163, 267-269"
+   },
+   {
+    "state": "request failure",
+    "behaviour": "Alert text; control re-enabled.",
+    "evidence": "Detail.tsx:102-106"
+   },
+   {
+    "state": "settings cannot open",
+    "behaviour": "Alert 'Could not open Settings'.",
+    "evidence": "Detail.tsx:32-36"
+   },
+   {
+    "state": "unknown permission",
+    "behaviour": "'Unknown permission type.' with a back arrow.",
+    "evidence": "Detail.tsx:109-150"
+   },
+   {
+    "state": "foreground return",
+    "behaviour": "Status read again; late results from an older read are ignored.",
+    "evidence": "Detail.tsx:60-79"
+   },
+   {
+    "state": "accessibility",
+    "behaviour": "Summary and button have labels; failure uses alert role.",
+    "evidence": "Detail.tsx:210-212, 262-266, 285-288"
+   },
+   {
+    "state": "restricted by device policy",
+    "behaviour": "Shown as denied.",
+    "evidence": "registry.ts:45-49"
+   },
+   {
+    "state": "offline",
+    "behaviour": "Not affected; all calls are on device.",
+    "evidence": "Detail.tsx and registry.ts make only on-device permission calls; no network call found"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/mobile/src/features/settings/permissions/__tests__/PermissionsScreen.snapshot.test.tsx",
+     "covers": "Native-backed list, camera detail, unknown route fails closed, stale-status message on read failure, request failure re-enables the control."
+    },
+    {
+     "path": "apps/mobile/src/features/settings/permissions/__tests__/PermissionStatusLabel.test.tsx",
+     "covers": "Ask versus Never labels, per-kind overrides, no Location row."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Undecided microphone",
+     "steps": [
+      "On a fresh install open Settings, Permissions, Microphone.",
+      "Tap Allow Microphone and accept."
+     ],
+     "expected": "Headline becomes Access Granted."
+    },
+    {
+     "name": "Denied camera",
+     "steps": [
+      "Deny the camera in the system prompt.",
+      "Reopen Camera."
+     ],
+     "expected": "'Access Denied' and an 'Open Settings' button."
+    },
+    {
+     "name": "Change in device Settings",
+     "steps": [
+      "Tap Open Settings.",
+      "Enable the permission.",
+      "Return to AGI."
+     ],
+     "expected": "Status updates without leaving the screen."
+    },
+    {
+     "name": "Read failure",
+     "steps": [
+      "Make the permission read fail in a test."
+     ],
+     "expected": "Failure message shown; status marked possibly out of date."
+    },
+    {
+     "name": "Local mode",
+     "steps": [
+      "Switch to Local mode.",
+      "Open Microphone."
+     ],
+     "expected": "Same behaviour; no sign-in prompt."
+    }
+   ],
+   "diagnostics": [
+    "Alert text 'Could not read this permission from your device.'",
+    "permissionsStore persisted value (MMKV).",
+    "Device log for expo-camera permission calls."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "Restricted state is shown as denied.",
+    "affects": "Phone users with managed devices.",
+    "evidence": "registry.ts:45-49",
+    "work_needed": "Map restricted separately and explain."
+   },
+   {
+    "gap": "Draft cited detail.tsx; the real file is Detail.tsx, with different line numbers.",
+    "affects": "Documentation.",
+    "evidence": "apps/mobile/src/features/settings/permissions/Detail.tsx",
+    "work_needed": "Use corrected paths."
+   },
+   {
+    "gap": "No evidence that the voice feature handles a denied microphone with a guiding message outside Settings.",
+    "affects": "Phone voice users.",
+    "evidence": "not opened",
+    "work_needed": "Check the voice path."
+   }
+  ],
+  "depends_on": [
+   "surface:mobile",
+   "mode:local",
+   "mode:cloud",
+   "SYS-voice-and-media",
+   "SYS-local-inference",
+   "SYS-security-and-privacy",
+   "SYS-execution-boundaries",
+   "store:permissionsStore",
+   "file:apps/mobile/src/features/settings/permissions/registry.ts",
+   "file:apps/mobile/src/features/settings/permissions/Detail.tsx",
+   "F086-11"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/features/settings/permissions/Detail.tsx",
+    "evidence": "Detail screen."
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/src/features/settings/permissions/registry.ts",
+    "evidence": "Registry."
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "store:permissionsStore",
+    "evidence": "permissionsStore.ts:42-61."
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:mobile",
+    "evidence": "Settings, Permissions."
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-voice-and-media",
+    "evidence": "Microphone use description 'voice input and real-time voice conversations' (apps/mobile/app.config.js:171-173)."
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-execution-boundaries",
+    "evidence": "Device-only permission; nothing leaves the device."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/src/features/settings/permissions/__tests__/PermissionsScreen.snapshot.test.tsx",
+    "evidence": "Detail screen tests."
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/src/features/settings/permissions/__tests__/PermissionStatusLabel.test.tsx",
+    "evidence": "Label tests."
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/mobile/app.config.js",
+    "evidence": "Usage strings for camera and microphone."
+   },
+   {
+    "rel": "depends_on",
+    "to": "F086-11",
+    "evidence": "Desktop shows the equivalent microphone status as a system permission row."
+   }
+  ],
+  "unknowns": [
+   "How the voice and scan features react when the permission is denied.",
+   "Whether iOS and Android show different headline text for the same status.",
+   "Whether the list screen refreshes on foreground return (only the detail was fully read).",
+   "Display name of the Settings parent row (Safety and security) in the shipped UI.",
+   "Android specifics of the permission request flow."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "2/3",
+   "claim": "Phone: Settings, Safety and security, 'Permissions' (index.tsx:180-191; settings/index.tsx:727).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "In the main Settings list the 'Permissions' row sits in the 'Device' group, directly above and separate from the 'Safety & Security' row (settings/index.tsx:723-735). The Permissions screen's back link goes to safety-security and safety-security/index.tsx also links to it, so it is reachable from there, but it is not nested under it. The row label is 'Safety & Security'; the list screen title is 'Permissions' with a 'App Permissions' header.",
+   "evidence": "apps/mobile/src/features/settings/index.tsx:668-735; permissions/index.tsx:~177; safety-security/index.tsx",
+   "correction": "Open Settings, then Device, then 'Permissions' (also reachable from Safety & Security and Capabilities), then Microphone or Camera."
+  },
+  {
+   "section": "3",
+   "claim": "iOS also lists Speech Recognition, Photos & Files, Reminders and Face ID; Notifications and Calendar on both platforms (registry.ts:251-259).",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "PERMISSION_KINDS matches that platform split, but the list screen hides any kind that has an isAvailable check until it reports available (e.g. Face ID on devices without it). The Photos row's label is not verified as 'Photos & Files'.",
+   "evidence": "registry.ts:251-259; permissions/index.tsx:25-27, 123-125, 137-150",
+   "correction": "Add that device-dependent rows (those with isAvailable, such as Face ID) are hidden until the device reports them available."
+  }
+ ],
+ "missing_facts": [
+  "The list screen also re-reads every permission on focus and on app foreground return (permissions/index.tsx:117-165, AppState listener at ~161), so the page's Unknown item 'whether the list refreshes on foreground return' is answerable: it does. The inferred stale-status caveat is therefore weaker than stated.",
+  "The microphone iOS purpose string says it is used for 'voice input and real-time voice conversations with AI' (app.config.js:171-172), so the microphone gates real-time voice, which is a server-backed feature, not only on-device dictation. The page's 'nothing leaves the device' applies only to the permission check, not to what the permission enables.",
+  "The list screen carries a help link to https://agiworkforce.com/help?q=permissions+microphone+camera (permissions/index.tsx:20), a network-opening path not mentioned in sections 6 or 8."
+ ]
+}

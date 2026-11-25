@@ -1,0 +1,500 @@
+{
+ "S13.01": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Type a message and press Enter to send."
+   }
+  ],
+  "needs": "a signed-in account to see a reply",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Start agi in a terminal and wait for the main screen.",
+   "The composer at the bottom has focus; type: hello there",
+   "Press Enter.",
+   "Look: the text appears in the chat as your message, and a reply starts (needs a signed-in account)."
+  ],
+  "where": "Main screen > composer box at the bottom > type a message > Enter"
+ },
+ "S13.02": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/keys for all keys"
+   }
+  ],
+  "needs": "none",
+  "note": "Whether Shift+Enter arrives depends on the terminal; the code says Ctrl-J is the fallback.",
+  "reachable": "yes",
+  "steps": [
+   "Type: line one",
+   "Press Shift+Enter, then type: line two.",
+   "Look: the composer shows two lines and nothing was sent.",
+   "Press Enter, then check the chat: the message keeps its line break."
+  ],
+  "where": "Main screen > composer box > Shift+Enter (also Alt+Enter or Ctrl-J)"
+ },
+ "S13.03": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "none",
+  "note": "The 8-row cap is in code (composer_content_rows); the scrolling behaviour was not checked against the code path.",
+  "reachable": "yes",
+  "steps": [
+   "Type one line, then press Shift+Enter and type another line.",
+   "Repeat until there are about ten lines.",
+   "Look: the composer grows one row per line up to about 8 text rows, then stops growing and the text scrolls inside it."
+  ],
+  "where": "Main screen > composer box > keep adding lines with Shift+Enter"
+ },
+ "S13.05": {
+  "labels": [
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Edit the prompt in $VISUAL or $EDITOR"
+   },
+   {
+    "file": "apps/cli/src/tui/composer_edits.rs",
+    "text": "No editor is set; set VISUAL or EDITOR."
+   }
+  ],
+  "needs": "a VISUAL or EDITOR environment variable set",
+  "note": "This opens an external editor, not a full-screen editor inside the app; the help line was found in command_registry.rs but where it shows on screen was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Before starting agi, set VISUAL or EDITOR in the shell (for example export EDITOR=nano).",
+   "Type a draft in the composer.",
+   "Press Ctrl-G; the editor opens with the draft.",
+   "Edit the text, save and quit the editor.",
+   "Look: the edited text is back in the composer. If no editor is set, look for the notice: No editor is set; set VISUAL or EDITOR."
+  ],
+  "where": "Main screen > composer box > Ctrl-G (or Ctrl-E) opens your $VISUAL or $EDITOR"
+ },
+ "S13.06": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Type a message and press Enter to send."
+   }
+  ],
+  "needs": "none",
+  "note": "Expected a visible send button with a disabled reason; the code has only the Enter key, and an empty Enter does nothing with no message.",
+  "reachable": "yes",
+  "steps": [
+   "Type a message.",
+   "Look for a visible send button; none was found in the code.",
+   "Press Enter.",
+   "Look: the message is sent and appears in the chat. Then press Enter on an empty composer and look for a reason; none is shown."
+  ],
+  "where": "Main screen > composer box > Enter (there is no send button)"
+ },
+ "S13.07": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "working, Esc or Ctrl-C to cancel"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "\u2298 Stopped"
+   }
+  ],
+  "needs": "a signed-in account to get a streamed reply",
+  "note": "There is no on-screen stop button; the stop is the key.",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt that gives a long answer (needs a signed-in account).",
+   "While the reply streams, look at the line that says: working, Esc or Ctrl-C to cancel.",
+   "Press Esc.",
+   "Look: the reply stops, the text already written stays, and the line: Stopped appears with the notice stopped the turn."
+  ],
+  "where": "While a reply is working > Esc (or Ctrl-C)"
+ },
+ "S13.09": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/keys for all keys"
+   }
+  ],
+  "needs": "none",
+  "note": "Code comment says Shift+Enter never arrives in terminals without the keyboard protocol; Alt+Enter and Ctrl-J also add a newline.",
+  "reachable": "yes",
+  "steps": [
+   "Type: first part",
+   "Press Shift+Enter.",
+   "Type: second part.",
+   "Look: a new line is added and the message is not sent."
+  ],
+  "where": "Main screen > composer box > Shift+Enter"
+ },
+ "S13.10": {
+  "labels": [
+   {
+    "file": "apps/cli/src/command_registry.rs",
+    "text": "Undo the last edit (Ctrl-Shift-Z redoes)"
+   }
+  ],
+  "needs": "none",
+  "note": "Expected Cmd+Z and Ctrl+Z; the code binds undo to Ctrl-_, Ctrl-7 and Ctrl-Shift-- (composer_edits.rs is_undo_key), not Ctrl+Z or Cmd+Z.",
+  "reachable": "yes",
+  "steps": [
+   "Type a sentence, then delete part of it.",
+   "Press Ctrl-_ (Ctrl-Shift-- also undoes).",
+   "Look: the text goes back to the earlier state.",
+   "Press Ctrl-Shift-Z.",
+   "Look: the edit is reapplied."
+  ],
+  "where": "Main screen > composer box > Ctrl-_ to undo, Ctrl-Shift-Z to redo"
+ },
+ "S13.11": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Attach the image on the clipboard"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/attach remove to drop"
+   }
+  ],
+  "needs": "an image on the clipboard",
+  "note": "Only clipboard images become attachments with Ctrl+V; pasted file paths arrive as text, and no file-paste attachment path was found.",
+  "reachable": "yes",
+  "steps": [
+   "Copy a sentence, switch to agi and paste it into the composer; look: the text appears.",
+   "Copy an image (for example a screenshot), then press Ctrl+V in the composer.",
+   "Look: a chip line above the composer starts with a paperclip and ends with: /attach remove to drop, and the notice says attached."
+  ],
+  "where": "Main screen > composer box > Cmd+V (text) or Ctrl+V (clipboard image)"
+ },
+ "S13.14": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Long pastes collapse to [Pasted text #N]; the full text is sent"
+   }
+  ],
+  "needs": "some long text on the clipboard",
+  "note": "The marker is inline text, not an attachment; the limits are in composer_edits.rs (800 characters, 3 lines).",
+  "reachable": "yes",
+  "steps": [
+   "Copy about 10 lines of text.",
+   "Paste it into the composer (Cmd+V).",
+   "Look: the composer shows one marker such as [Pasted text #1 +10 lines] instead of all the text.",
+   "Press Enter and check the chat: the full text was sent."
+  ],
+  "where": "Main screen > composer box > paste a long text (more than 3 lines or 800 characters)"
+ },
+ "S13.15": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "catalog estimate:"
+   }
+  ],
+  "needs": "none",
+  "note": "The draft size is not shown; the footer token and context counts are off by default (show_context false).",
+  "reachable": "yes",
+  "steps": [
+   "Start a chat and have a few exchanges.",
+   "Look at the header's second row for a context meter with a percent.",
+   "Type a long draft without sending.",
+   "Look: the meter does not change with the draft length; it reflects the conversation so far. In Local mode the label begins with catalog estimate:."
+  ],
+  "where": "Main screen > header, second row > context meter"
+ },
+ "S13.19": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   }
+  ],
+  "needs": "none",
+  "note": "No search key for prompt history was found (Ctrl-R is not bound); only Up and Down.",
+  "reachable": "yes",
+  "steps": [
+   "Send three different prompts.",
+   "With the composer empty, press Up.",
+   "Look: the last sent prompt appears in the composer.",
+   "Press Up again, then Down, and check that the earlier and later prompts come back."
+  ],
+  "where": "Main screen > composer box > Up arrow and Down arrow"
+ },
+ "S13.21": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Commands"
+   }
+  ],
+  "needs": "a custom command file in .agiworkforce/commands/",
+  "note": "Tab fills only the command name, not the template body; the body is sent when the command runs.",
+  "reachable": "yes",
+  "steps": [
+   "Before starting, add a command file under .agiworkforce/commands/ in the project (for example review-note.md).",
+   "Type / in the composer and find your command in the Commands list.",
+   "Press Tab on it.",
+   "Look: the composer shows the command name (for example /review-note), then type your text after it and press Enter.",
+   "Look: the command runs with your text."
+  ],
+  "where": "Main screen > composer box > type / > pick a custom command in the Commands list > Tab"
+ },
+ "S13.22": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Message AGI...  / for commands"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/command_popup.rs",
+    "text": "Commands"
+   }
+  ],
+  "needs": "none",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "With the composer empty, type /.",
+   "Look: a Commands list opens over the chat.",
+   "Type mo to filter the list, then move with Up and Down.",
+   "Look: the list narrows to matching commands; Enter runs the highlighted one and Tab fills it into the composer."
+  ],
+  "where": "Main screen > composer box > type /"
+ },
+ "S13.23": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "No skills found. Add .md files to .agiworkforce/skills/"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Enable or disable individual skills"
+   }
+  ],
+  "needs": "a skill installed under .agiworkforce/skills/ or ~/.agiworkforce/skills/",
+  "note": "Skills are invoked by typing their slash name; no skill picker was found.",
+  "reachable": "yes",
+  "steps": [
+   "Type /skills and press Enter to list installed skills.",
+   "Look: the list starts with Skills (N): or, with none, the notice No skills found.",
+   "Type / and find the skill name in the Commands list.",
+   "Type the skill name, then your request, and press Enter.",
+   "Look: the reply follows the skill's instructions."
+  ],
+  "where": "Main screen > composer box > type / then the skill name (or /skills to list them)"
+ },
+ "S13.24": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Hand the message to one of your agents"
+   },
+   {
+    "file": "apps/cli/src/tui/widgets/mention_popup.rs",
+    "text": "Files"
+   }
+  ],
+  "needs": "an agent set up in the workspace",
+  "note": "Agent entries in the Files popup were not traced to their display text; the agent names come from mention_candidates.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure an agent is set up in the workspace.",
+   "Type @ and look for the Files list; agents should appear in it.",
+   "Choose the agent and type your message, then press Enter.",
+   "Look: the message is handed to that agent and its reply appears."
+  ],
+  "where": "Main screen > composer box > type @ > pick an agent in the Files list, or type @agent-<name>"
+ },
+ "S13.26": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/widgets/mention_popup.rs",
+    "text": "Type to filter \u00b7 \u2191\u2193 to move \u00b7 Enter to insert \u00b7 Esc to cancel"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Inline a file, or list a folder with @dir/"
+   }
+  ],
+  "needs": "a trusted folder (an untrusted folder sends only the path)",
+  "note": "The trust rule (only the path is sent when the folder is untrusted) was confirmed in mentions.rs for folders; the same rule for files was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Type @ and then part of a file name, for example README.",
+   "Look: the Files list narrows; press Enter on the file.",
+   "Look: the @file token is inserted into the composer.",
+   "Send a question about it and check the reply uses the file contents."
+  ],
+  "where": "Main screen > composer box > type @ > pick a file in the Files list > Enter"
+ },
+ "S13.27": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Inline a file, or list a folder with @dir/"
+   }
+  ],
+  "needs": "a trusted folder (an untrusted folder sends only the path)",
+  "note": "Whether folder entries show a trailing slash in the list was not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Type @ and then a folder name, for example src.",
+   "Pick the folder entry in the Files list and press Enter.",
+   "Look: the @folder/ token is inserted.",
+   "Send a question and check the reply lists or uses the folder contents."
+  ],
+  "where": "Main screen > composer box > type @ > pick a folder > Enter"
+ },
+ "S13.30": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Ways to add context to your next message:"
+   }
+  ],
+  "needs": "a connected MCP server that offers resources",
+  "note": "The @ popup lists workspace files only, so the connector syntax is not shown on screen; the rule is in agent/mod.rs mcp_resource_selectors.",
+  "reachable": "yes",
+  "steps": [
+   "Connect an MCP server that offers resources (via /mcp).",
+   "Type @<server>:<resource-uri> in the composer and press Enter.",
+   "Look: the notices in the chat say what was attached, and the reply uses the resource."
+  ],
+  "where": "Main screen > composer box > type @server:resource-uri (typed by hand, no popup)"
+ },
+ "S13.31": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/attach remove to drop"
+   }
+  ],
+  "needs": "an image file",
+  "note": "Only attachments and generated images appear as chips; no skill, project, folder or page chips were found, and removal is by command, not a per-chip x.",
+  "reachable": "yes",
+  "steps": [
+   "Type /attach followed by the path of an image file and press Enter.",
+   "Look: a chip line above the composer lists the file and says /attach remove to drop.",
+   "Type /attach remove and press Enter.",
+   "Look: the chip line is gone."
+  ],
+  "where": "Main screen > composer box > /attach <file> > chip line above the composer > /attach remove"
+ },
+ "S13.35": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Ways to add context to your next message:"
+   }
+  ],
+  "needs": "none",
+  "note": "No plus button was found; the attach menu is printed text, not a control.",
+  "reachable": "yes",
+  "steps": [
+   "Type /attach and press Enter.",
+   "Look: the chat shows the list Ways to add context to your next message: with @path, @agent-<name>, /attach <file>, Ctrl+V and /mcp."
+  ],
+  "where": "Main screen > composer box > type /attach > Enter"
+ },
+ "S13.36": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Dictate into the composer without sending"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "dictation added to the composer, Enter to send"
+   }
+  ],
+  "needs": "a microphone",
+  "note": "No microphone button was found; it is a command only.",
+  "reachable": "yes",
+  "steps": [
+   "Type /dictate and press Enter (an optional language code may follow).",
+   "Speak when the app asks you to.",
+   "Finish the dictation as the prompt says.",
+   "Look: the words appear in the composer, are not sent, and the notice says dictation added to the composer, Enter to send."
+  ],
+  "where": "Main screen > composer box > type /dictate > Enter"
+ },
+ "S13.37": {
+  "labels": [
+   {
+    "file": "apps/cli/src/voice.rs",
+    "text": "Voice mode requires a working microphone."
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "Voice session ended."
+   }
+  ],
+  "needs": "a microphone and speakers, and a signed-in account",
+  "note": "Voice mode leaves the composer and runs its own loop; there is no button for it.",
+  "reachable": "yes",
+  "steps": [
+   "Type /voice and press Enter.",
+   "Wait for voice mode to take over the terminal, then speak.",
+   "Listen for the spoken reply.",
+   "End the voice session as the prompt says.",
+   "Look: the notice Voice session ended. appears back in the main screen."
+  ],
+  "where": "Main screen > composer box > type /voice > Enter (alias /v)"
+ },
+ "S13.40": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "type to queue a message"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "(Enter to queue, /btw to ask aside)"
+   }
+  ],
+  "needs": "a signed-in account and a long-running reply",
+  "note": "Expected guidance that steers the running task; the code queues the message and sends it after the turn ends, so it does not steer the running task.",
+  "reachable": "yes",
+  "steps": [
+   "Send a prompt that takes a while.",
+   "While the line shows working, type: use the tests folder, then press Enter.",
+   "Look: the line shows the draft with (Enter to queue, /btw to ask aside) and 1 message queued.",
+   "Wait for the turn to end and check that the queued message is then sent."
+  ],
+  "where": "While a reply is working > composer box > type a message > Enter"
+ },
+ "S13.41": {
+  "labels": [
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "/btw to ask aside"
+   },
+   {
+    "file": "apps/cli/src/tui/tui_app.rs",
+    "text": "answering the side question"
+   }
+  ],
+  "needs": "a signed-in account for the answer",
+  "note": "The side query is built from a copy of the session messages (agent/chat.rs side_query); the no-change result was not run.",
+  "reachable": "yes",
+  "steps": [
+   "Start a long reply.",
+   "While it works, type /btw what does this file do? and press Enter.",
+   "Look: the notice answering the side question appears and a chat line starting btw: shows the answer.",
+   "Check that the main reply continues and the main conversation is not changed (for example /status shows the same Turns count)."
+  ],
+  "where": "While a reply is working (or any time) > composer box > /btw <question> > Enter"
+ }
+}

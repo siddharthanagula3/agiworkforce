@@ -1,0 +1,629 @@
+{
+ "feature": {
+  "id": "F012-10",
+  "aliases": [
+   "First-use introduction",
+   "Onboarding",
+   "Welcome page",
+   "OnboardingWizard",
+   "Get started with AGI Code (VS Code walkthrough)",
+   "Welcome to AGI (Chrome page)",
+   "/welcome",
+   "S12.22"
+  ],
+  "summary": "Short first-run flows on each app. Web has a two-step wizard at /welcome with starter prompts. Mobile has hero, about-you and device-setup screens. The CLI has a terminal setup wizard. VS Code has a walkthrough and a first-run panel. Chrome opens a Welcome page on install. Each can be skipped.",
+  "purpose": {
+   "what_it_does": "Greets a first-time person, asks for light personalization or setup, and then lands them in the first chat. Web asks for a preferred name and work description, then offers starter prompts. Mobile asks to accept terms, collects name and work, then offers a local model download or sign in to Cloud. (apps/web/features/onboarding/components/OnboardingWizard.tsx:36) (apps/mobile/app/(public)/onboarding.tsx:280)",
+   "why_it_exists": "The brief says first-time users are shown a short introduction to key features before or at their first chat (doc: knowledge-base/data/area-briefs/012-new-chat-experience.md, S12.22). Mobile requirements: onboarding shows brand and privacy summary, explains Local, BYOK and Cloud, checks local model readiness and never blocks Local use (doc: docs/product/requirements.md, M-ONB-001 to M-ONB-005).",
+   "who_uses_it": "New users on every app.",
+   "problems_solved": [
+    "Empty new-chat screens do not tell a new person what to do.",
+    "Personal details (name, work) make the first replies fit the person.",
+    "Setup of how to connect (account, own key, local model) must happen once."
+   ],
+   "use_cases": [
+    "After sign-up on web, answer 'What should we call you?' and pick a starter prompt that fills the composer.",
+    "Install the mobile app, tap 'Start chatting', accept the notice, download the recommended local model, and land in chat.",
+    "Run the CLI for the first time and choose how to connect.",
+    "Install the Chrome extension and read the Welcome page."
+   ]
+  },
+  "user_experience": {
+   "where_to_find_it": [
+    "Web: /welcome page showing the wizard (apps/web/app/welcome/page.tsx:12).",
+    "Mobile: first screen after the age gate when no 'onboarding-done' value exists (apps/mobile/app/index.tsx:16).",
+    "CLI: first interactive launch with no .setup_complete file, or 'agi onboarding' (apps/cli/src/lib.rs:6119) (apps/cli/src/lib.rs:7803).",
+    "VS Code: Getting Started walkthrough 'Get started with AGI Code' and the command 'Code: Show Getting Started' (apps/extension-vscode/package.json:818) and a first-run panel in the sidebar (apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1392).",
+    "Chrome: Welcome page opened on install, title 'Welcome to AGI' (apps/extension/src/background.ts:7697) (apps/extension/src/welcome.html:6).",
+    "Desktop: the hosted web wizard (doc: AGENTS.md section 5)."
+   ],
+   "prerequisites": [
+    "Web: signed in, current terms accepted, adult eligibility confirmed; otherwise redirected (apps/web/app/welcome/page.tsx:14-22).",
+    "Mobile: age gate confirmed first (apps/mobile/app/index.tsx:12).",
+    "CLI: an interactive terminal and no subcommand or prompt (apps/cli/src/lib.rs:6115)."
+   ],
+   "screens_and_controls": [
+    "Web step 1 'What should we call you?': 'Preferred name', 'What best describes your work?' select; 'Skip for now' (apps/web/features/onboarding/components/OnboardingWizard.tsx:199).",
+    "Web step 2 'What do you want to do first?': radio use cases, 'Start with one of these' prompts, 'How this works' notes (apps/web/features/onboarding/components/OnboardingWizard.tsx:41).",
+    "Mobile: hero 'Start chatting' with Terms and Privacy Policy links; first-run disclosure modal; about-you with 'Continue' and 'Skip for now'; device tier with 'Download <model>' / 'Continue', 'Pick a different model', 'Continue without downloading', 'Sign in to use Cloud' (apps/mobile/app/(public)/onboarding.tsx:569-804).",
+    "CLI: menu 'Choose how to connect' with Local model, Provide your own API key, Other providers, AGI cloud, Skip for now (apps/cli/src/onboarding.rs:262).",
+    "VS Code walkthrough steps: Install the AGI CLI; Work in this repository; Follow background work from the IDE; Turn intent into a reviewed change; Set autonomy and verify the boundary (apps/extension-vscode/package.json:818-870)."
+   ],
+   "journey": [
+    "Web: sign up completes, the person reaches /welcome (how they get there is unknown, see unknowns).",
+    "Step 1: enter name and work (prefilled from the account), press Continue.",
+    "Step 2: pick a use case; pick a starter prompt; the wizard saves, then goes to /chat?starterPrompt=... and the composer is prefilled (apps/web/features/chat/pages/WebChatPage.tsx:1322).",
+    "Or 'Skip for now': saves a completed marker and goes to /chat.",
+    "Mobile: hero, terms and disclosure accept, about-you, device tier, download or skip, then the app main screen; 'onboarding-done' is stored (apps/mobile/app/(public)/onboarding.tsx:257).",
+    "CLI: banner, trust current folder, choose connection, authenticate, choose model, marker file written (apps/cli/src/onboarding.rs:795)."
+   ],
+   "feedback_and_outputs": [
+    "Web: 'Step N of 2'; errors 'Failed to save your preferences' or 'Failed to skip setup' (apps/web/features/onboarding/components/OnboardingWizard.tsx:78).",
+    "Web: use-case disclosure 'This picks the suggestions below and nothing else...' (apps/web/features/onboarding/components/OnboardingWizard.tsx:38).",
+    "Mobile: download progress and speed; error with 'Try again' and 'Continue to chat' (apps/mobile/app/(public)/onboarding.tsx:903).",
+    "CLI: 'Setup interrupted. Run again to continue.' when cancelled (apps/cli/src/onboarding.rs:808).",
+    "Chrome: Welcome page; side-panel tour and pin prompt keys (apps/extension/src/features/side-panel/onboarding.ts:4)."
+   ],
+   "settings": [
+    "Web: name and work description are stored as general preferences and editable later in Settings (apps/web/features/onboarding/lib/onboarding-preferences.ts:58).",
+    "Mobile: personalization nickname and occupation (apps/mobile/app/(public)/onboarding.tsx:310).",
+    "CLI: 'agi onboarding' re-runs; /login configures later.",
+    "VS Code: 'Code: Show Getting Started' resets the seen flag (apps/extension-vscode/src/core/commandSetup.ts:2543)."
+   ]
+  },
+  "current_implementation": {
+   "working": [
+    "Web /welcome redirects to /login when signed out and to /chat when onboarding is already completed (apps/web/app/welcome/page.tsx:15-29).",
+    "Wizard completes or skips by writing onboardingCompletedAt into the 'general' preference namespace (apps/web/features/onboarding/lib/onboarding-preferences.ts:58-71).",
+    "The chosen use case is spent on suggestions and not saved on the account (apps/web/features/onboarding/lib/onboarding-preferences.ts:21).",
+    "Mobile root routes to onboarding until 'onboarding-done' is set (apps/mobile/app/index.tsx:16).",
+    "CLI wizard runs once per config folder and writes a marker file (apps/cli/src/onboarding.rs:26).",
+    "VS Code seen flag agiWorkforce.onboardingSeen set on completeOnboarding (apps/extension-vscode/src/features/onboarding/onboardingState.ts:3) (apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1595).",
+    "Chrome opens the Welcome page on install only (apps/extension/src/background.ts:7697)."
+   ],
+   "incomplete": [
+    "Mobile onboarding is a setup flow (terms, name, local model) rather than a tour of main features; no screens that explain modes Local, own key and Cloud in words were found beyond the device screen (docs M-ONB-002 not confirmed) (apps/mobile/app/(public)/onboarding.tsx:700).",
+    "The brief's VS Code reference apps/extension-vscode/package.json:671 now points at a project command, not onboarding; the real walkthrough is at line 816."
+   ],
+   "disconnected_or_disabled": [
+    "No code that sends a new web user to /welcome automatically was found in non-test code; /welcome is only a page and an allowed post-auth destination in a test (apps/web/features/auth/__tests__/postAuthDestination.test.ts:24)."
+   ],
+   "not_available": [
+    "Desktop-specific onboarding: none found; Electron shows the hosted web page.",
+    "Language, time zone or memory steps are intentionally not part of sign-up (doc: docs/decisions/2026-09-27-founder-decisions.md, S3.22, S3.25)."
+   ]
+  },
+  "required_behaviour": {
+   "established": [
+    {
+     "statement": "First-time users are shown a short introduction to key features before or at their first chat.",
+     "source": "S12.22 (doc: knowledge-base/data/area-briefs/012-new-chat-experience.md)"
+    },
+    {
+     "statement": "Complete and skip persist across reload; delayed profile loading never overwrites an edited field; read and save failures expose a recoverable state without claiming completion.",
+     "source": "W01 (doc: docs/product/experience-contract.md:774)"
+    },
+    {
+     "statement": "Mobile onboarding shows brand, Local-first positioning and a privacy summary, lets the user proceed without an account, explains Local, BYOK and Cloud, checks local model readiness, and does not block Local use with sign-in.",
+     "source": "M-ONB-001 to M-ONB-005 (doc: docs/product/requirements.md:937)"
+    },
+    {
+     "statement": "No language, time zone or memory step at sign-up.",
+     "source": "(doc: docs/decisions/2026-09-27-founder-decisions.md)"
+    }
+   ],
+   "acceptance_criteria": [
+    "A new signed-in web user without the completed marker sees the two-step wizard at /welcome; a user with it is sent to /chat.",
+    "'Skip for now' lands in /chat and /welcome then redirects to /chat on later visits.",
+    "Choosing a starter prompt lands in /chat with that prompt in the composer and removes the query parameter.",
+    "A save failure shows an error and lets the person retry.",
+    "Mobile first launch shows the hero, and after finishing, relaunch goes straight to the app.",
+    "CLI first run shows the connection menu once; re-run needs 'agi onboarding'.",
+    "Chrome install opens the Welcome page once."
+   ],
+   "inferred": [
+    "The edited-field guard stops late seed data from overwriting what the person typed [inferred from editedFields ref in OnboardingWizard].",
+    "Failure of the seed read lets the wizard still show with an account name fallback [inferred]."
+   ],
+   "proposed": [
+    "[proposed] Make the trigger for /welcome explicit and tested (redirect after sign-up).",
+    "[proposed] Add a plain explanation of Local, own key and Cloud to mobile and web onboarding to meet M-ONB-002."
+   ]
+  },
+  "implementation_map": [
+   {
+    "kind": "screen",
+    "name": "WelcomePage",
+    "path": "apps/web/app/welcome/page.tsx",
+    "role": "Server page: auth, terms, adult checks, completed redirect, renders the wizard."
+   },
+   {
+    "kind": "component",
+    "name": "OnboardingWizard",
+    "path": "apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "role": "Two-step wizard, skip, finish with starter prompt."
+   },
+   {
+    "kind": "component",
+    "name": "StarterPrompts",
+    "path": "apps/web/features/onboarding/components/StarterPrompts.tsx",
+    "role": "Starter prompt buttons for the chosen use case."
+   },
+   {
+    "kind": "config",
+    "name": "ONBOARDING_USE_CASES",
+    "path": "apps/web/features/onboarding/lib/use-cases.ts",
+    "role": "Use case labels, descriptions and starter prompts."
+   },
+   {
+    "kind": "service",
+    "name": "onboarding-preferences",
+    "path": "apps/web/features/onboarding/lib/onboarding-preferences.ts",
+    "role": "Load seed, complete or skip via the 'general' preference namespace."
+   },
+   {
+    "kind": "service",
+    "name": "getOnboardingStatus",
+    "path": "apps/web/lib/server/user-identity.ts",
+    "role": "Reads onboardingCompletedAt from the identity namespace (line 131)."
+   },
+   {
+    "kind": "screen",
+    "name": "Signup complete page",
+    "path": "apps/web/app/signup/complete/page.tsx",
+    "role": "After sign-up: email, age and terms steps, then redirect destination."
+   },
+   {
+    "kind": "hook",
+    "name": "starterPrompt handoff",
+    "path": "apps/web/features/chat/pages/WebChatPage.tsx",
+    "role": "Prefills composer from ?starterPrompt and removes it (lines 1146, 1322)."
+   },
+   {
+    "kind": "screen",
+    "name": "Mobile root index",
+    "path": "apps/mobile/app/index.tsx",
+    "role": "Chooses age gate, onboarding or app."
+   },
+   {
+    "kind": "screen",
+    "name": "Mobile onboarding",
+    "path": "apps/mobile/app/(public)/onboarding.tsx",
+    "role": "Hero, disclosure, about-you, device tier, download screens; stores onboarding-done."
+   },
+   {
+    "kind": "store",
+    "name": "mobile storage onboarding-done",
+    "path": "apps/mobile/lib/mmkv.ts",
+    "role": "Device store holding the onboarding-done key."
+   },
+   {
+    "kind": "service",
+    "name": "CLI onboarding",
+    "path": "apps/cli/src/onboarding.rs",
+    "role": "Wizard, marker file .setup_complete, auth and model choice."
+   },
+   {
+    "kind": "command",
+    "name": "CLI first-run hook and 'onboarding' command",
+    "path": "apps/cli/src/lib.rs",
+    "role": "Runs wizard on first interactive launch (6119) and on the Onboarding command (7803)."
+   },
+   {
+    "kind": "config",
+    "name": "VS Code walkthrough",
+    "path": "apps/extension-vscode/package.json",
+    "role": "agiWorkforce.gettingStarted walkthrough with five steps (line 818)."
+   },
+   {
+    "kind": "service",
+    "name": "onboardingState",
+    "path": "apps/extension-vscode/src/features/onboarding/onboardingState.ts",
+    "role": "ONBOARDING_SEEN_KEY and shouldShowOnboarding."
+   },
+   {
+    "kind": "command",
+    "name": "agi-workforce.showOnboarding",
+    "path": "apps/extension-vscode/src/core/commandSetup.ts",
+    "role": "Resets the flag and shows the panel (line 2543)."
+   },
+   {
+    "kind": "component",
+    "name": "VS Code webview onboarding panel",
+    "path": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+    "role": "First-run panel markup and styles (line 442)."
+   },
+   {
+    "kind": "job",
+    "name": "Chrome onInstalled welcome",
+    "path": "apps/extension/src/background.ts",
+    "role": "Opens the Welcome page on install (line 7694)."
+   },
+   {
+    "kind": "screen",
+    "name": "Chrome Welcome page",
+    "path": "apps/extension/src/welcome.ts",
+    "role": "Welcome page logic; markup in welcome.html."
+   },
+   {
+    "kind": "service",
+    "name": "Chrome side-panel onboarding keys",
+    "path": "apps/extension/src/features/side-panel/onboarding.ts",
+    "role": "agi_onboarding_completed, disclosure version, tour and pin prompt keys."
+   },
+   {
+    "kind": "test",
+    "name": "onboarding-first-run e2e",
+    "path": "apps/web/e2e/onboarding-first-run.spec.ts",
+    "role": "Walks the web wizard end to end."
+   }
+  ],
+  "execution_and_data_flow": {
+   "steps": [
+    {
+     "what_happens": "The server page reads the identity, checks terms and age, and reads the completed marker from the account.",
+     "runs_on": "our servers",
+     "evidence": "apps/web/app/welcome/page.tsx:12-28"
+    },
+    {
+     "what_happens": "The wizard loads the saved name and work description from the 'general' preference namespace and prefills.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/web/features/onboarding/lib/onboarding-preferences.ts:46"
+    },
+    {
+     "what_happens": "Finish or skip saves the namespace with onboardingCompletedAt and refreshes profile consumers, then routes to /chat.",
+     "runs_on": "device and our servers",
+     "evidence": "apps/web/features/onboarding/lib/onboarding-preferences.ts:48-71"
+    },
+    {
+     "what_happens": "Mobile stores the choices on the device and sets 'onboarding-done'; the disclosure acceptance goes to a device ledger.",
+     "runs_on": "device",
+     "evidence": "apps/mobile/app/(public)/onboarding.tsx:257-306"
+    },
+    {
+     "what_happens": "Mobile local model download pulls the recommended model from its host, with checksum.",
+     "runs_on": "outside service",
+     "evidence": "apps/mobile/app/(public)/onboarding.tsx:346-362"
+    },
+    {
+     "what_happens": "CLI wizard writes .setup_complete in the config folder.",
+     "runs_on": "device",
+     "evidence": "apps/cli/src/onboarding.rs:26"
+    },
+    {
+     "what_happens": "VS Code stores the seen flag in extension global state.",
+     "runs_on": "device",
+     "evidence": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1595"
+    }
+   ],
+   "data": [
+    {
+     "what": "preferredName, workDescription, onboardingCompletedAt",
+     "where_stored": "Account preference namespace 'general' on our servers",
+     "synced": "Yes through the account",
+     "retained_or_deleted": "Until the person edits or clears them in Settings"
+    },
+    {
+     "what": "Mobile onboarding-done and personalization",
+     "where_stored": "Mobile device store (MMKV) and local settings store; also cloud settings store",
+     "synced": "Cloud settings store call is made; sync detail unknown",
+     "retained_or_deleted": "unknown"
+    },
+    {
+     "what": "CLI .setup_complete marker",
+     "where_stored": "CLI config folder",
+     "synced": "No",
+     "retained_or_deleted": "Removed by forget_setup (apps/cli/src/onboarding.rs:19)"
+    },
+    {
+     "what": "VS Code onboardingSeen",
+     "where_stored": "Extension global state",
+     "synced": "No",
+     "retained_or_deleted": "Reset by the show command"
+    },
+    {
+     "what": "Chrome agi_onboarding_completed",
+     "where_stored": "chrome.storage.local",
+     "synced": "No",
+     "retained_or_deleted": "unknown"
+    }
+   ],
+   "models_and_providers": "Web wizard uses no model. Mobile recommends a local model by device tier and activates it on finish (apps/mobile/app/(public)/onboarding.tsx:252). CLI wizard offers local, own key, other provider or AGI cloud and then a model picker from the catalog (apps/cli/src/onboarding.rs:262). Names are not restated."
+  },
+  "access_and_usage": {
+   "account": "Web: required. Mobile: not required for Local; Cloud sign-in offered at the end. CLI: not required for the Local path. VS Code and Chrome: none for the intro.",
+   "permissions": "Web requires current terms and adult eligibility before the wizard (apps/web/app/welcome/page.tsx:18-20). Mobile requires age gate (apps/mobile/app/index.tsx:12).",
+   "subscription": "none found in the code.",
+   "limits_and_metering": "none found in the code.",
+   "flags": "Mobile FEATURES.auth affects the age gate input (apps/mobile/app/index.tsx:12). Others: none found.",
+   "model_compatibility": "Mobile recommends by device tier (tier1/tier2) (apps/mobile/app/(public)/onboarding.tsx:197).",
+   "provider_restrictions": "Mobile first-run disclosure records acceptance of certain providers (apps/mobile/app/(public)/onboarding.tsx:300).",
+   "local_mode": "Mobile and CLI onboarding both have a Local path that needs no account ('Local model, no account needed.') (apps/cli/src/onboarding.rs:835)."
+  },
+  "states_and_edge_cases": [
+   {
+    "state": "Signed out on /welcome",
+    "behaviour": "Redirect to /login?redirectTo=/welcome.",
+    "evidence": "apps/web/app/welcome/page.tsx:15"
+   },
+   {
+    "state": "Already completed",
+    "behaviour": "Redirect to /chat.",
+    "evidence": "apps/web/app/welcome/page.tsx:28"
+   },
+   {
+    "state": "Save fails",
+    "behaviour": "Error text and the button is usable again.",
+    "evidence": "apps/web/features/onboarding/components/OnboardingWizard.tsx:78-80"
+   },
+   {
+    "state": "Double click",
+    "behaviour": "completionAdmitted ref ignores a second call.",
+    "evidence": "apps/web/features/onboarding/components/OnboardingWizard.tsx:68"
+   },
+   {
+    "state": "Mobile download fails",
+    "behaviour": "Error and 'Try again' / 'Continue to chat'.",
+    "evidence": "apps/mobile/app/(public)/onboarding.tsx:903-916"
+   },
+   {
+    "state": "Mobile capability detection fails",
+    "behaviour": "Defaults kept.",
+    "evidence": "apps/mobile/app/(public)/onboarding.tsx:222"
+   },
+   {
+    "state": "CLI cancelled with Ctrl+C",
+    "behaviour": "No marker; shows again next run.",
+    "evidence": "apps/cli/src/onboarding.rs:808"
+   },
+   {
+    "state": "CLI non-interactive",
+    "behaviour": "Wizard is skipped.",
+    "evidence": "apps/cli/src/lib.rs:6118"
+   },
+   {
+    "state": "Accessibility",
+    "behaviour": "Web focuses the name field; headings are h1; mobile buttons carry labels.",
+    "evidence": "apps/web/features/onboarding/components/OnboardingWizard.tsx:79"
+   }
+  ],
+  "verification": {
+   "existing_tests": [
+    {
+     "path": "apps/web/features/onboarding/components/OnboardingWizard.test.tsx",
+     "covers": "Wizard behaviour."
+    },
+    {
+     "path": "apps/web/features/onboarding/components/StarterPrompts.test.tsx",
+     "covers": "Starter prompts."
+    },
+    {
+     "path": "apps/web/features/onboarding/__tests__/onboarding-preferences.test.ts",
+     "covers": "Complete and skip saves."
+    },
+    {
+     "path": "apps/web/features/onboarding/__tests__/onboarding-resumability.test.ts",
+     "covers": "Resume after reload."
+    },
+    {
+     "path": "apps/web/e2e/onboarding-first-run.spec.ts",
+     "covers": "End-to-end wizard to prefilled composer (file exists; no recorded run)."
+    },
+    {
+     "path": "apps/mobile/__tests__/Onboarding.test.tsx",
+     "covers": "Mobile onboarding flow."
+    },
+    {
+     "path": "apps/mobile/__tests__/OnboardingPrivacyNotice.test.tsx",
+     "covers": "Mobile privacy notice."
+    },
+    {
+     "path": "apps/extension-vscode/src/__tests__/onboarding.test.ts",
+     "covers": "VS Code onboarding state."
+    },
+    {
+     "path": "apps/extension/__tests__/onboarding-welcome.test.ts",
+     "covers": "Chrome welcome."
+    },
+    {
+     "path": "apps/cli/src/onboarding.rs",
+     "covers": "16 in-file Rust tests (count by test attribute)."
+    }
+   ],
+   "scenarios": [
+    {
+     "name": "Web happy path",
+     "steps": [
+      "Use a new account.",
+      "Open /welcome.",
+      "Enter a name, continue, pick a use case and a starter prompt."
+     ],
+     "expected": "/chat opens with the prompt in the composer; /welcome now redirects to /chat."
+    },
+    {
+     "name": "Web skip",
+     "steps": [
+      "Open /welcome.",
+      "Press 'Skip for now'."
+     ],
+     "expected": "/chat opens; reload of /welcome redirects to /chat."
+    },
+    {
+     "name": "Web save error",
+     "steps": [
+      "Block the preference save request.",
+      "Finish the wizard."
+     ],
+     "expected": "'Failed to save your preferences' and the wizard stays."
+    },
+    {
+     "name": "Mobile fresh install",
+     "steps": [
+      "Install fresh.",
+      "Confirm age.",
+      "Walk the hero to the device screen.",
+      "Choose 'Continue without downloading'."
+     ],
+     "expected": "App opens; relaunch skips onboarding."
+    },
+    {
+     "name": "CLI first run",
+     "steps": [
+      "Use an empty config folder.",
+      "Run the CLI in a terminal."
+     ],
+     "expected": "Wizard menu appears once; marker file written."
+    },
+    {
+     "name": "Chrome install",
+     "steps": [
+      "Install the extension fresh."
+     ],
+     "expected": "Welcome page tab opens once."
+    }
+   ],
+   "diagnostics": [
+    "Wizard error strings above.",
+    "onboardingCompletedAt in the 'general' preference namespace.",
+    "CLI '.setup_complete' file in the config folder.",
+    "Mobile key 'onboarding-done'."
+   ]
+  },
+  "gaps": [
+   {
+    "gap": "No automatic route to /welcome after sign-up found in code.",
+    "affects": "Web, Desktop",
+    "evidence": "apps/web/app/signup/complete/page.tsx:12",
+    "work_needed": "Confirm the redirect (identity provider setting or proxy) and add a test."
+   },
+   {
+    "gap": "Mobile onboarding does not explain Local, own key and Cloud in plain words as the requirement asks.",
+    "affects": "Mobile",
+    "evidence": "apps/mobile/app/(public)/onboarding.tsx:700 versus docs/product/requirements.md:944",
+    "work_needed": "Add the explanation or update the requirement."
+   },
+   {
+    "gap": "Brief line references for VS Code (package.json:671) and mobile are stale.",
+    "affects": "Brief readers",
+    "evidence": "apps/extension-vscode/package.json:818",
+    "work_needed": "Refresh references."
+   },
+   {
+    "gap": "Desktop has no own first-use flow beyond the hosted page.",
+    "affects": "Desktop",
+    "evidence": "AGENTS.md section 5",
+    "work_needed": "Confirm that is intended."
+   }
+  ],
+  "depends_on": [
+   "surface:web",
+   "surface:desktop",
+   "surface:mobile",
+   "surface:cli",
+   "surface:vscode",
+   "surface:chrome",
+   "SYS-authentication-and-identity",
+   "SYS-memory-projects-and-context",
+   "SYS-local-inference",
+   "F012-12"
+  ],
+  "relationships": [
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/web/features/onboarding/components/OnboardingWizard.tsx",
+    "evidence": "apps/web/features/onboarding/components/OnboardingWizard.tsx:38"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/mobile/app/(public)/onboarding.tsx",
+    "evidence": "apps/mobile/app/(public)/onboarding.tsx:280"
+   },
+   {
+    "rel": "implemented_by",
+    "to": "file:apps/cli/src/onboarding.rs",
+    "evidence": "apps/cli/src/onboarding.rs:795"
+   },
+   {
+    "rel": "stores_data_in",
+    "to": "store:onboarding-done",
+    "evidence": "apps/mobile/app/index.tsx:16"
+   },
+   {
+    "rel": "depends_on",
+    "to": "SYS-authentication-and-identity",
+    "evidence": "apps/web/app/welcome/page.tsx:12"
+   },
+   {
+    "rel": "depends_on",
+    "to": "mode:local",
+    "evidence": "apps/cli/src/onboarding.rs:835"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/web/e2e/onboarding-first-run.spec.ts",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "tested_by",
+    "to": "test:apps/mobile/__tests__/Onboarding.test.tsx",
+    "evidence": "file exists"
+   },
+   {
+    "rel": "available_on",
+    "to": "surface:chrome",
+    "evidence": "apps/extension/src/background.ts:7697"
+   },
+   {
+    "rel": "configured_by",
+    "to": "file:apps/extension-vscode/package.json",
+    "evidence": "apps/extension-vscode/package.json:818"
+   }
+  ],
+  "unknowns": [
+   "How a newly signed-up web user reaches /welcome.",
+   "Whether the Chrome welcome page lists features or only disclosures (page content not read beyond title).",
+   "Whether mobile onboarding data syncs to the account.",
+   "Whether the VS Code first-run panel appears automatically on first launch or only through the command (hide message seen at ChatStateManager.ts:1392).",
+   "Chrome side-panel tour behaviour."
+  ]
+ },
+ "corrections": [
+  {
+   "section": "3/6",
+   "claim": "CLI wizard runs once per config folder and writes a marker file; Ctrl+C writes no marker",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The marker .setup_complete is written at Step 8 (onboarding.rs:1007) after every path that reaches the end. That includes 'Skip for now' / AuthChoice::Skip, which only prints 'Skipped authentication' (:887-893). So choosing Skip does mark setup complete and the wizard never shows again. Cancelling at the auth menu returns Ok(false) with no marker (:814-821). The 'Setup interrupted' text at :808 belongs to the trust-folder step, not Ctrl+C in general.",
+   "evidence": "apps/cli/src/onboarding.rs:787-821,887-893,1004-1009",
+   "correction": "The CLI writes .setup_complete when the flow reaches the end, including after 'Skip for now'. Cancelling at the folder-trust or connection-menu step writes no marker, so the wizard returns on the next run."
+  },
+  {
+   "section": "6",
+   "claim": "Mobile local model download pulls the recommended model from its host, with checksum (onboarding.tsx:346-362)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "There are two paths. The ExecuTorch preset path calls prepareModel(presetModel) with no checksum condition. The checksum is required only on the second path (downloadUrl && checksum && format, :365-372). Both go through useModelInstallStore.prepareModel.",
+   "evidence": "apps/mobile/app/(public)/onboarding.tsx:346-392",
+   "correction": "The recommended model downloads through the model install store. Only the non-preset path requires a catalog checksum, download URL and format. The preset path is handled by the store's own logic."
+  },
+  {
+   "section": "7",
+   "claim": "Local mode: Mobile and CLI onboarding both have a Local path that needs no account ('Local model, no account needed.')",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The CLI string exists (onboarding.rs:843), on the AuthChoice::Local branch. The cited line is not Mobile evidence, and I did not open a mobile string for the claim. Mobile has 'Continue without downloading' and 'Sign in to use Cloud'. Mobile also makes the age gate come first, and that gate uses FEATURES.auth and the account age confirmation, so it can depend on the account.",
+   "evidence": "apps/cli/src/onboarding.rs:841-844; apps/mobile/app/index.tsx:11-13",
+   "correction": "CLI Local path needs no account (onboarding.rs:841). For Mobile, the age gate runs before onboarding and is keyed to the account age check, so describe it as such instead of 'no account'."
+  },
+  {
+   "section": "8",
+   "claim": "CLI non-interactive: Wizard is skipped (lib.rs:6118)",
+   "verdict": "partly wrong",
+   "what_the_code_shows": "The first-run wizard runs only when cli.command is none, cli.prompt is none, not dump_system_prompt, interactive::can_prompt() is true and the marker is absent (lib.rs:6112-6119). So it is skipped for any subcommand, a prompt argument or --dump-system-prompt, not only when non-interactive. The explicit 'agi onboarding' command (lib.rs:7803) runs it regardless.",
+   "evidence": "apps/cli/src/lib.rs:6112-6119,7803",
+   "correction": "The wizard is skipped when a subcommand, a prompt or --dump-system-prompt is given, or when no terminal can prompt."
+  }
+ ],
+ "missing_facts": [
+  "The web wizard's save-failure and skip behaviours are in apps/web/features/onboarding/components/OnboardingWizard.tsx. The page does not say that the wizard also requires terms acceptance and adult eligibility on every visit, which are enforced as redirects in apps/web/app/welcome/page.tsx:18-20, so a signed-in user who has not accepted terms cannot reach the wizard.",
+  "The CLI wizard's trust-folder step (apps/cli/src/onboarding.rs:800-808) can end the whole flow with no marker. The page treats 'Setup interrupted' as a Ctrl+C message, but it is the folder-trust failure message.",
+  "The CLI 'Skip for now' still writes .setup_complete (apps/cli/src/onboarding.rs:887-893,1007), so skipping means the first-run wizard never reappears. The page does not state this."
+ ]
+}

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Desktop and mobile surface maintainers
-Last updated: 2026-09-28
+Last updated: 2026-11-24
 
 How a phone drives a coding session on the desktop, or in a VS Code window, the user is
 signed in on.
@@ -13,7 +13,7 @@ changing any of it are in `AGENTS.md`; the surrounding architecture is in
 ## What it is, and what it is not
 
 Remote control attaches a **companion** (the mobile app) to a **host** (the
-Electron desktop shell, or the VS Code extension) so the companion can watch and steer a local coding
+Electron desktop shell, the VS Code extension, or the CLI's `agi remote-control`) so the companion can watch and steer a local coding
 session that is already running on the host. It is not screen sharing, and it is
 not a second place a session can start: every session runs on the host, under the
 host's own capability grants, and the companion only sends control actions to it.
@@ -39,8 +39,9 @@ peers and enforces size and action limits on what passes.
 ## The pairing handshake
 
 1. The user asks to pair. `apps/web/app/api/pair/initiate/route.ts` authenticates
-   the request, applies CSRF, rate limiting, the MFA policy gate and the IP
-   allow-list gate, and asks the relay for a pairing code. The route records a
+   the request, applies CSRF, rate limiting, the standing refusal check
+   (workspace `remote_control` policy, plan capability and the `screen_share` kill
+   switch), and asks the relay for a pairing code. The route records a
    workspace audit event, so a pairing attempt is visible after the fact whether
    or not it completed.
 2. The relay answers with a code, an expiry, a websocket address, and one pair
@@ -72,10 +73,11 @@ pairing secret.
 `services/signaling-server/src/control-payload.ts` holds the closed list.
 `ALLOWED_CONTROL_ACTIONS` covers pairing, approvals and their snapshots, the
 agent list, sync, dispatch, heartbeat, cancellation, emergency stop and control
-receipts. `CODE_SESSION_CONTROL_ACTIONS` covers the
+receipts. `DISPATCH_TASK_CONTROL_ACTIONS` covers dispatch task create, cancel, reply and
+status. `CODE_SESSION_CONTROL_ACTIONS` covers the
 coding session verbs: list, start, attach, detach, steer, interrupt, read
 history, respond to an approval, answer a question, and the snapshot and event
-streams back. An action outside both lists
+streams back. An action outside these lists
 is rejected at the relay, and payload size is capped separately for code session
 traffic and for everything else.
 

@@ -1,0 +1,457 @@
+{
+ "S59.01": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a signed-in account and an approved site for a browser task",
+  "note": "Two approval cards exist: the chat card (Approve/Decline) and the browser task card (Allow/Skip).",
+  "reachable": "yes",
+  "steps": [
+   "Start a chat task that makes the agent use a tool needing approval (a browser task on an approved site works).",
+   "When the approval card appears, click Allow (browser task) or Approve (chat).",
+   "Look for the action running and the run continuing.",
+   "Repeat with Skip or Decline and look for the action not running."
+  ],
+  "where": "Side panel > chat > approval card > Approve or Decline. During a browser task the same card shows Allow or Skip."
+ },
+ "S59.02": {
+  "labels": [],
+  "needs": "a run with several pending tool calls",
+  "note": "No batch control found. Searched apps/extension/src for approve all, decline all, allow all and batch; each pending call has only its own buttons in bubbles.ts and computerUsePanel.ts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S59.03": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow for this task"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Allow for this chat"
+   }
+  ],
+  "needs": "a browser task on an approved site",
+  "note": "Code scopes the grant to the task, while Expected says the session; chat grants are scoped to the chat.",
+  "reachable": "yes",
+  "steps": [
+   "Start a browser task on an approved site that triggers an approval.",
+   "Click Allow for this task on the approval card.",
+   "Let the same tool run again in the task and look for no new approval card.",
+   "Start a new task and check that the tool asks again."
+  ],
+  "where": "Side panel > browser task > approval card > Allow for this task (chat cards use Allow for this chat)."
+ },
+ "S59.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Add"
+   }
+  ],
+  "needs": "a website open in a tab",
+  "note": "Blocked sites is a separate section in the same Permissions area (blocked-sites-section.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Open a website in a tab and click the side panel's menu item Extension settings (the settings menu location was not traced).",
+   "Click Permissions in the Options page navigation.",
+   "In the Approved sites area, click Add for the open site.",
+   "Open a task on that site and on a site not in the list, and look for the agent acting only on approved sites."
+  ],
+  "where": "Extension settings > Permissions > Approved sites (Add or Remove for the current site)."
+ },
+ "S59.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Permissions"
+   },
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Add"
+   }
+  ],
+  "needs": "a website open in a tab",
+  "note": "Only the approved-site list was traced to storage (chrome.storage.local); no code found showing the mode choice or other choices persist across devices.",
+  "reachable": "yes",
+  "steps": [
+   "Open Extension settings and go to Permissions.",
+   "Add the current site under Approved sites.",
+   "Close and reopen the browser, then reopen Options.",
+   "Look for the site still listed under Approved sites."
+  ],
+  "where": "Extension settings > Permissions > Approved sites list."
+ },
+ "S59.08": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "How should AGI act in your browser?"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Ask first"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Auto"
+   }
+  ],
+  "needs": "none",
+  "note": "The code has four modes (Ask first, Auto, Full access, YOLO); Expected lists three, and YOLO is the skip-approvals mode.",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and find the chip beside the + button.",
+   "Click the chip; the heading reads How should AGI act in your browser?.",
+   "Pick Ask first, then Auto, then Full access, then YOLO.",
+   "Start a browser task in each mode and look for the approval prompts to change with the mode."
+  ],
+  "where": "Side panel > the mode chip beside the + button in the composer > pick Ask first, Auto, Full access or YOLO."
+ },
+ "S59.09": {
+  "labels": [],
+  "needs": "none",
+  "note": "No read-only mode found. Searched apps/extension for read-only, readonly and read only; only unrelated hits (for example the card text This card is read-only in Chrome). The four modes in S59.08 have no read-only option.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S59.10": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Ask first"
+   }
+  ],
+  "needs": "an approved site for a browser task",
+  "note": "Ask first is described as confirming every browser action, which differs from Expected's reads-run-automatically rule; the closest match was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open the mode chip beside the + button and choose Ask first.",
+   "Start a browser task that reads a page and then tries to type or click.",
+   "Look for the reads to run without a card and the write action to show the approval card.",
+   "Compare with Expected."
+  ],
+  "where": "Side panel > the mode chip beside the + button > Ask first."
+ },
+ "S59.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Auto"
+   }
+  ],
+  "needs": "an approved site for a browser task",
+  "note": "The Auto description says it acts on the task's sites and asks before crucial actions, not low-risk wording.",
+  "reachable": "yes",
+  "steps": [
+   "Open the mode chip beside the + button and choose Auto.",
+   "Start a browser task on an approved site.",
+   "Look for reads and page searches to run without a card.",
+   "Look for sending, deleting, signing in or downloading to show an approval card."
+  ],
+  "where": "Side panel > the mode chip beside the + button > Auto."
+ },
+ "S59.12": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Approve action"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow"
+   }
+  ],
+  "needs": "an approved site for a browser task",
+  "note": "The card shows the action description, but no separate line explaining why approval is needed was found.",
+  "reachable": "yes",
+  "steps": [
+   "Start a browser task that needs an approval.",
+   "Read the approval card title and the line under it.",
+   "Compare the plain summary with Expected: what the tool will do and why it needs approval."
+  ],
+  "where": "Side panel > browser task > approval card (title Approve action: followed by the tool name)."
+ },
+ "S59.13": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Approve"
+   }
+  ],
+  "needs": "a signed-in account and a send-capable connector",
+  "note": "The stake labels come from the key names (for example to, cc) through humanizeKey, so the exact visible words are generated, not literal.",
+  "reachable": "yes",
+  "steps": [
+   "Start a chat where the agent asks to send a message or email.",
+   "Read the approval card before clicking Approve.",
+   "Look for the recipient names or addresses listed in the card."
+  ],
+  "where": "Side panel > chat > approval card for a send tool (the stakes list shows the recipient fields)."
+ },
+ "S59.14": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Skip"
+   }
+  ],
+  "needs": "an approved site for a browser task",
+  "note": "The host text comes from describeAction.ts for navigate; other tools show their own description text.",
+  "reachable": "yes",
+  "steps": [
+   "Start a browser task that will open or navigate to another site.",
+   "Read the description on the approval card before clicking Allow.",
+   "Look for the destination host (for navigate: Open <host> in this tab) or URL."
+  ],
+  "where": "Side panel > browser task > approval card (description line shows the host or URL)."
+ },
+ "S59.15": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/computer-use/approvalPolicy.ts",
+    "text": "Not done: this completes a purchase or payment, which the browser agent never does itself."
+   }
+  ],
+  "needs": "an approved shopping site",
+  "note": "The browser agent refuses purchases outright, so no approval with an amount appears there; the amount and item stake list is in the chat approval card.",
+  "reachable": "yes",
+  "steps": [
+   "Start a browser task on a shopping page and ask it to buy an item.",
+   "When it reaches the payment step, read the message in the task.",
+   "Look for the message to say the purchase was not done and the user must check the amount.",
+   "Also look at a chat approval card for a payment tool: it lists amount and item."
+  ],
+  "where": "Side panel > browser task > the agent reaches a checkout; the agent refuses with a message beginning Not done: this completes a purchase or payment."
+ },
+ "S59.19": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Approve"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Allow"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Trigger an approval in chat or in a browser task.",
+   "Click Approve (chat) or Allow (browser task).",
+   "Look for the action to run and the result to appear in the transcript."
+  ],
+  "where": "Side panel > chat > approval card > Approve (browser task cards use Allow)."
+ },
+ "S59.20": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Decline"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Skip"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "Code sends the decision to the model as rejected; the model's reaction was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger an approval in chat or in a browser task.",
+   "Click Decline (chat) or Skip (browser task).",
+   "Look for the action not to run, and the transcript to say it was denied or skipped."
+  ],
+  "where": "Side panel > chat > approval card > Decline (browser task cards use Skip)."
+ },
+ "S59.22": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add guidance to steer the run (optional)"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The guidance box is in the chat approval card; a browser task card was not checked for the same box.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger a chat approval.",
+   "Type an alternative into the box Add guidance to steer the run (optional).",
+   "Click Decline.",
+   "Look for the agent to continue with that guidance in the next step."
+  ],
+  "where": "Side panel > chat > approval card > the text box Add guidance to steer the run (optional), typed before Approve or Decline."
+ },
+ "S59.23": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Skipped (no response)"
+   }
+  ],
+  "needs": "an approved site for a browser task; a wait of about 5 minutes",
+  "note": "The timer value is APPROVAL_TIMEOUT_MS in agentLoop.ts (5 minutes).",
+  "reachable": "yes",
+  "steps": [
+   "Start a browser task that needs an approval.",
+   "Do not click anything on the card for 5 minutes.",
+   "Look for the buttons to become disabled and the title to read Skipped (no response)."
+  ],
+  "where": "Side panel > browser task > approval card left unanswered for 5 minutes."
+ },
+ "S59.24": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/options/approval-history-section.ts",
+    "text": "Approval history"
+   },
+   {
+    "file": "apps/extension/src/features/options/approval-history-section.ts",
+    "text": "Open chat"
+   }
+  ],
+  "needs": "a signed-in account with past approvals",
+  "note": "Without sign-in the section shows Sign in to see the approvals you decided on every device.",
+  "reachable": "yes",
+  "steps": [
+   "Open Extension settings and go to Permissions.",
+   "Scroll to Approval history.",
+   "Look for past decisions with tool name, decision and time.",
+   "Click Open chat on an entry to see the chat where it was decided."
+  ],
+  "where": "Extension settings > Permissions > Approval history."
+ },
+ "S59.25": {
+  "labels": [
+   {
+    "file": "apps/extension/src/options.ts",
+    "text": "Remove"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Permissions"
+   }
+  ],
+  "needs": "a site already approved",
+  "note": "Only site grants can be revoked here. No UI was found to revoke a per-tool always allow.",
+  "reachable": "yes",
+  "steps": [
+   "Open Extension settings and go to Permissions.",
+   "In the Approved sites list, click Remove beside a site (the x button is titled Remove followed by the origin).",
+   "Open a task on that site.",
+   "Look for the agent to ask again before acting there."
+  ],
+  "where": "Extension settings > Permissions > Approved sites list > click Remove beside a site."
+ },
+ "S59.26": {
+  "labels": [],
+  "needs": "two signed-in devices",
+  "note": "No code found that lets a second device answer an approval. Searched the approval history and chat approval code; the only match was the history hint text Tool requests you allowed or denied in chats on every device.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S59.28": {
+  "labels": [
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Private data from this chat could be sent outside AGI. Check where it goes before you allow it."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Allow for this chat"
+   }
+  ],
+  "needs": "a signed-in account and a high-risk tool",
+  "note": "The warning text is defined in the contracts file; its display in the card was not traced. Re-ask and no permanent allow were not verified.",
+  "reachable": "yes",
+  "steps": [
+   "Trigger a chat approval for a high-risk tool.",
+   "Look for the warning text Private data from this chat could be sent outside AGI.",
+   "Look for no Allow for this chat button, only Approve and Decline.",
+   "Compare with a low-risk approval card, which does show Allow for this chat."
+  ],
+  "where": "Side panel > chat > approval card for a high-risk tool (no Allow for this chat button; warning text shown)."
+ },
+ "S59.29": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Take over"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Continue"
+   }
+  ],
+  "needs": "an approved site for a browser task",
+  "note": "The Take over tooltip says the task ends if the page is not handed back within the set number of minutes.",
+  "reachable": "yes",
+  "steps": [
+   "Start a browser task on an approved site.",
+   "While it runs, click Take over.",
+   "Use the page yourself and look for the handoff banner to tell you to choose Continue.",
+   "Click Continue and look for AGI to take the page back."
+  ],
+  "where": "Side panel > during a browser task, the button Take over (after pausing, the button Continue appears)."
+ },
+ "S59.30": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Continue"
+   }
+  ],
+  "needs": "an approved site for a browser task",
+  "note": "Resuming after an approval in chat was not traced beyond the resolve message.",
+  "reachable": "yes",
+  "steps": [
+   "Start a browser task and click Take over.",
+   "Make a change on the page, then click Continue.",
+   "Look for the task to carry on from the same step rather than restart."
+  ],
+  "where": "Side panel > browser task > Continue (after Take over)."
+ },
+ "S59.31": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Completed"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Skipped"
+   }
+  ],
+  "needs": "an approved site for a browser task",
+  "note": "The chat transcript's own decision wording uses TOOL_APPROVAL_ACTION_LABELS and was not traced in full.",
+  "reachable": "yes",
+  "steps": [
+   "Run a browser task with an approval.",
+   "Decide the approval (Allow or Skip).",
+   "Read the step title in the transcript.",
+   "Look for Completed or Skipped with the tool name, and the result text under it."
+  ],
+  "where": "Side panel > browser task > transcript step titles Completed, Skipped, Not verified or Result, followed by the tool name."
+ }
+}

@@ -1,0 +1,305 @@
+{
+ "S36.01": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Source {{indices}}: {{sites}}"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show sources"
+   }
+  ],
+  "needs": "a Free account or a paid account; a question that triggers web search",
+  "note": "The code does not show which question triggers web search, so the tester must find one that does.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat.",
+   "Send a question that makes the answer search the web for current facts.",
+   "Look for small rounded pill chips with a site name placed right after a sentence in the answer.",
+   "Compare with Expected: claims should carry an inline marker naming the source."
+  ],
+  "where": "In a chat answer that searched the web: small pill chips showing a site name sit at the end of claims. Each chip's accessible name reads \"Source {{indices}}: {{sites}}\"."
+ },
+ "S36.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   }
+  ],
+  "needs": "a web-search answer",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat answer that used web sources.",
+   "Hover the book icon under the answer and click \"Show sources\".",
+   "In the panel on the right, look at the bold first line of each source row.",
+   "Compare with Expected: each cited source shows its title."
+  ],
+  "where": "Chat answer > \"Show sources\" button under the answer (tooltip \"Sources\") > Research panel tab \"Sources\"."
+ },
+ "S36.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Sources"
+   }
+  ],
+  "needs": "a web-search answer",
+  "note": "The shown domain is the publisher's, not the search router's, per the code comments.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat answer that used web sources.",
+   "Click \"Show sources\".",
+   "Read the grey line under each source title; it shows the site domain.",
+   "Hover a site-name pill in the answer to see the same info in the tooltip.",
+   "Compare with Expected: each source names its publisher or site."
+  ],
+  "where": "Chat answer > \"Show sources\" button under the answer > Research panel tab \"Sources\" (the grey line under each source title)."
+ },
+ "S36.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show sources"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Research sources"
+   }
+  ],
+  "needs": "a web-search answer; a browser with internet access",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat answer that used web sources and click \"Show sources\".",
+   "Click one source row.",
+   "Look for a new browser tab opening the source page.",
+   "Compare with Expected: the source opens from its row."
+  ],
+  "where": "Chat answer > \"Show sources\" button > Research panel tab \"Sources\" > click a source row."
+ },
+ "S36.05": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Published ${published}"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show sources"
+   }
+  ],
+  "needs": "a web-search answer; the date only appears when the source provides one",
+  "note": "The date is shown only when the source provides one, so an answer may show none.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat answer that used web sources and click \"Show sources\".",
+   "Look at the grey line under a source title for a date.",
+   "If there is no date, check the \"Report\" tab on a Deep Research report.",
+   "Compare with Expected: cited sources show a publication date when the source has one."
+  ],
+  "where": "Chat answer > \"Show sources\" button > Research panel tab \"Sources\" (source row text); also the \"Report\" tab > Sources list."
+ },
+ "S36.06": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Retrieved ${retrievedOn}"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show sources"
+   }
+  ],
+  "needs": "a web-search answer",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat answer that used web sources and click \"Show sources\".",
+   "Read the grey line under a source title.",
+   "Look for \"Retrieved\" followed by a date.",
+   "Compare with Expected: each source shows when it was retrieved."
+  ],
+  "where": "Chat answer > \"Show sources\" button > Research panel tab \"Sources\" (grey line under a source title)."
+ },
+ "S36.07": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/ProjectFileCitationChip.tsx",
+    "text": "Project files used in this answer"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CitationPastChats.tsx",
+    "text": "Previous chats this answer used"
+   }
+  ],
+  "needs": "a web-search answer; a project with an uploaded file for the file icon; past chats for the chat icon",
+  "note": "The icons have no visible text, so the tester confirms them by sight; the code shows a globe, a file and a chat icon.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat answer that used web sources and look at the small globe icon in the site-name pill.",
+   "Open a chat answer that cited a project file (see S36.09) and look for the file icon.",
+   "Open a chat answer that used past chats (see S36.14) and look for the chat icon.",
+   "Compare with Expected: each source type has its own icon."
+  ],
+  "where": "Chat answer: source chips show a globe icon for web sources; project files show a file icon in the group \"Project files used in this answer\"; past chats show a chat icon in the group \"Previous chats this answer used\"."
+ },
+ "S36.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+    "text": "Show sources"
+   }
+  ],
+  "needs": "a web-search answer",
+  "note": "The code shows the source snippet, trimmed to 180 characters, but does not mark it as a quote, so the tester judges that by reading.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat answer that used web sources.",
+   "Hover a site-name pill in the answer and read the tooltip.",
+   "Click \"Show sources\" and read the short text under a source title.",
+   "Compare with Expected: each cited source shows a quoted excerpt supporting the claim."
+  ],
+  "where": "Chat answer > hover a site-name pill (tooltip) or > \"Show sources\" > Research panel tab \"Sources\" (text under the source title)."
+ },
+ "S36.09": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/ProjectFileCitationChip.tsx",
+    "text": "Project files used in this answer"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/markdown/ProjectFileCitationChip.tsx",
+    "text": "Project file ${citation.fileName}, ${location}"
+   }
+  ],
+  "needs": "a project with an uploaded multi-page PDF; a Free or paid account",
+  "note": "The page label comes from formatProjectFileAnchor, which shows \"p. N\"; the preview-at-page behaviour is read from the URL in SourcesPanel.tsx.",
+  "reachable": "yes",
+  "steps": [
+   "Open a project that has an uploaded PDF and ask a question that answers from it.",
+   "In the answer, find the group of chips \"Project files used in this answer\".",
+   "Read the chip that shows the file name and \"p.\" followed by a number.",
+   "Click the chip and look whether the file preview opens on that page.",
+   "Compare with Expected: the citation names the page and opens the file there."
+  ],
+  "where": "Chat answer > group \"Project files used in this answer\" > click a file chip showing \"p. N\" > the project file preview opens on that page."
+ },
+ "S36.14": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/CitationPastChats.tsx",
+    "text": "Previous chats this answer used"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/CitationPastChats.tsx",
+    "text": "Open the source conversation ${citation.title}"
+   }
+  ],
+  "needs": "two chats in the same account; the answer must draw on the earlier one",
+  "note": "The code shows the chip links to the chat with a message highlight parameter; the highlight is confirmed only by sight.",
+  "reachable": "yes",
+  "steps": [
+   "Have a chat where the assistant recalls an earlier conversation.",
+   "Ask a question that makes the answer draw on that earlier chat.",
+   "Find the group \"Previous chats this answer used\" under the answer.",
+   "Click one chip and look for the earlier chat opening with that message highlighted.",
+   "Compare with Expected: the citation opens the exact message."
+  ],
+  "where": "Chat answer that used past chats > group \"Previous chats this answer used\" > click a chip (opens the earlier chat at that message)."
+ },
+ "S36.16": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Source {{indices}}: {{sites}}"
+   }
+  ],
+  "needs": "a web-search answer",
+  "note": "",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat answer that used web sources.",
+   "Read each sentence and find the small pill chip placed right after it.",
+   "Hover the chip to see which source it names.",
+   "Compare with Expected: each chip sits at the claim it supports."
+  ],
+  "where": "Chat answer: the source chip sits right after the sentence it supports (site-name pill)."
+ },
+ "S36.17": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "Sources {{indices}}: {{sites}}"
+   }
+  ],
+  "needs": "a web-search answer where one claim cites several sources",
+  "note": "A multi-source claim is needed to see the +N chip; the code does not control how often it appears.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat answer that used web sources.",
+   "Look for a site-name chip showing \"+\" and a number.",
+   "Hover the chip and read the tooltip list.",
+   "Compare with Expected: all sources for the claim are visible."
+  ],
+  "where": "Chat answer: a chip with \"+N\" after the site name; hover it to see all sources for that claim."
+ },
+ "S36.19": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/chat.json",
+    "text": "This report refers to {{count}} numbered sources, but the run recorded no links for them."
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Report"
+   }
+  ],
+  "needs": "a report whose run recorded no source links but whose text has numbered references",
+  "note": "The code shows this notice only for a report with no captured links; a single broken link has no notice, so a tester may not find one.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Deep Research report from the Research panel's \"Report\" tab.",
+   "Scroll to the end of the report body.",
+   "Look for the \"Sources\" heading and the sentence about numbered sources.",
+   "Compare with Expected: when a source cannot be opened, the product says so rather than showing a dead link."
+  ],
+  "where": "Chat > Deep research report > \"Report\" tab in the Research panel > bottom of the report, section \"Sources\"."
+ },
+ "S36.25": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+    "text": "Export report as ${format.label}"
+   },
+   {
+    "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+    "text": "Report"
+   }
+  ],
+  "needs": "a completed Deep Research report with sources",
+  "note": "The export buttons are labelled Markdown, PDF and Word in the code; the tester checks the saved file's citations by reading it.",
+  "reachable": "yes",
+  "steps": [
+   "Open a Deep Research report from the Research panel's \"Report\" tab.",
+   "Click the export button \"Markdown\" (or \"PDF\" or \"Word\").",
+   "Open the downloaded file.",
+   "Compare with Expected: the citations and the source list are present in the exported file."
+  ],
+  "where": "Chat > Deep research report > \"Report\" tab in the Research panel > export buttons \"Markdown\", \"PDF\" and \"Word\" in the report header."
+ }
+}

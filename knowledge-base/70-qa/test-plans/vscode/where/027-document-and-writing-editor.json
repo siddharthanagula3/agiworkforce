@@ -1,0 +1,91 @@
+{
+ "S27.01": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Artifacts"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Open an artifact\u2026"
+   },
+   {
+    "file": "apps/extension-vscode/src/features/artifacts/artifactPresentation.ts",
+    "text": "Untitled"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with artifacts, including one with no title",
+  "note": "The Artifacts tree class exists but no tree view is registered, so the list the person sees is the quick pick; there is no separate card or viewer title beyond the row name and tab name.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud with an account that has artifacts.",
+   "Open the Command Palette and run \"Code: Show Artifacts\".",
+   "Look at each row: the row name should be the artifact's title.",
+   "Find an artifact with no title and check the row shows \"Untitled\" followed by its type.",
+   "Click a row to open it and check the editor tab name matches the title."
+  ],
+  "where": "Command Palette > Code: Show Artifacts > pick a row in the \"Code, Artifacts\" list (placeholder \"Open an artifact\u2026\")"
+ },
+ "S27.15": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Explain Selection"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Refactor Code"
+   },
+   {
+    "file": "apps/extension-vscode/src/providers/codeActionProvider.ts",
+    "text": "Refactor with"
+   }
+  ],
+  "needs": "none",
+  "note": "There is no floating toolbar in the code; the selection actions are the editor right-click menu and the code-action (lightbulb) menu, which only appear when text is selected.",
+  "reachable": "yes",
+  "steps": [
+   "Open any code file and select several lines.",
+   "Right-click inside the selection.",
+   "Look for \"Code: Explain Selection\" and \"Code: Refactor Code\" in the menu.",
+   "Press Cmd+. (or click the lightbulb) with the selection still active.",
+   "Look for \"Refactor with\" followed by the product name \"Code\" and \"Explain with\" in the list."
+  ],
+  "where": "Select some text in an editor > right-click > Code: Explain Selection or Code: Refactor Code; or click the lightbulb (or press Cmd+.) and look for Refactor with Code"
+ },
+ "S27.37": {
+  "labels": [
+   {
+    "file": "apps/extension-vscode/src/features/surfaces/index.ts",
+    "text": "Save into the workspace"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Save Artifact into Workspace"
+   },
+   {
+    "file": "apps/extension-vscode/package.json",
+    "text": "Code: Show Artifacts"
+   }
+  ],
+  "needs": "a signed-in AGI Cloud account with a Markdown artifact",
+  "note": "No command is named or labelled as Markdown export. The closest path is saving an artifact into the workspace; the file gets a .md extension only when the artifact's language is markdown (artifactPresentation.ts maps markdown to md).",
+  "reachable": "yes",
+  "steps": [
+   "Sign in to AGI Cloud with an account that has a Markdown artifact.",
+   "Run \"Code: Show Artifacts\" from the Command Palette.",
+   "Hover the Markdown artifact row and click the save icon labelled \"Save into the workspace\".",
+   "In the save dialog, choose a folder and keep the suggested name.",
+   "Check the saved file name ends in .md and that its content matches the artifact."
+  ],
+  "where": "Command Palette > Code: Show Artifacts > hover a row > click the save icon \"Save into the workspace\" (command \"Code: Save Artifact into Workspace\")"
+ },
+ "S27.41": {
+  "labels": [],
+  "needs": "a connected email account",
+  "note": "Searched apps/extension-vscode/src for send-email, sendEmail, recipient, draft-email and email-confirm patterns and packages/ui for the same words; found no review-before-send step, only a resend confirmation in ChatStateManager.ts. The ledger gives no code location.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}

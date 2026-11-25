@@ -241,14 +241,15 @@ docker compose up -d   # PostgreSQL 16 + pgAdmin at http://localhost:5050
 Each surface owns its environment contract in a tracked `.env.example`; never
 commit `.env`, `.env.local`, signing credentials, or provider secrets.
 
-| Surface          | Contract                                 | Local loading                                  |
-| ---------------- | ---------------------------------------- | ---------------------------------------------- |
-| Desktop          | `apps/desktop/.env.example`              | Vite loads `apps/desktop/.env.local`           |
-| Web              | `apps/web/.env.example`                  | Next.js loads `apps/web/.env.local`            |
-| Mobile           | `apps/mobile/.env.example`               | Expo loads `.env.local`; EAS uses EAS envs     |
-| Chrome extension | `apps/extension/.env.example`            | Vite loads `apps/extension/.env.local`         |
-| Signaling        | `services/signaling-server/.env.example` | Loads `services/signaling-server/.env` locally |
-| Upload scanner   | `services/upload-scanner/.env.example`   | Fly secrets; `docker run --env-file` locally   |
+| Surface          | Contract                                 | Local loading                                   |
+| ---------------- | ---------------------------------------- | ----------------------------------------------- |
+| Desktop          | `apps/desktop/.env.example`              | Vite loads `apps/desktop/.env.local`            |
+| Web              | `apps/web/.env.example`                  | Next.js loads `apps/web/.env.local`             |
+| Mobile           | `apps/mobile/.env.example`               | Expo loads `.env.local`; EAS uses EAS envs      |
+| Chrome extension | `apps/extension/.env.example`            | Vite loads `apps/extension/.env.local`          |
+| CLI              | `apps/cli/.env.example`                  | Reads process environment; does not load `.env` |
+| Signaling        | `services/signaling-server/.env.example` | Loads `services/signaling-server/.env` locally  |
+| Upload scanner   | `services/upload-scanner/.env.example`   | Fly secrets; `docker run --env-file` locally    |
 
 ```bash
 # Reads process.env only and prints key names, never values.

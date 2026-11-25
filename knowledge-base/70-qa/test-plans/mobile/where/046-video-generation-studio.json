@@ -1,0 +1,317 @@
+{
+ "S46.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Add to chat"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create video"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Message input"
+   }
+  ],
+  "needs": "a Cloud-mode account whose plan includes video generation",
+  "note": "The video option only appears in Cloud mode when the plan and granted capabilities allow it. I did not trace the send path that runs a video turn from the message box, so the exact send step is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in Cloud mode.",
+   "Tap the Add to chat button.",
+   "Tap Create video. Under it, the Video model list appears.",
+   "Type a text prompt in the message box and send it.",
+   "Wait for the video card to appear in the chat.",
+   "Compare: a video clip comes back in the chat after generating."
+  ],
+  "where": "Chat screen > Add to chat (+ button) > Create video > type a prompt in Message input and send"
+ },
+ "S46.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Video model"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create video"
+   }
+  ],
+  "needs": "a Cloud-mode account whose plan includes video generation",
+  "note": "Model names and prices come from the model registry, not from literal text. The model choice is saved with the chat view store; I did not check that the send step reads it.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in Cloud mode.",
+   "Tap Add to chat.",
+   "Tap Create video.",
+   "Look at the list under Video model.",
+   "Tap a different model row.",
+   "Compare: the tapped row shows as selected, and the next clip uses that model."
+  ],
+  "where": "Chat screen > Add to chat > Create video > Video model list"
+ },
+ "S46.06": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Length"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create video"
+   }
+  ],
+  "needs": "a Cloud-mode account whose plan includes video generation",
+  "note": "The Length section only shows when the model offers more than one duration. The row text is built as a template (N seconds), so the exact visible words are not a fixed string.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in Cloud mode.",
+   "Tap Add to chat, then Create video.",
+   "Look under the Length heading for rows such as 5 seconds.",
+   "Tap one of the Length rows.",
+   "Read the line that starts with About under the list.",
+   "Compare: the chosen length is marked selected and the About line changes for that length."
+  ],
+  "where": "Chat screen > Add to chat > Create video > Length"
+ },
+ "S46.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Aspect ratio"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create video"
+   }
+  ],
+  "needs": "a Cloud-mode account whose plan includes video generation",
+  "note": "The words Aspect ratio also appear for images. The video section is gated on video mode. I did not confirm that the generated clip changes shape.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in Cloud mode.",
+   "Tap Add to chat, then Create video.",
+   "Find the Aspect ratio heading in the video options.",
+   "Tap one of the aspect ratio rows.",
+   "Compare: the tapped row is marked selected."
+  ],
+  "where": "Chat screen > Add to chat > Create video > Aspect ratio"
+ },
+ "S46.08": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Quality"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "Create video"
+   }
+  ],
+  "needs": "a Cloud-mode account whose plan includes video generation",
+  "note": "The screen word is Quality, not Resolution. The resolution options come from getVideoQualityOptionsForModel. I did not confirm the delivered file's resolution matches the choice.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in Cloud mode.",
+   "Tap Add to chat, then Create video.",
+   "Find the Quality heading in the video options.",
+   "Tap one of the Quality rows.",
+   "Compare: the tapped row is selected. Some rows show a hint like N/Ns only.",
+   "Compare the clip's output resolution with the chosen row, if you can inspect the file."
+  ],
+  "where": "Chat screen > Add to chat > Create video > Quality"
+ },
+ "S46.26": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/VideoGenProgress.tsx",
+    "text": "Generating video\u2026"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/VideoGenProgress.tsx",
+    "text": "This usually takes a minute or two. You can keep using the app."
+   }
+  ],
+  "needs": "a Cloud-mode account whose plan includes video generation",
+  "note": "Other status words are Queued with the provider\u2026 and Video generation failed. The progress bar is shown only when a number is reported.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in Cloud mode with video mode selected.",
+   "Send a video prompt.",
+   "Look at the card in the chat.",
+   "Compare: the card shows Generating video, a percentage and bar only if the provider reports one, and the line about a minute or two."
+  ],
+  "where": "Chat screen > send a video prompt > video card in the chat shows Generating video"
+ },
+ "S46.27": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "per second"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+    "text": "a failed video costs nothing."
+   }
+  ],
+  "needs": "a Cloud-mode account whose plan includes video generation",
+  "note": "Before generating, only the estimate is shown. I searched GeneratedVideo.tsx, VideoGenProgress.tsx and runVideoGenerationTurn.ts for a credit amount after generation and found none in the video card files.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a chat in Cloud mode.",
+   "Tap Add to chat, then Create video.",
+   "Read the price text on each Video model row, such as per second.",
+   "Pick a Length and read the About line below the options.",
+   "Compare: the About line shows an estimated credit amount and says a failed video costs nothing."
+  ],
+  "where": "Chat screen > Add to chat > Create video > Video model rows and the About line under the options"
+ },
+ "S46.28": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/VideoGenProgress.tsx",
+    "text": "Stop generating"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/VideoGenProgress.tsx",
+    "text": "Video generation stopped"
+   }
+  ],
+  "needs": "a Cloud-mode account whose plan includes video generation",
+  "note": "The button only appears when the message has a video task id. Server-side stopping is in apps/web/lib/services/video-job-reconciliation-service.ts and I did not verify it from the app.",
+  "reachable": "yes",
+  "steps": [
+   "Send a video prompt and wait until the card shows Generating video.",
+   "Tap Stop generating under the progress text.",
+   "Look at the button while it works.",
+   "Compare: the button shows Stopping and then the card shows Video generation stopped, and the clip is not delivered."
+  ],
+  "where": "Chat screen > send a video prompt > video card > Stop generating"
+ },
+ "S46.29": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Retry"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+    "text": "Retry video generation"
+   }
+  ],
+  "needs": "a Cloud-mode account and a video that failed or timed out",
+  "note": "Retry resends the prompt as a /video request through the chat send path in apps/mobile/app/(app)/chat/[id].tsx. I did not verify that it reuses the earlier model, length, aspect ratio and quality, rather than the current selections.",
+  "reachable": "yes",
+  "steps": [
+   "Make a video that fails, or wait for a timeout.",
+   "Look for the Retry button under the failed card.",
+   "Tap Retry.",
+   "Compare: the prompt is sent again as a video request and a new video card appears."
+  ],
+  "where": "Chat screen > failed video card > Retry"
+ },
+ "S46.30": {
+  "labels": [
+   {
+    "file": "packages/ui/i18n/locales/en/common.json",
+    "text": "Library"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Videos"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Videos you generate will appear here"
+   }
+  ],
+  "needs": "a signed-in account with at least one finished clip",
+  "note": "The side menu row uses the navLibrary key. The gallery is the Library grid with the Videos filter. I did not confirm how the side menu is opened.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open the side menu.",
+   "Tap Library.",
+   "Tap the Videos filter chip.",
+   "Look at the grid.",
+   "Compare: completed clips are shown as tiles, or the text Videos you generate will appear here shows if there are none."
+  ],
+  "where": "Side menu > Library > Videos"
+ },
+ "S46.31": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/GeneratedVideo.tsx",
+    "text": "Play"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/GeneratedVideo.tsx",
+    "text": "Play generated video"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/GeneratedVideo.tsx",
+    "text": "Video could not play. Retry"
+   }
+  ],
+  "needs": "a finished video clip in the account",
+  "note": "The player is a WebView (VideoPlayerModal.tsx). Its play, pause and scrub controls come from the player page built by apps/mobile/src/services/fileCreation, which I did not open, so the controls are unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat with a finished video card.",
+   "Tap Play on the card, or tap the video in the Library grid.",
+   "Look at the player screen that opens.",
+   "Use the player's controls to play, pause and scrub.",
+   "Compare: the clip plays, pauses and can be moved to another point."
+  ],
+  "where": "Chat screen > video card > Play, or Side menu > Library > tap a video tile"
+ },
+ "S46.32": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/GeneratedVideo.tsx",
+    "text": "Save"
+   },
+   {
+    "file": "apps/mobile/src/features/chat/components/VideoPlayerModal.tsx",
+    "text": "Save video"
+   }
+  ],
+  "needs": "a finished video clip in the account",
+  "note": "The app downloads the file and opens the system share sheet, so the file is saved through that sheet, not straight to a folder. The word Download is only in the icon and the hint.",
+  "reachable": "yes",
+  "steps": [
+   "Open a finished video card in a chat.",
+   "Tap Save under the card.",
+   "Wait for the share sheet to open.",
+   "Compare: the share sheet lists a save or send option for the video file."
+  ],
+  "where": "Chat screen > video card > Save, or the player's Save video icon"
+ },
+ "S46.33": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Share"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Library options"
+   },
+   {
+    "file": "apps/mobile/src/features/library/index.tsx",
+    "text": "Select saved files"
+   }
+  ],
+  "needs": "a signed-in account with at least one finished clip",
+  "note": "Share in the library also exists through the selection button. Sharing in chat is done by the Save button, not Share. If the library is not in cloud scope, the share function returns without showing anything.",
+  "reachable": "yes",
+  "steps": [
+   "Open Library from the side menu.",
+   "Tap the Videos filter.",
+   "Long-press a video tile.",
+   "Tap Share in the menu that opens, or tap Library options, Select saved files, pick one video, then tap Share.",
+   "Compare: the share sheet opens with the video file."
+  ],
+  "where": "Side menu > Library > long-press a video tile > Share"
+ }
+}

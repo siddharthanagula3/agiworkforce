@@ -1,0 +1,55 @@
+{
+ "S74.18": {
+  "labels": [
+   {
+    "file": "packages/ui/ui/src/settings-nav.ts",
+    "text": "Capabilities"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPairingSection.tsx",
+    "text": "Chrome"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPairingSection.tsx",
+    "text": "Connect to Desktop"
+   }
+  ],
+  "needs": "a Mac with the Desktop app, Chrome with the AGI extension installed, and a signed-in account",
+  "note": "The code is shown in a dialog opened by the Desktop app (its source is apps/desktop/electron/browser/bridgeServer.ts), not on the Settings page; the dialog's own wording was not found in the web files. The Install extension button is shown only while no pairing exists yet.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Desktop app on the Mac and sign in. Open the app menu, choose Settings\u2026, then open the Capabilities tab.",
+   "Scroll to the Chrome section. If it says Nothing has asked to pair yet, the Install extension button is shown; that is the path to the extension setup page.",
+   "In Chrome, open the AGI extension side panel and choose Connect to Desktop. A dialog opens on the Mac showing a code.",
+   "Type the code from the Desktop dialog into the Chrome side panel.",
+   "Go back to Settings > Capabilities > Chrome and look for the line Paired and answering (with a fingerprint after a dot). Compare with Expected: the extension is paired with the Desktop app."
+  ],
+  "where": "Settings > Capabilities > Chrome. The Chrome section is shown only inside the Desktop app (it is hidden in a normal browser). Pairing starts in Chrome: open the extension side panel and choose Connect to Desktop; Desktop then opens a dialog on this Mac that shows the code."
+ },
+ "S74.19": {
+  "labels": [
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPairingSection.tsx",
+    "text": "Paired and answering"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPairingSection.tsx",
+    "text": "Register the browser host again"
+   },
+   {
+    "file": "apps/web/features/desktop-host/components/BrowserPairingSection.tsx",
+    "text": "Chrome"
+   }
+  ],
+  "needs": "a Mac with the Desktop app and a paired Chrome extension (to see a connected state); a way to stop the connection, such as quitting Chrome, to see the not-answering state",
+  "note": "The connection status comes from the native host and bridge (apps/desktop/electron/browser/bridgeServer.ts, which sets bridgeListening from the server state). The button re-registers the host; it does not have a separate Reconnect label, so the tester should treat it as the reconnect control. The status text Paired, not answering right now was not checked against a live connection.",
+  "reachable": "yes",
+  "steps": [
+   "Open the Desktop app, open the app menu, choose Settings\u2026, then the Capabilities tab.",
+   "Scroll to the Chrome section and read the status line. It shows Paired and answering when the native host is connected, or Paired, not answering right now when it is not.",
+   "If the line says Paired, not answering right now, or the text The browser host is not registered, so Chrome cannot reach this app. Register it again below. appears, click Register the browser host again.",
+   "Wait for the spinner to finish. Compare with Expected: the status line changes to Paired and answering, and an error appears in red text only if registration fails."
+  ],
+  "where": "Settings > Capabilities > Chrome. The status line shows Paired and answering or Paired, not answering right now. The reconnect action is the button Register the browser host again."
+ }
+}

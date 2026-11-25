@@ -1,0 +1,460 @@
+{
+ "S74.01": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Open AGI side panel"
+   },
+   {
+    "file": "apps/extension/manifest.json",
+    "text": "AGI Extension"
+   }
+  ],
+  "needs": "none",
+  "note": "Code opens the side panel on toolbar click (background.ts action.onClicked); if the side panel API is unavailable it opens a separate popup window instead.",
+  "reachable": "yes",
+  "steps": [
+   "Open Chrome on a normal web page, not a Chrome page.",
+   "Click the AGI Extension icon in the Chrome toolbar (hover shows the name \"AGI Extension\").",
+   "Or press Command+Shift+K.",
+   "Look for the AGI assistant to open beside the page. Compare with Expected: clicking the button or the shortcut opens the assistant."
+  ],
+  "where": "Chrome toolbar > AGI Extension icon (click it). Shortcut: Command+Shift+K, listed as \"Open AGI side panel\" at chrome://extensions/shortcuts"
+ },
+ "S74.03": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Chat"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   }
+  ],
+  "needs": "none",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal web page.",
+   "Click the AGI Extension icon in the Chrome toolbar.",
+   "Look at the panel that opens on the side of the same Chrome window.",
+   "Check that the assistant (tabs \"Chat\" and \"Computer Use\") is shown beside the page. Compare with Expected."
+  ],
+  "where": "Chrome toolbar > AGI Extension icon, then the side panel that opens beside the page, with the tab labelled \"Chat\""
+ },
+ "S74.04": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Explain this"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Translate this"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Ask AGI about \"%s\""
+   }
+  ],
+  "needs": "none",
+  "note": "The \"Ask AGI about\" label is a template: Chrome fills in the selected text, so the entry reads differently on each selection.",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal web page and select a sentence with the mouse.",
+   "Right-click the selected text.",
+   "Look for the entries \"Ask AGI about\" (the selected words in quotes), \"Explain this\" and \"Translate this\".",
+   "Compare with Expected: the menu offers assistant actions for the selection."
+  ],
+  "where": "Select some text on a web page > right-click the selection > \"Explain this\", \"Translate this\" or \"Ask AGI about \"%s\"\" (Chrome shows the selected words in place of %s)"
+ },
+ "S74.05": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Ask AGI about \"%s\""
+   }
+  ],
+  "needs": "a signed-in AGI account for an answer from the assistant (not verified in code)",
+  "note": "The code sets a pending selected-text chat and opens the side panel; the answer itself was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "Select a short phrase on a web page.",
+   "Right-click the selection and choose the \"Ask AGI about\" entry.",
+   "Wait for the side panel to open.",
+   "Look for the assistant to use the selected text in its answer. Compare with Expected."
+  ],
+  "where": "Select text on a web page > right-click the selection > \"Ask AGI about \"%s\"\" (the selected words fill the template)"
+ },
+ "S74.06": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Ask AGI about this page"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add the browser page"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Add attachment"
+   }
+  ],
+  "needs": "a signed-in AGI account for chat (not verified in code)",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal web page with some text on it.",
+   "Right-click an empty area (not on a link or selected text) and choose \"Ask AGI about this page\".",
+   "Or open the side panel, click the \"+\" button labelled \"Add attachment\", then choose \"Add the browser page\".",
+   "Type a question about the page and send it. Look for an answer about that page's content. Compare with Expected."
+  ],
+  "where": "Right-click an empty area of a web page > \"Ask AGI about this page\". Or in the side panel: \"Add attachment\" (+) > \"Add the browser page\", then type a question"
+ },
+ "S74.07": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Summarize this page"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/pageCommands.ts",
+    "text": "/summarize"
+   }
+  ],
+  "needs": "a signed-in AGI account for chat (not verified in code)",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal web page with readable text.",
+   "Right-click an empty area and choose \"Summarize this page\".",
+   "Or open the side panel, type / in the message box and pick /summarize.",
+   "Look for one summary of the page in the chat. Compare with Expected."
+  ],
+  "where": "Right-click an empty area of a web page > \"Summarize this page\". Or type \"/\" in the side panel message box and choose \"/summarize\""
+ },
+ "S74.08": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/pageActions.ts",
+    "text": "Summarize video"
+   },
+   {
+    "file": "apps/extension/src/features/content/in-page-panel/launcher.ts",
+    "text": "Open AGI"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Page assistant overlay"
+   }
+  ],
+  "needs": "a YouTube video page with captions, the page assistant overlay turned on, and the site approved (approval gating not traced)",
+  "note": "The panel says a video without captions has no transcript; the launcher's approval gating was not traced in code.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on \"Page assistant overlay\" in the extension's Extension settings first, then open a YouTube video that has captions.",
+   "Click the \"Open AGI\" round button on the page (its tooltip reads \"Ask AGI\").",
+   "Click \"Summarize video\" in the panel.",
+   "Look for a summary that uses the video's transcript. Compare with Expected."
+  ],
+  "where": "Open a YouTube video page (youtube.com/watch) > \"Open AGI\" button on the page > \"Summarize video\""
+ },
+ "S74.11": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "New chat"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Recent chats"
+   }
+  ],
+  "needs": "a signed-in AGI account (saved chats are not verified without sign-in)",
+  "note": "The code only shows the Recents button and chat list items; whether they appear without sign-in was not confirmed.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message in the chat.",
+   "Click the \"New chat\" icon at the top of the side panel.",
+   "Send a different message in the new chat.",
+   "Click \"Recent chats\" (clock icon) and open the first chat. Look that the first chat's messages come back separately. Compare with Expected."
+  ],
+  "where": "Chat tab: \"New chat\" button (pen icon) to start a second chat; \"Recent chats\" button (clock icon) to switch between chats"
+ },
+ "S74.12": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Add the browser page"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Snapshot \u00b7 $HOST$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Remove $PAGE$"
+   }
+  ],
+  "needs": "a normal web page (not a Chrome page)",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open a normal web page.",
+   "In the side panel click \"+\" (Add attachment) and choose \"Add the browser page\".",
+   "Look above the message box for a chip showing \"Snapshot \u00b7 \" and the site name.",
+   "Click the \"\u00d7\" button on the chip (labelled \"Remove\" plus the page name) and see the chip disappear. Compare with Expected."
+  ],
+  "where": "Chat tab: \"+\" (Add attachment) > \"Add the browser page\". The chip shows above the message box with \"Snapshot \u00b7 $HOST$\" and a remove button"
+ },
+ "S74.13": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "AGI needs access to $HOST$"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Allow for this task"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Decline"
+   }
+  ],
+  "needs": "a normal website that is not yet approved",
+  "note": "\"Always allow on this site\" appears only for full browser-control requests, not for page reading; Chrome's own permission prompt was not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the site is not in your approved sites (Extension settings > Permissions > Blocked sites / approved list).",
+   "Open that site in a tab and make it the active tab.",
+   "In the side panel click \"+\" and choose \"Add the browser page\".",
+   "Look for the card \"AGI needs access to\" with the site name and the buttons \"Allow for this task\" and \"Decline\". Compare with Expected: access is asked for explicitly before reading."
+  ],
+  "where": "Chat tab: \"+\" (Add attachment) > \"Add the browser page\" on a site not yet approved. A card titled \"AGI needs access to $HOST$\" appears in the chat with \"Allow for this task\" and \"Decline\""
+ },
+ "S74.14": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   },
+   {
+    "file": "apps/extension/src/features/options/site-permission-policy.ts",
+    "text": "Browser control"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Blocked sites"
+   }
+  ],
+  "needs": "none",
+  "note": "The approved-sites list is built in apps/extension/src/options.ts without a visible title string of its own; it was only partly traced.",
+  "reachable": "yes",
+  "steps": [
+   "In the side panel click the \"More\" button (\u22ee) at the top right.",
+   "Click \"Extension settings\".",
+   "On the Permissions section, change the \"Browser control\" dropdown (Auto, Ask first, Full access) and read its text.",
+   "Scroll to \"Blocked sites\" and the approved-sites list, remove or add a site, then reload the page to see the change. Compare with Expected."
+  ],
+  "where": "More (\"\u22ee\" button, labelled \"More\") > \"Extension settings\" (opens the Permissions page) > \"Browser control\" dropdown, \"Blocked sites\" list and the approved-sites list"
+ },
+ "S74.15": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Browser task controls"
+   },
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   }
+  ],
+  "needs": "an approved site and a signed-in AGI account",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Approve a site and start a browser task from the \"Computer Use\" tab (see S74.16).",
+   "Watch the page while the task runs.",
+   "Look for the \"Browser task controls\" dock on the page and the pointer moving over it.",
+   "Look at the \"Computer Use\" tab for the active run and the page name. Compare with Expected."
+  ],
+  "where": "While a browser task runs: the page shows a \"Browser task controls\" dock with \"Stop\" and \"Take over\", and a pointer moves over the page; the side panel's \"Computer Use\" tab shows the run"
+ },
+ "S74.16": {
+  "labels": [
+   {
+    "file": "apps/extension/src/side_panel.ts",
+    "text": "Computer Use"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Start"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Sign in required"
+   }
+  ],
+  "needs": "a signed-in AGI account and an approved site (without sign-in the panel shows \"Sign in required\")",
+  "note": "The task box and Start button stay disabled until the active site is approved.",
+  "reachable": "yes",
+  "steps": [
+   "Open an approved site in the active tab.",
+   "Click the \"Computer Use\" tab.",
+   "Type a goal in the \"Task\" box and check the line that says \"Works on\" with the site name.",
+   "Click \"Start\" and watch the status. Compare with Expected: AGI takes control of the browser for the goal."
+  ],
+  "where": "Side panel: \"Computer Use\" tab > \"Task\" box > \"Start\". Mode is chosen in the dropdown with the label \"How should AGI act in your browser?\" (Auto, Ask first, Full access)"
+ },
+ "S74.17": {
+  "labels": [
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Take over"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Continue"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Stop"
+   }
+  ],
+  "needs": "an approved site and a running browser task",
+  "note": "The page dock also has \"Stop\" and \"Take over\" buttons (apps/extension/src/features/content/browserRunOverlay.ts).",
+  "reachable": "yes",
+  "steps": [
+   "Start a browser task (see S74.16).",
+   "Click \"Take over\" and read the message that AGI is paused. Use the page yourself.",
+   "Click \"Continue\" to hand the page back, or click \"Stop\" to end the run.",
+   "Look for the run to stop and the status to show \"Stopping\u2026\" then end. Compare with Expected."
+  ],
+  "where": "\"Computer Use\" tab during a run: \"Stop\" and \"Take over\" buttons; \"Continue\" appears after Take over"
+ },
+ "S74.18": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Pair with Desktop"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Desktop app"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Extension settings"
+   }
+  ],
+  "needs": "the AGI Desktop app running on this Mac",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open the AGI Desktop app on this Mac and leave it open.",
+   "In the side panel click \"More\" (\u22ee) > \"Extension settings\".",
+   "Choose the \"Account\" section and find \"Desktop app\".",
+   "Click \"Pair with Desktop\", type the code shown in the Desktop app into the field and click \"Confirm Code\". Compare with Expected: the status changes to \"Paired\"."
+  ],
+  "where": "More (\u22ee) > \"Extension settings\" > \"Account\" tab > \"Desktop app\" section > \"Pair with Desktop\""
+ },
+ "S74.19": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Desktop tools are optional and currently disconnected."
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Reconnect"
+   }
+  ],
+  "needs": "the AGI Desktop app, and a way to stop it",
+  "note": "The side panel shows the notice only while the native host is disconnected; a connected state has no visible label there. The \"Paired\" state in Account > Desktop app is pairing status, not live connection status.",
+  "reachable": "yes",
+  "steps": [
+   "Make sure the Desktop app is not running (or is not paired).",
+   "Open the side panel and look above the message box for the notice \"Desktop tools are optional and currently disconnected.\"",
+   "Click \"Reconnect\" and watch the notice.",
+   "Start the Desktop app and click \"Reconnect\" again; the notice should disappear. Compare with Expected."
+  ],
+  "where": "Side panel, above the message box: notice \"Desktop tools are optional and currently disconnected.\" with a \"Reconnect\" button. Pairing state is in Extension settings > Account > \"Desktop app\""
+ },
+ "S74.21": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Voice input"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Continue"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Voice input is not supported in this browser"
+   }
+  ],
+  "needs": "a microphone and a Chrome build with speech recognition (on an unsupported browser the button is disabled and shows \"Voice input is not supported in this browser\")",
+  "note": "none",
+  "reachable": "yes",
+  "steps": [
+   "Open the side panel and click the microphone button labelled \"Voice input\".",
+   "Read the notice and click \"Continue\".",
+   "Allow the microphone when Chrome asks.",
+   "Speak a sentence and look for the words to appear in the message box. Compare with Expected."
+  ],
+  "where": "Side panel: the microphone button \"Voice input\" next to the message box. First use shows \"Before you dictate\" with \"Not now\" and \"Continue\""
+ },
+ "S74.25": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Page access unavailable"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Retry"
+   },
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Page context is unavailable on this browser page"
+   }
+  ],
+  "needs": "none",
+  "note": "The explanation text under the title is a fixed English string in apps/extension/src/side_panel.ts, not in the translation file.",
+  "reachable": "yes",
+  "steps": [
+   "Open a tab with chrome://extensions in the address bar.",
+   "Click the AGI Extension toolbar icon to open the side panel.",
+   "Read the notice \"Page access unavailable\" and its explanation.",
+   "Click \"+\" (Add attachment) and hover \"Add the browser page\" to see \"Page context is unavailable on this browser page\". Compare with Expected."
+  ],
+  "where": "Open a Chrome page the extension cannot read (for example chrome://extensions or the Chrome Web Store) > side panel shows \"Page access unavailable\" with a \"Retry\" button. \"Add attachment\" > \"Add the browser page\" is disabled there"
+ },
+ "S74.28": {
+  "labels": [
+   {
+    "file": "apps/extension/_locales/en/messages.json",
+    "text": "Reconnecting\u2026"
+   },
+   {
+    "file": "apps/extension/src/features/side-panel/computerUsePanel.ts",
+    "text": "Browser task status is unavailable."
+   }
+  ],
+  "needs": "none (Chrome's own suspension of the background worker cannot be forced from the UI)",
+  "note": "Chrome decides when to suspend the background worker, so the tester cannot force it; the steps only show the recovery messages the code shows when the panel reopens.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Start a browser task on an approved site (see S74.16).",
+   "Close the side panel and open it again with the AGI Extension toolbar icon.",
+   "Look at the \"Computer Use\" tab: the message \"A browser-control run started before this panel was reopened is still active. Use Stop to end it.\" should show, or \"Browser task status is unavailable.\" if status cannot be read.",
+   "Look for \"Reconnecting\u2026\" in a chat while the connection is lost. Compare with Expected."
+  ],
+  "where": "Chat stream reconnect status; \"Computer Use\" tab run status after the side panel reopens"
+ }
+}

@@ -1,0 +1,397 @@
+{
+ "S57.01": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+    "text": "Search the web"
+   },
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Web search"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/WebSearchCard.tsx",
+    "text": "Web search: "
+   }
+  ],
+  "needs": "a signed-in account where web search is available on the plan; the tester should confirm the plan first",
+  "note": "Tests say automatic web search is not a user-facing menu toggle, so the attach-menu entry may only apply to a local scope; the tester should check which control appears on the account.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and open a new chat.",
+   "Open the attach menu in the composer and choose Search the web (or turn on Web search if the composer shows it).",
+   "Type a question that needs current facts, such as today's news, and send.",
+   "Look for a row or card that starts with 'Web search:' followed by the query and a result count, with sources listed under the answer. Compare with Expected: the search and its sources are shown."
+  ],
+  "where": "New chat > composer attach menu > Search the web, or the composer's Web search option; ask a question that needs current facts"
+ },
+ "S57.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Expand tool details"
+   }
+  ],
+  "needs": "a signed-in account",
+  "note": "The model decides when to fetch, so there is no button for this tool; the tester can only prompt for it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Open a new chat.",
+   "Type: Read https://example.com and tell me what the page says. Send.",
+   "Look for a tool row in the reply; expand it with the 'Expand tool details' control if it is collapsed.",
+   "Compare with Expected: a fetch of the page is shown in the transcript."
+  ],
+  "where": "Chat transcript, under the assistant reply, after asking the assistant to read a web page"
+ },
+ "S57.03": {
+  "labels": [],
+  "needs": "none",
+  "note": "Searched the Code evidence files for a visible control; found only the prompt manifest and routing policy entries, which are not user controls. Known unfinished switch-on is a routing setting, not a screen.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.04": {
+  "labels": [],
+  "needs": "a paired desktop with local folders",
+  "note": "Device-step contracts and the Electron dispatcher exist, but I did not find the visible wording or the screen that starts a file search from the app.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.05": {
+  "labels": [],
+  "needs": "a paired desktop with local folders",
+  "note": "Device-step and dispatcher code exist for file reads, but no visible control or label was found in the cited files.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.06": {
+  "labels": [],
+  "needs": "a paired desktop with local folders",
+  "note": "Device-step and dispatcher code exist for file writes, but no visible control or label was found in the cited files.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.07": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Office files"
+   }
+  ],
+  "needs": "a signed-in account where office creation is enabled",
+  "note": "The format names come from CHAT_OUTPUT_FORMAT_LABEL, which I did not open, so the exact spreadsheet label is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat.",
+   "Turn on the Office files option in the composer and choose the spreadsheet format.",
+   "Ask: Make a spreadsheet of monthly expenses for 3 months.",
+   "Look for a file card the user can open or download. Compare with Expected: an xlsx file is offered."
+  ],
+  "where": "Chat composer > attach or output menu > 'Office files' option (the chosen format label), then ask for a spreadsheet"
+ },
+ "S57.08": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Office files"
+   }
+  ],
+  "needs": "a signed-in account where office creation is enabled",
+  "note": "The format names come from CHAT_OUTPUT_FORMAT_LABEL, which I did not open, so the exact document label is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat.",
+   "Turn on the Office files option and choose the document format.",
+   "Ask: Write a one-page memo about a trip plan as a Word file.",
+   "Look for a file card the user can open or download. Compare with Expected: a docx file is offered."
+  ],
+  "where": "Chat composer > attach or output menu > 'Office files' option (the chosen format label), then ask for a document"
+ },
+ "S57.09": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Office files"
+   }
+  ],
+  "needs": "a signed-in account where office creation is enabled",
+  "note": "The format names come from CHAT_OUTPUT_FORMAT_LABEL, which I did not open, so the exact presentation label is unverified.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat.",
+   "Turn on the Office files option and choose the presentation format.",
+   "Ask: Make a 3-slide deck about a product launch.",
+   "Look for a file card the user can open or download. Compare with Expected: a pptx file is offered."
+  ],
+  "where": "Chat composer > attach or output menu > 'Office files' option (the chosen format label), then ask for a presentation"
+ },
+ "S57.10": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+    "text": "Run code"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+    "text": "Run code"
+   }
+  ],
+  "needs": "a signed-in account on a model that can run code",
+  "note": "The composer shows a message when the selected model cannot run code; the menu name 'tools menu' is my description, not a visible label.",
+  "reachable": "yes",
+  "steps": [
+   "Open a new chat.",
+   "Open the composer's tools menu and choose Run code.",
+   "Ask: Compute the first 20 prime numbers with code and show the output.",
+   "Look for the code run and its output in the transcript. Compare with Expected: the output appears in the transcript."
+  ],
+  "where": "Chat composer > tools menu > Run code, then send a request that needs computing"
+ },
+ "S57.11": {
+  "labels": [],
+  "needs": "a paired desktop",
+  "note": "Shell tool contracts and dispatcher code exist, but I did not find the visible wording or the control that shows a shell command from the app.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.12": {
+  "labels": [],
+  "needs": "a paired desktop with local folders",
+  "note": "Patch device-step and filesystem service code exist, but no visible control or label was found in the cited files.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.13": {
+  "labels": [],
+  "needs": "a paired desktop with the built-in browser",
+  "note": "Browser step code exists in the Electron browser steps file, but I did not find the visible label or the screen that starts it.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.14": {
+  "labels": [],
+  "needs": "a paired desktop with the built-in browser",
+  "note": "Browser action code exists, but I did not find the visible labels or the screen that starts them.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.15": {
+  "labels": [],
+  "needs": "a paired desktop with computer use granted",
+  "note": "Computer-action dispatcher code exists; the only visible text found is 'Running on this device. Approve it if your desktop asks.' in ToolCallCard.tsx, and no start control was located.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.16": {
+  "labels": [],
+  "needs": "a signed-in account where image generation is available",
+  "note": "Composer image mode (setImageMode) and image tool code exist, but I did not confirm the visible label of the image control.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.17": {
+  "labels": [],
+  "needs": "a signed-in account and an image to upload",
+  "note": "Image-edit operations are defined in ChatComposerNew.tsx and ImageMaskDialog, but I did not confirm the visible labels or the path to open them.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.21": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "Memory tool code exists in apps/web/lib/server/tools/memory-tools.ts, but I did not find the visible label of the settings screen that shows remembered facts.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.22": {
+  "labels": [],
+  "needs": "a connected calendar account; production state needed",
+  "note": "Connector tool code exists, but the Code audit says Google Calendar OAuth is not set up in production and Outlook needs Microsoft credentials, so the feature may not be reachable.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.23": {
+  "labels": [],
+  "needs": "a connected messaging service such as Slack",
+  "note": "Connector code and the tool-call approval card exist, but I did not confirm the connector screen path or the exact approve button wording.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.24": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "Schedule tool code and a schedules feature exist, but I did not confirm the menu path or label that lets a user open scheduled tasks.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.26": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "ClarifyCard is rendered in the chat (apps/web/features/chat/components/messages/cards/ClarifyCard.tsx via InteractiveCardBlock.tsx), but I did not extract its visible wording or choice buttons.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.28": {
+  "labels": [],
+  "needs": "none",
+  "note": "The model is told which other tools exist and loads them itself; there is no control to test.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "Chat with several connected tools; effect is inside the model's context and not on any screen"
+ },
+ "S57.29": {
+  "labels": [],
+  "needs": "a signed-in account",
+  "note": "Searched for a visible tool search control: the only match is the placeholder 'Search tools...' in apps/desktop/src/features/mcp/MCPWorkspace.tsx, but I did not trace the menu path that opens it.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.30": {
+  "labels": [],
+  "needs": "a connected connector with tools",
+  "note": "ConnectorCapabilitiesPanel.tsx shows a 'Tools' section, but I did not trace the screen path that opens it.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S57.31": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "Request"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Tool run complete"
+   }
+  ],
+  "needs": "an account that can run a tool in chat (a web search is enough)",
+  "note": "The \"Request\" block depends on the showParameters prop (default true); I did not confirm the chat page leaves it on.",
+  "reachable": "yes",
+  "steps": [
+   "Start a chat and send a message that makes the assistant use a tool, for example a web search.",
+   "When the reply shows the tool row, click the row that reads \"Tool run complete\" to open the list.",
+   "Click one tool call row to open it.",
+   "Look for the \"Request\" heading; the block under it should show the command, file, query or JSON the tool was called with, and compare it with Expected."
+  ],
+  "where": "Chat reply > the row \"Tool run complete\" (click to open) > click a tool call row > \"Request\" block"
+ },
+ "S57.32": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Working..."
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Tool run complete"
+   }
+  ],
+  "needs": "an account that can run a tool in chat (a web search is enough)",
+  "note": "The per-tool running phrase comes from each tool's statusPhrase, and the \"completed\" wording comes from runStatusLabel in @agiworkforce/types, so exact wording varies by tool; the elapsed time is a formatted duration, not a fixed word.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that makes the assistant run a tool, for example a web search or a file read.",
+   "While the reply is still coming, look at the tool row; it should show a running phrase such as \"Working...\" in blue, and the tool card shows a live elapsed time.",
+   "Wait for the run to finish.",
+   "Look at the row again: it should read \"Tool run complete\" with no running phrase, and a finished tool card shows its duration; compare with Expected."
+  ],
+  "where": "Chat: send a message that makes the assistant use a tool, then watch the tool row above the reply while it runs"
+ },
+ "S57.33": {
+  "labels": [
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "Response"
+   },
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Tool run complete"
+   }
+  ],
+  "needs": "an account that can run a tool in chat (a web search is enough)",
+  "note": "The code shows the full result in a box with a maximum height and a scrollbar, not a cut-down summary; I did not confirm a cut-off.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that makes the assistant use a tool that returns a result, for example a web search.",
+   "When the run finishes, click the row that reads \"Tool run complete\".",
+   "Click a finished tool call row.",
+   "Look at the \"Response\" block; it should show a short preview of the result in a box that scrolls, and compare with Expected."
+  ],
+  "where": "Chat reply > the row \"Tool run complete\" (click to open) > click a finished tool call row > \"Response\" block"
+ },
+ "S57.34": {
+  "labels": [
+   {
+    "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
+    "text": "Tool run complete"
+   },
+   {
+    "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+    "text": "Response"
+   }
+  ],
+  "needs": "an account that can run a tool in chat (a web search is enough)",
+  "note": "The timeline button is labelled \"Toggle tool timeline\" only for screen readers; I did not find a labelled visible control for opening one tool call, so the tester should click the row itself.",
+  "reachable": "yes",
+  "steps": [
+   "Send a message that makes the assistant use a tool.",
+   "Click the row \"Tool run complete\" to open the list of tool calls.",
+   "Click a tool call row; its \"Request\" and \"Response\" blocks should appear.",
+   "Click the same row again; the blocks should close. Compare with Expected."
+  ],
+  "where": "Chat reply > the row \"Tool run complete\" (click to open and close) > click a tool call row to open or close its \"Request\" and \"Response\" blocks"
+ },
+ "S57.36": {
+  "labels": [
+   {
+    "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-store.ts",
+    "text": "read_tool_result"
+   }
+  ],
+  "needs": "none",
+  "note": "I searched for \"stored result\", \"Full result\" and \"Show more\" and found no user-facing control to open a stored result; the reference is for the model, so the tester cannot open it from the screen.",
+  "reachable": "not_from_ui",
+  "steps": [],
+  "where": "No control found; the replacement notice is written for the model in the conversation context, and the model reads the full stored result with the read_tool_result tool"
+ },
+ "S57.37": {
+  "labels": [
+   {
+    "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
+    "text": "Tool permissions"
+   },
+   {
+    "file": "apps/web/features/connectors/components/ConnectorCallLog.tsx",
+    "text": "Recent calls"
+   }
+  ],
+  "needs": "a connected connector that has been called before, for example from a chat",
+  "note": "The call log says \"Arguments and results are never recorded\", so the input the tool was called with is not shown, only the outcome; the way into Settings was not confirmed in code.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and click \"Connectors\".",
+   "Open a connector that is already connected and has been used in a chat.",
+   "Click \"Tool permissions\" in its details.",
+   "Scroll to \"Recent calls\" and look at each entry's status (\"Worked\", \"Failed\" or \"Blocked here\") and its time; compare with Expected."
+  ],
+  "where": "Settings > Connectors > [a connected connector] > \"Tool permissions\" > \"Recent calls\""
+ }
+}

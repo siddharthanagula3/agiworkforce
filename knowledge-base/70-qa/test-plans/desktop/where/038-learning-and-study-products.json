@@ -1,0 +1,105 @@
+{
+ "S38.01": {
+  "labels": [
+   {
+    "file": "apps/web/shared/components/layout/app-nav-items.ts",
+    "text": "Study"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Start studying"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyModeIndicator.tsx",
+    "text": "Studying:"
+   }
+  ],
+  "needs": "a Free account or a paid account",
+  "note": "The sidebar item is marked hideable, so a user who hid it will not see it; the teaching behaviour comes from the study instruction in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts (studyInstruction), not the plan's cited line 2892.",
+  "reachable": "yes",
+  "steps": [
+   "Sign in and click \"Study\" in the sidebar (or click the + button under the chat box and choose \"Study\").",
+   "On the page titled \"Study\", type a subject in \"What are you studying?\", keep the \"How\" choice, and click \"Start studying\".",
+   "Wait for the chat to open. Look for the \"Studying: <your subject>\" indicator above the chat, and check that the tutor teaches one idea at a time and asks a question before moving on."
+  ],
+  "where": "Sidebar > Study (also Composer + menu > Study)"
+ },
+ "S38.02": {
+  "labels": [
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "What are you studying?"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Start with a personal study plan"
+   },
+   {
+    "file": "packages/contracts/types/src/study.ts",
+    "text": "Learn it"
+   }
+  ],
+  "needs": "none",
+  "note": "The page has no separate goal screen; the typed subject and the How choice together stand in for stating a learning goal before the session starts.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Study\" in the sidebar.",
+   "Under \"Start a session\", click in the field \"What are you studying?\" and type a goal such as eigenvalues. The field stops at 200 characters.",
+   "Choose one option under \"How\": \"Learn it\", \"Practise it\" or \"Revise it\". Each shows a one-line description.",
+   "Optionally tick \"Start with a personal study plan\", then click \"Start studying\". Check that the chat opens and the first reply is about your goal."
+  ],
+  "where": "Sidebar > Study > \"What are you studying?\" and \"How\""
+ },
+ "S38.03": {
+  "labels": [
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "What are you studying?"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Course material"
+   },
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "From project:"
+   }
+  ],
+  "needs": "none (a project is needed to see the Course material menu)",
+  "note": "The plan says the user picks a subject, but the code only has a free text field with a placeholder of examples; the Course material menu appears only when the account has at least one project.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Study\" in the sidebar.",
+   "Type the subject into \"What are you studying?\". There is no list of subjects to pick from; the subject is typed.",
+   "If you have projects, open the \"Course material\" menu and pick \"From project: <name>\" (or \"None\").",
+   "Click \"Start studying\" and check that the chat title starts with the mode label and the subject, and the indicator shows \"Studying: <subject>\"."
+  ],
+  "where": "Sidebar > Study > \"What are you studying?\" (and \"Course material\" when projects exist)"
+ },
+ "S38.04": {
+  "labels": [
+   {
+    "file": "apps/web/features/study/components/StudyPage.tsx",
+    "text": "Where you are with it"
+   },
+   {
+    "file": "packages/contracts/types/src/study.ts",
+    "text": "Know it well"
+   },
+   {
+    "file": "packages/contracts/types/src/study.ts",
+    "text": "New to it"
+   }
+  ],
+  "needs": "none",
+  "note": "The level is applied through LEVEL_INSTRUCTIONS in apps/web/features/study/lib/study-session.ts, which the server sends to the model, so the tutor's behaviour change is only seen in the chat reply.",
+  "reachable": "yes",
+  "steps": [
+   "Click \"Study\" in the sidebar.",
+   "Open the \"Where you are with it\" menu. The options are \"New to it\" (default), \"Some background\" and \"Know it well\".",
+   "Pick \"Know it well\", type a subject, click \"Start studying\".",
+   "In the new chat, check that the tutor skips the basics and uses precise vocabulary, compared with a session started at \"New to it\", which defines every term first."
+  ],
+  "where": "Sidebar > Study > \"Where you are with it\""
+ }
+}

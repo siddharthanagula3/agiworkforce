@@ -1,0 +1,326 @@
+{
+ "S11.01": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/shared/components/DrawerButton.tsx",
+    "text": "Open notifications"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Notifications"
+   }
+  ],
+  "needs": "a notification in the inbox (unread) and a wide window; on phone width the code shows no link to this screen",
+  "note": "On phone width the code has no visible route to the Notifications screen; only the wide-layout bell was found.",
+  "reachable": "yes",
+  "steps": [
+   "Make the app window wide enough for the permanent sidebar (a Mac window, not a phone-width window).",
+   "Make sure there is at least one unread notification, so the bell button appears in the header.",
+   "Turn on VoiceOver and move across the header button; it should announce \"Open notifications, N unread\".",
+   "Tap the bell. On the Notifications screen, move through each notification row; each should read as one button with its title and time.",
+   "Compare with Expected: every control has a name that says what it does."
+  ],
+  "where": "Header button \"Open notifications, N unread\" (only shown in the wide layout with the permanent sidebar), then the Notifications screen"
+ },
+ "S11.02": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Device"
+   }
+  ],
+  "needs": "none",
+  "note": "Section titles are marked as headers in the code; the settings page title comes from the shared shell.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings from the side menu.",
+   "Turn on VoiceOver and use the heading navigation (VO + Command + H) to move between section titles.",
+   "Confirm the section names Device, Assistant, Cloud and Support are reached as headings.",
+   "Open a settings page such as Settings > Device > General and check its page title is a heading.",
+   "Compare with Expected: each screen has a top heading and sections are headings."
+  ],
+  "where": "Settings > Device (section title), then the other section titles Assistant, Cloud, Support"
+ },
+ "S11.05": {
+  "labels": [
+   {
+    "file": "apps/mobile/app/(app)/settings/remote-control.tsx",
+    "text": "Open Remote"
+   },
+   {
+    "file": "apps/mobile/app/(app)/companion/index.tsx",
+    "text": "Show companion walkthrough"
+   },
+   {
+    "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+    "text": "Skip walkthrough"
+   }
+  ],
+  "needs": "a paired or unpaired account with the Remote feature enabled (shown only when the companion feature is on)",
+  "note": "The walkthrough is a modal with accessibilityViewIsModal; the code shows Dismiss and Skip buttons, and onRequestClose is wired to skip, so Escape should be the same as Skip.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, go to the Remote control section and tap Connections.",
+   "Tap \"Open Remote\" (or \"Pair a computer\" if not paired).",
+   "On the Remote screen, tap the help icon labelled \"Show companion walkthrough\".",
+   "Check that the walkthrough opens as a full-screen dialog with focus inside it; press Tab (or swipe with VoiceOver) and confirm focus stays inside.",
+   "Press Escape (or use the \"Skip walkthrough\" button) and confirm the dialog closes.",
+   "Compare with Expected: focus moves into the dialog, stays there, and Escape closes it."
+  ],
+  "where": "Settings > Cloud > Remote control > Connections (row \"Open Remote\" or \"Pair a computer\"), then the Remote screen, then the help button \"Show companion walkthrough\""
+ },
+ "S11.06": {
+  "labels": [],
+  "needs": "device",
+  "note": "No code for restoring focus to the opening control was found. I searched apps/mobile for restoreFocus, returnFocus, \"focus restor\" and \"restore focus\" and got no matches.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ },
+ "S11.07": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Message input"
+   }
+  ],
+  "needs": "a signed-in account with a working AI reply and VoiceOver on",
+  "note": "The announcement text is not shown on screen; the tester has to listen for it.",
+  "reachable": "yes",
+  "steps": [
+   "Turn on VoiceOver and open a chat.",
+   "Focus the \"Message input\" field and type a short question.",
+   "Send it and let the reply finish streaming.",
+   "Listen for the short spoken announcements (a \"responding\" message when the reply starts and an outcome message when it ends) without the focus moving.",
+   "Compare with Expected: a short announcement is heard and focus stays where it was."
+  ],
+  "where": "Chat screen > \"Message input\" field > send a message and wait for the reply"
+ },
+ "S11.09": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx",
+    "text": "Show agent activity"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Allow"
+   },
+   {
+    "file": "packages/contracts/types/src/tool-approval-policy.ts",
+    "text": "Deny"
+   }
+  ],
+  "needs": "a signed-in account and a tool request that needs approval",
+  "note": "The approval buttons use the shared labels; the exact button set depends on the approval scope shown.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat in which the agent runs a tool that needs approval.",
+   "Tap the agent activity line whose label starts with \"Show agent activity\" to expand it.",
+   "Read the tool step: it should say its state (running, done, failed or waiting for approval).",
+   "For a step waiting for approval, check the buttons labelled \"Allow\" and \"Deny\" and the \"Decision for\" group.",
+   "Compare with Expected: each step's state is announced and approve/deny controls have labels."
+  ],
+  "where": "Chat screen > a message with agent activity > \"Show agent activity\" > the tool step or approval row > \"Allow\" / \"Deny\" buttons"
+ },
+ "S11.12": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Appearance"
+   }
+  ],
+  "needs": "a device with text-size control; the text-size option itself is not in the app",
+  "note": "The code caps font scaling at maxFontSizeMultiplier 2 on settings rows and the chat list title, but there is no in-app text-size control to find.",
+  "reachable": "yes",
+  "steps": [
+   "Change the device text size to a larger setting (the system Text Size or Larger Text option).",
+   "Reopen the app and go to Settings > Device > Appearance.",
+   "Check that the row labels and values wrap or stay on one line, with values capped at about 200%.",
+   "Open the chat list (Chats) and check the header title and subtitle are still readable.",
+   "Compare with Expected: text grows up to about 200% and nothing is cut off."
+  ],
+  "where": "Settings > Device > Appearance (the text size comes from the device's own text-size setting, not an in-app control)"
+ },
+ "S11.14": {
+  "labels": [],
+  "needs": "a device that lets the tester turn on Reduce Motion",
+  "note": "The app reads the OS reduce-motion flag through AccessibilityInfo; I did not find a visible in-app switch for it.",
+  "reachable": "not_from_ui",
+  "steps": [
+   "Turn on Reduce Motion in the device accessibility settings.",
+   "Open the app and go to a screen with a loading or offline indicator.",
+   "Check that looping or travelling animations stop or are replaced by a static display.",
+   "Compare with Expected: the animations stop or change while Reduce Motion is on."
+  ],
+  "where": "Device Reduce Motion setting (not an app control); effect seen on looping or moving animations in the app"
+ },
+ "S11.15": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Voice"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/voice/index.tsx",
+    "text": "Open Voice Companion"
+   },
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Show captions"
+   }
+  ],
+  "needs": "a microphone and a device with an on-device speech recognizer; the \"Open Voice Companion\" row is hidden otherwise",
+  "note": "Live voice is also available inside a chat through the chat voice composer, but I did not confirm the button that starts it.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Device > Voice.",
+   "Tap \"Open Voice Companion\" (this row appears only when the on-device recognizer is available).",
+   "Start a voice conversation and speak.",
+   "Tap the captions button (labelled \"Show captions\" or \"Hide captions\") in the voice bar.",
+   "Compare with Expected: spoken words appear as live captions while the conversation runs."
+  ],
+  "where": "Settings > Device > Voice > \"Open Voice Companion\", then the live voice bar button \"Show captions\" / \"Hide captions\""
+ },
+ "S11.16": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/voice/components/LiveVoiceBar.tsx",
+    "text": "Show captions"
+   }
+  ],
+  "needs": "a microphone and an on-device speech recognizer",
+  "note": "The code shows the transcript while captions are on, but I did not confirm that the voice turns are saved into the chat history.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Device > Voice and tap \"Open Voice Companion\".",
+   "Turn captions on (\"Show captions\") and have a short spoken exchange.",
+   "Read the transcript area (testID live-voice-transcript) that lists each turn.",
+   "Go back to the chat that the voice session came from and look for the conversation text.",
+   "Compare with Expected: a readable text transcript is kept with the chat."
+  ],
+  "where": "Settings > Device > Voice > \"Open Voice Companion\", then the live transcript shown under the voice bar when captions are on"
+ },
+ "S11.19": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/general/index.tsx",
+    "text": "App language"
+   }
+  ],
+  "needs": "a device or app setting that lets the app use a right-to-left language",
+  "note": "The code applies the right-to-left layout through applyLayoutDirection; I did not confirm which languages are offered or whether a restart is needed.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings > Device > General.",
+   "Tap \"App language\" and choose a right-to-left language.",
+   "Go back and look at the app layout: menus, rows and text should mirror (text aligned to the right, start and end swapped).",
+   "If the layout does not change, check whether the app asks you to restart it.",
+   "Compare with Expected: the whole layout mirrors correctly."
+  ],
+  "where": "Settings > Device > General > \"App language\""
+ },
+ "S11.20": {
+  "labels": [],
+  "needs": "a signed-in account and a chat that can show mixed-direction text",
+  "note": "The code applies right-to-left style per paragraph (directionStyle in MessageContentRenderer); I did not find a left-to-right paragraph style of dir=auto, so the English paragraph may depend on the default.",
+  "reachable": "yes",
+  "steps": [
+   "Open a chat and send a message that has an Arabic or Hebrew paragraph and an English paragraph (or ask for a reply that contains both).",
+   "Look at each paragraph in the message bubble.",
+   "Check that the Arabic or Hebrew paragraph is right-aligned and the English paragraph is left-aligned.",
+   "Compare with Expected: each paragraph is shown in its own direction."
+  ],
+  "where": "Chat screen > a message bubble that mixes Arabic or Hebrew text with English text"
+ },
+ "S11.21": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+    "text": "Message input"
+   }
+  ],
+  "needs": "a Japanese, Chinese or Korean input method on the keyboard",
+  "note": "The code shows a multiline field with blurOnSubmit false, and I found no explicit composition handling; Enter is not wired to send in this file.",
+  "reachable": "yes",
+  "steps": [
+   "Switch the Mac keyboard to a Japanese, Chinese or Korean input method.",
+   "Open a chat, focus the \"Message input\" field and type a phrase so it is still being converted (underlined).",
+   "Press Enter to confirm the conversion.",
+   "Check that the message is not sent and the composed text stays in the field.",
+   "Compare with Expected: Enter confirms the composition and never sends the message."
+  ],
+  "where": "Chat screen > \"Message input\" field (a Japanese, Chinese or Korean keyboard)"
+ },
+ "S11.22": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Usage"
+   }
+  ],
+  "needs": "a cloud account with credits that have an expiry date (for the date to appear)",
+  "note": "Dates are formatted with the device locale in cloud-usage; the context-window number is formatted by Intl in plans.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to the Cloud section, then tap Usage.",
+   "Look at any date shown, such as \"Expires ...\" or \"Next expiry ...\".",
+   "Look at the numbers, such as counts with thousands separators.",
+   "Change the device region or language in the device settings, reopen the screen and compare the date and number format.",
+   "Compare with Expected: dates and numbers follow the user's locale."
+  ],
+  "where": "Settings > Cloud > Usage"
+ },
+ "S11.23": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/screenTitles.ts",
+    "text": "Subscription"
+   },
+   {
+    "file": "apps/mobile/src/features/settings/cloud-billing/index.tsx",
+    "text": "Current Plan"
+   }
+  ],
+  "needs": "a store account (App Store or Google Play); prices come from the store, so they can show only in an app-store build",
+  "note": "Price text comes from the store (nativeIap.priceFor) and is not formatted in the app; the sandbox store may not show prices on a Mac.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings and go to the Account section, then tap Subscription.",
+   "Look at the \"Current Plan\" section and any plan button showing a price, such as \"Upgrade \u00b7 price\".",
+   "Compare the currency symbol and number format with the device region.",
+   "Compare with Expected: the price shows the right currency symbol and number format."
+  ],
+  "where": "Settings > Account > Subscription"
+ },
+ "S11.24": {
+  "labels": [
+   {
+    "file": "apps/mobile/src/features/settings/index.tsx",
+    "text": "Reflect"
+   },
+   {
+    "file": "apps/mobile/app/(app)/settings/reflect.tsx",
+    "text": "{{count}} follow-up"
+   }
+  ],
+  "needs": "a cloud account with some recap data (ongoing work with follow-ups)",
+  "note": "Other plural strings are in app/(app)/settings/memory-import.tsx, app/(app)/scan.tsx and ArtifactChangesView.tsx, but their entry screens were not traced.",
+  "reachable": "yes",
+  "steps": [
+   "Open Settings, go to the Cloud section and tap Reflect.",
+   "Look at the ongoing-work lines that show a follow-up count.",
+   "Find a line with exactly one follow-up and one with more than one.",
+   "Compare with Expected: \"1 follow-up\" and \"2 follow-ups\" follow the language's plural rules."
+  ],
+  "where": "Settings > Cloud > Reflect (the follow-up count line in the recap)"
+ },
+ "S11.27": {
+  "labels": [],
+  "needs": "device",
+  "note": "The ledger has no code location for this item and I did not find a specific long-label or translated-copy layout check in apps/mobile; I did not search exhaustively.",
+  "reachable": "unsure",
+  "steps": [],
+  "where": ""
+ }
+}
