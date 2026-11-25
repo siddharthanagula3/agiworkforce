@@ -711,6 +711,13 @@ async fn approve_command_under_policy(
                             );
                         }
 
+                        if !std::io::IsTerminal::is_terminal(&std::io::stderr()) {
+                            return Ok(Err(ToolResult {
+                                tool_name: tool_name.to_string(),
+                                success: false,
+                                output: "This command did not run because approval requires an interactive terminal. No user decision was received. Skip this command; repeating it cannot obtain approval here. Continue any independently requested work with the available tools. If this was a baseline check for an edit, read and edit the files, then request the relevant test alone after the edit. Each command goes through the normal permission check.".to_string(),
+                            }));
+                        }
                         let confirmed = crate::output::confirm(prompt_msg, default);
 
                         if !confirmed {
@@ -1320,6 +1327,38 @@ mod tests {
 
         assert!(result.success, "{}", result.output);
         assert!(result.output.contains("only-here.txt"), "{}", result.output);
+    }
+
+    #[tokio::test]
+    async fn unavailable_approval_for_a_combined_command_does_not_deny_later_tests() {
+        if std::io::IsTerminal::is_terminal(&std::io::stderr()) {
+            return;
+        }
+        let policy = agiworkforce_execpolicy::Policy::empty();
+        let composite = approve_command_under_policy(
+            &policy,
+            "run_command",
+            "git status --short && node --test",
+            Vec::new(),
+            true,
+            None,
+        )
+        .await
+        .expect("policy evaluation")
+        .expect_err("unattended compound command");
+        assert!(!composite.success);
+        assert!(composite.output.contains("No user decision was received"));
+        let standalone = approve_command_under_policy(
+            &policy,
+            "run_command",
+            "node --test retry.test.cjs",
+            Vec::new(),
+            false,
+            None,
+        )
+        .await
+        .expect("policy evaluation");
+        assert!(standalone.is_ok());
     }
 
     #[tokio::test]

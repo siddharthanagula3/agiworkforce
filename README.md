@@ -76,7 +76,7 @@ description of what runs today, not a shipped-feature claim.
 | Mobile            | 0.0.1   | On-device Local chat exists in the codebase, but no build has reached TestFlight, Play Internal Testing, or a store listing. In-app purchase is fail-closed.                                            |
 | Web               | 0.0.1   | The deepest surface: product site, chat, and billing run in production.                                                                                                                                 |
 | Desktop           | 0.0.1   | Electron is the only public Desktop product: a managed-cloud shell with approved folders and computer use. No current public installer has been published; retained Tauri code is not a public product. |
-| CLI               | 0.0.1   | Interactive TUI and one-shot mode. `release-cli.yml` publishes a signed release from a `v-cli-<semver>` tag equal to the `Cargo.toml` version; it has not completed a run yet.                          |
+| CLI               | 0.0.2   | Interactive TUI and one-shot mode. `release-cli.yml` publishes a signed release from a `v-cli-<semver>` tag equal to the `Cargo.toml` version; it has not completed a run yet.                          |
 | Chrome Extension  | 0.0.6   | Manifest V3 with browser automation and a side panel. Not yet published to the Chrome Web Store.                                                                                                        |
 | VS Code Extension | 0.0.2   | Local release candidate. The Marketplace currently serves 0.0.1. The extension uses the AGI CLI.                                                                                                        |
 

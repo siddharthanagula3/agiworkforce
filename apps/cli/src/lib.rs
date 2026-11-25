@@ -8126,10 +8126,11 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
     let effective_auto_approve_safe = resolved_permissions.auto_approve_safe;
     let launch_permission_mode = cli_options::LaunchPermissionMode {
         mode: resolved_permissions.mode,
-        requested: cli
-            .mode
-            .or(normalized_cli_options.permission_mode)
-            .is_some(),
+        requested: cli.dangerously_skip_permissions
+            || cli
+                .mode
+                .or(normalized_cli_options.permission_mode)
+                .is_some(),
         repository: app_config.source.repository_permission_mode,
         explicit_yes: cli.yes,
         explicit_skip: cli.dangerously_skip_permissions,

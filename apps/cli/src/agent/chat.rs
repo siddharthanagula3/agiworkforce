@@ -1863,6 +1863,32 @@ impl TurnHostAdapter<'_> {
         Some(std::sync::Arc::new(catalog))
     }
 
+    fn offer_discovered_tools(&mut self, name: &str, args: &serde_json::Value, succeeded: bool) {
+        if !succeeded || name != "tool_search" {
+            return;
+        }
+        let args = value_to_legacy_args(args);
+        let Some(query) = args.get("query") else {
+            return;
+        };
+        let max = args
+            .get("max_results")
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(crate::tool_search::DEFAULT_MAX_RESULTS);
+        let Some(catalog) = self.tool_search_catalog_for(name) else {
+            return;
+        };
+        for tool in crate::tool_search::matching_tool_definitions(query, &catalog, max) {
+            if !self
+                .tool_defs
+                .iter()
+                .any(|offered| offered.name == tool.name)
+            {
+                self.tool_defs.push(tool.clone());
+            }
+        }
+    }
+
     async fn spawn_teammate(
         &mut self,
         args: &std::collections::HashMap<String, String>,
@@ -3270,6 +3296,7 @@ impl TurnHost for TurnHostAdapter<'_> {
         prepared: PreparedCall,
         result: ExecResult,
     ) -> ResultBlock {
+        self.offer_discovered_tools(&prepared.name, &prepared.args, result.ok);
         let hcfg = self.session.hooks_config.clone();
         hooks::run_hooks(
             &hcfg,
@@ -3323,6 +3350,7 @@ impl TurnHost for TurnHostAdapter<'_> {
         args: serde_json::Value,
         result: ExecResult,
     ) -> ResultBlock {
+        self.offer_discovered_tools(&call.name, &args, result.ok);
         let hcfg = self.session.hooks_config.clone();
         let post_results = hooks::run_hooks(
             &hcfg,
@@ -4392,7 +4420,7 @@ mod tests {
                 .collect::<HashSet<_>>();
             assert!(available_tool_names.contains("tool_search"));
             assert!(!available_tool_names.contains("write_file"));
-            let adapter = TurnHostAdapter {
+            let mut adapter = TurnHostAdapter {
                 session: &mut session,
                 config: &config,
                 tool_defs,
@@ -4418,6 +4446,30 @@ mod tests {
                 "allowed {allowed:?}, disallowed {disallowed:?}"
             );
             assert!(adapter.tool_search_catalog_for("read_file").is_none());
+            let query = serde_json::json!({"query": "select:update_plan,write_file"});
+            assert!(!adapter
+                .tool_defs
+                .iter()
+                .any(|tool| tool.name == "update_plan"));
+            adapter.offer_discovered_tools("tool_search", &query, false);
+            assert!(!adapter
+                .tool_defs
+                .iter()
+                .any(|tool| tool.name == "update_plan"));
+            adapter.offer_discovered_tools("tool_search", &query, true);
+            adapter.offer_discovered_tools("tool_search", &query, true);
+            assert_eq!(
+                adapter
+                    .tool_defs
+                    .iter()
+                    .filter(|tool| tool.name == "update_plan")
+                    .count(),
+                usize::from(allowed.is_empty())
+            );
+            assert!(!adapter
+                .tool_defs
+                .iter()
+                .any(|tool| tool.name == "write_file"));
         }
     }
 
