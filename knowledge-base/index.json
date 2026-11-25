@@ -1,6 +1,6 @@
 {
  "built_on": "2026-11-24",
- "built_at_commit": "8213c7ea65",
+ "built_at_commit": "16f70b9dab",
  "content_read_on": "2026-11-24",
  "content_read_at_commit": "f51d16e747",
  "documents": [
@@ -1209,7 +1209,7 @@
    "type": "feature",
    "title": "Skill, template and assistant directories",
    "path": "20-features/002-public-website-and-acquisition-screens/F002-06-skill-template-and-assistant-directories.md",
-   "words": 2692,
+   "words": 2694,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -1549,7 +1549,7 @@
    "type": "feature",
    "title": "Workspace admin, developer console and help",
    "path": "20-features/004-signed-in-application-destinations/F004-14-workspace-admin-developer-console-and-help.md",
-   "words": 3486,
+   "words": 3488,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -1669,7 +1669,7 @@
    "type": "feature",
    "title": "Profile, help and upgrade menus",
    "path": "20-features/005-application-shell-and-navigation-components/F005-10-profile-help-and-upgrade-menus.md",
-   "words": 2263,
+   "words": 2265,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -1749,7 +1749,7 @@
    "type": "feature",
    "title": "Row, menu, dialog and form sizes",
    "path": "20-features/006-visual-foundations-and-spacing-conventions/F006-05-row-menu-dialog-and-form-sizes.md",
-   "words": 2067,
+   "words": 2069,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -1759,7 +1759,7 @@
    "type": "feature",
    "title": "Buttons and icons",
    "path": "20-features/006-visual-foundations-and-spacing-conventions/F006-06-buttons-and-icons.md",
-   "words": 2071,
+   "words": 2073,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -1949,7 +1949,7 @@
    "type": "feature",
    "title": "Action buttons",
    "path": "20-features/008-basic-interactive-elements/F008-01-action-buttons.md",
-   "words": 3227,
+   "words": 3229,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -1979,7 +1979,7 @@
    "type": "feature",
    "title": "Switches, checkboxes and toggle buttons",
    "path": "20-features/008-basic-interactive-elements/F008-04-switches-checkboxes-and-toggle-buttons.md",
-   "words": 2402,
+   "words": 2404,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -2069,7 +2069,7 @@
    "type": "area",
    "title": "Basic interactive elements",
    "path": "20-features/008-basic-interactive-elements/README.md",
-   "words": 1597,
+   "words": 1601,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -2119,7 +2119,7 @@
    "type": "feature",
    "title": "Device, permission-scope and approval controls",
    "path": "20-features/009-compound-interface-components/F009-05-device-permission-scope-and-approval-controls.md",
-   "words": 3091,
+   "words": 3093,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -2139,7 +2139,7 @@
    "type": "feature",
    "title": "Library: file browser, folders, grid, gallery and image comparison",
    "path": "20-features/009-compound-interface-components/F009-07-library-file-browser-folders-grid-gallery-and-imag.md",
-   "words": 3935,
+   "words": 3937,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -2199,7 +2199,7 @@
    "type": "feature",
    "title": "Create and rename",
    "path": "20-features/010-modal-and-dialog-inventory/F010-01-create-and-rename.md",
-   "words": 3366,
+   "words": 3368,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -2209,7 +2209,7 @@
    "type": "feature",
    "title": "Move and duplicate",
    "path": "20-features/010-modal-and-dialog-inventory/F010-02-move-and-duplicate.md",
-   "words": 2638,
+   "words": 2640,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -2219,7 +2219,7 @@
    "type": "feature",
    "title": "Archive and delete",
    "path": "20-features/010-modal-and-dialog-inventory/F010-03-archive-and-delete.md",
-   "words": 3219,
+   "words": 3221,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -2249,7 +2249,7 @@
    "type": "feature",
    "title": "Sources, uploads and screen share",
    "path": "20-features/010-modal-and-dialog-inventory/F010-06-sources-uploads-and-screen-share.md",
-   "words": 3317,
+   "words": 3319,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -2329,7 +2329,7 @@
    "type": "feature",
    "title": "Screen-reader names, labels and headings",
    "path": "20-features/011-accessibility-and-localization-components/F011-01-screen-reader-names-labels-and-headings.md",
-   "words": 3399,
+   "words": 3403,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -2509,7 +2509,7 @@
    "type": "feature",
    "title": "Image and video entries",
    "path": "20-features/012-new-chat-experience/F012-06-image-and-video-entries.md",
-   "words": 2290,
+   "words": 2294,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -3069,7 +3069,7 @@
    "type": "feature",
    "title": "Sending state: queued, pending, draft",
    "path": "20-features/016-user-message-components/F016-09-sending-state-queued-pending-draft.md",
-   "words": 4805,
+   "words": 4807,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -3719,7 +3719,7 @@
    "type": "feature",
    "title": "Work tasks and routines",
    "path": "20-features/023-project-workspace/F023-06-work-tasks-and-routines.md",
-   "words": 2411,
+   "words": 2413,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -3799,7 +3799,7 @@
    "type": "feature",
    "title": "Search, sort and layout",
    "path": "20-features/024-library-and-file-management-experience/F024-04-search-sort-and-layout.md",
-   "words": 2146,
+   "words": 2148,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -3849,7 +3849,7 @@
    "type": "feature",
    "title": "Recently deleted and restore",
    "path": "20-features/024-library-and-file-management-experience/F024-09-recently-deleted-and-restore.md",
-   "words": 2872,
+   "words": 2874,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -4059,7 +4059,7 @@
    "type": "feature",
    "title": "Copy and export",
    "path": "20-features/026-artifact-container-and-panel/F026-06-copy-and-export.md",
-   "words": 2455,
+   "words": 2457,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -4069,7 +4069,7 @@
    "type": "feature",
    "title": "Sharing and visibility",
    "path": "20-features/026-artifact-container-and-panel/F026-07-sharing-and-visibility.md",
-   "words": 4876,
+   "words": 4882,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -4219,7 +4219,7 @@
    "type": "feature",
    "title": "Export and save out",
    "path": "20-features/027-document-and-writing-editor/F027-11-export-and-save-out.md",
-   "words": 3390,
+   "words": 3392,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -4319,7 +4319,7 @@
    "type": "feature",
    "title": "Download and export",
    "path": "20-features/028-code-canvas-and-application-preview/F028-08-download-and-export.md",
-   "words": 2929,
+   "words": 2931,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -4519,7 +4519,7 @@
    "type": "feature",
    "title": "Add, duplicate, move and delete slides",
    "path": "20-features/030-presentation-workspace/F030-02-add-duplicate-move-and-delete-slides.md",
-   "words": 2212,
+   "words": 2214,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -4539,7 +4539,7 @@
    "type": "feature",
    "title": "Slide content editing and layout",
    "path": "20-features/030-presentation-workspace/F030-04-slide-content-editing-and-layout.md",
-   "words": 2361,
+   "words": 2365,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -4559,7 +4559,7 @@
    "type": "feature",
    "title": "Speaker notes and speaker view",
    "path": "20-features/030-presentation-workspace/F030-06-speaker-notes-and-speaker-view.md",
-   "words": 1685,
+   "words": 1689,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -4989,7 +4989,7 @@
    "type": "feature",
    "title": "Report and moderation",
    "path": "20-features/033-generated-sites-and-published-applications/F033-09-report-and-moderation.md",
-   "words": 3106,
+   "words": 3110,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -5019,7 +5019,7 @@
    "type": "feature",
    "title": "Find inside the open chat",
    "path": "20-features/034-search-experiences/F034-01-find-inside-the-open-chat.md",
-   "words": 2901,
+   "words": 2903,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -5089,7 +5089,7 @@
    "type": "feature",
    "title": "Source cards, citations and source lists",
    "path": "20-features/034-search-experiences/F034-08-source-cards-citations-and-source-lists.md",
-   "words": 4017,
+   "words": 4023,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -5769,7 +5769,7 @@
    "type": "feature",
    "title": "Language preference",
    "path": "20-features/040-instructions-preferences-and-personal-style/F040-04-language-preference.md",
-   "words": 1896,
+   "words": 1898,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -5789,7 +5789,7 @@
    "type": "feature",
    "title": "Agent instructions (CLI)",
    "path": "20-features/040-instructions-preferences-and-personal-style/F040-06-agent-instructions-cli.md",
-   "words": 2111,
+   "words": 2115,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -6169,7 +6169,7 @@
    "type": "feature",
    "title": "Image region, crop and annotated answers (not built)",
    "path": "20-features/043-image-and-visual-understanding/F043-08-image-region-crop-and-annotated-answers-not-built.md",
-   "words": 2510,
+   "words": 2512,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -6309,7 +6309,7 @@
    "type": "feature",
    "title": "Safety, reporting and AI labels",
    "path": "20-features/044-image-generation-studio/F044-12-safety-reporting-and-ai-labels.md",
-   "words": 2978,
+   "words": 2980,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -6649,7 +6649,7 @@
    "type": "feature",
    "title": "Compare and history",
    "path": "20-features/047-video-editing-and-media-continuity/F047-08-compare-and-history.md",
-   "words": 2524,
+   "words": 2526,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -6839,7 +6839,7 @@
    "type": "feature",
    "title": "Choose the dictation language",
    "path": "20-features/049-dictation-transcription-and-recording/F049-02-choose-the-dictation-language.md",
-   "words": 2374,
+   "words": 2376,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -7009,7 +7009,7 @@
    "type": "feature",
    "title": "Music generation and style",
    "path": "20-features/050-audio-overviews-speech-generation-and-music/F050-07-music-generation-and-style.md",
-   "words": 2218,
+   "words": 2220,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -7879,7 +7879,7 @@
    "type": "feature",
    "title": "Images and video",
    "path": "20-features/057-tool-catalog-and-invocation-experience/F057-06-images-and-video.md",
-   "words": 2542,
+   "words": 2544,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -8269,7 +8269,7 @@
    "type": "feature",
    "title": "Results, deliverables and partial outcome",
    "path": "20-features/060-agentic-work-product/F060-10-results-deliverables-and-partial-outcome.md",
-   "words": 3284,
+   "words": 3286,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -8309,7 +8309,7 @@
    "type": "feature",
    "title": "Create and manage agents",
    "path": "20-features/061-persistent-agents-and-agent-rosters/F061-02-create-and-manage-agents.md",
-   "words": 3642,
+   "words": 3644,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -8329,7 +8329,7 @@
    "type": "feature",
    "title": "Shared tools, skills and per-agent limits",
    "path": "20-features/061-persistent-agents-and-agent-rosters/F061-04-shared-tools-skills-and-per-agent-limits.md",
-   "words": 2952,
+   "words": 2956,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -8989,7 +8989,7 @@
    "type": "feature",
    "title": "Work from an issue or a team mention",
    "path": "20-features/067-coding-capabilities-and-developer-workflows/F067-08-work-from-an-issue-or-a-team-mention.md",
-   "words": 2840,
+   "words": 2842,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9069,7 +9069,7 @@
    "type": "feature",
    "title": "Answer approvals and drive a session from another client",
    "path": "20-features/068-session-continuity-and-remote-session-product/F068-03-answer-approvals-and-drive-a-session-from-another.md",
-   "words": 2723,
+   "words": 2725,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9089,7 +9089,7 @@
    "type": "feature",
    "title": "Hand a local session to the cloud",
    "path": "20-features/068-session-continuity-and-remote-session-product/F068-05-hand-a-local-session-to-the-cloud.md",
-   "words": 3069,
+   "words": 3071,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9209,7 +9209,7 @@
    "type": "feature",
    "title": "Microphone, camera and screen access",
    "path": "20-features/069-web-application/F069-05-microphone-camera-and-screen-access.md",
-   "words": 2943,
+   "words": 2947,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9339,7 +9339,7 @@
    "type": "feature",
    "title": "Screen capture and computer use",
    "path": "20-features/070-desktop-application/F070-05-screen-capture-and-computer-use.md",
-   "words": 3314,
+   "words": 3328,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9349,7 +9349,7 @@
    "type": "feature",
    "title": "Local folders and files",
    "path": "20-features/070-desktop-application/F070-06-local-folders-and-files.md",
-   "words": 3115,
+   "words": 3131,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9449,7 +9449,7 @@
    "type": "feature",
    "title": "Message actions (tap buttons and long-press menu)",
    "path": "20-features/071-mobile-application/F071-03-message-actions-tap-buttons-and-long-press-menu.md",
-   "words": 2818,
+   "words": 2820,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9509,7 +9509,7 @@
    "type": "feature",
    "title": "Local models and device storage",
    "path": "20-features/071-mobile-application/F071-09-local-models-and-device-storage.md",
-   "words": 2719,
+   "words": 2721,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9709,7 +9709,7 @@
    "type": "feature",
    "title": "Context from the editor (open file, selection, problems, unsaved text)",
    "path": "20-features/073-vs-code-and-ide-extension/F073-02-context-from-the-editor-open-file-selection-proble.md",
-   "words": 2239,
+   "words": 2241,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9739,7 +9739,7 @@
    "type": "feature",
    "title": "Review and apply changes in the editor diff",
    "path": "20-features/073-vs-code-and-ide-extension/F073-05-review-and-apply-changes-in-the-editor-diff.md",
-   "words": 2081,
+   "words": 2083,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -9749,7 +9749,7 @@
    "type": "feature",
    "title": "Previous sessions and session search",
    "path": "20-features/073-vs-code-and-ide-extension/F073-06-previous-sessions-and-session-search.md",
-   "words": 2434,
+   "words": 2438,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10159,7 +10159,7 @@
    "type": "feature",
    "title": "Live refresh after a change",
    "path": "20-features/078-ui-gating-and-adaptation-components/F078-08-live-refresh-after-a-change.md",
-   "words": 4948,
+   "words": 4950,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10169,7 +10169,7 @@
    "type": "feature",
    "title": "Other items in UI gating and adaptation components",
    "path": "20-features/078-ui-gating-and-adaptation-components/F078-99-other-items.md",
-   "words": 2159,
+   "words": 2161,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10179,7 +10179,7 @@
    "type": "area",
    "title": "UI gating and adaptation components",
    "path": "20-features/078-ui-gating-and-adaptation-components/README.md",
-   "words": 2033,
+   "words": 2035,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10279,7 +10279,7 @@
    "type": "feature",
    "title": "Specialist workers with their own model",
    "path": "20-features/079-routing-and-model-neutral-orchestration/F079-10-specialist-workers-with-their-own-model.md",
-   "words": 2337,
+   "words": 2341,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10559,7 +10559,7 @@
    "type": "feature",
    "title": "Trial terms",
    "path": "20-features/083-billing-and-subscription-screens/F083-05-trial-terms.md",
-   "words": 2604,
+   "words": 2606,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10909,7 +10909,7 @@
    "type": "feature",
    "title": "Sign-in methods and password",
    "path": "20-features/086-security-and-connected-access-settings/F086-01-sign-in-methods-and-password.md",
-   "words": 3366,
+   "words": 3370,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10949,7 +10949,7 @@
    "type": "feature",
    "title": "Active sessions and sign-out",
    "path": "20-features/086-security-and-connected-access-settings/F086-05-active-sessions-and-sign-out.md",
-   "words": 2899,
+   "words": 2901,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -10999,7 +10999,7 @@
    "type": "feature",
    "title": "Agent approval rules",
    "path": "20-features/086-security-and-connected-access-settings/F086-10-agent-approval-rules.md",
-   "words": 3323,
+   "words": 3329,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -11199,7 +11199,7 @@
    "type": "feature",
    "title": "Bug reports and diagnostic bundle",
    "path": "20-features/088-support-trust-and-policy-product/F088-03-bug-reports-and-diagnostic-bundle.md",
-   "words": 2916,
+   "words": 2918,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -11529,7 +11529,7 @@
    "type": "feature",
    "title": "Attempt record for each answer",
    "path": "20-features/090-conversation-and-synchronization-components/F090-09-attempt-record-for-each-answer.md",
-   "words": 2189,
+   "words": 2191,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -11729,7 +11729,7 @@
    "type": "feature",
    "title": "Approvals and pauses",
    "path": "20-features/092-tool-calling-and-agent-loop-components/F092-05-approvals-and-pauses.md",
-   "words": 3540,
+   "words": 3542,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12109,7 +12109,7 @@
    "type": "feature",
    "title": "Delete, trash and restore",
    "path": "20-features/095-file-and-library-components/F095-08-delete-trash-and-restore.md",
-   "words": 3334,
+   "words": 3336,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12309,7 +12309,7 @@
    "type": "feature",
    "title": "Let other tools use this product",
    "path": "20-features/098-integration-and-extensibility-components/F098-05-let-other-tools-use-this-product.md",
-   "words": 2056,
+   "words": 2060,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12349,7 +12349,7 @@
    "type": "feature",
    "title": "Plugin trust and organization rollout",
    "path": "20-features/098-integration-and-extensibility-components/F098-09-plugin-trust-and-organization-rollout.md",
-   "words": 3548,
+   "words": 3550,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12419,7 +12419,7 @@
    "type": "feature",
    "title": "Plans, prices and what a plan allows",
    "path": "20-features/100-commercial-and-administrative-components/F100-01-plans-prices-and-what-a-plan-allows.md",
-   "words": 3857,
+   "words": 3859,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12649,7 +12649,7 @@
    "type": "feature",
    "title": "Cloud chat answers, streamed",
    "path": "20-features/102-runtime-inventory/F102-01-cloud-chat-answers-streamed.md",
-   "words": 3298,
+   "words": 3300,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12689,7 +12689,7 @@
    "type": "feature",
    "title": "Desktop app shell and its local helper",
    "path": "20-features/102-runtime-inventory/F102-05-desktop-app-shell-and-its-local-helper.md",
-   "words": 3000,
+   "words": 3002,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12779,7 +12779,7 @@
    "type": "feature",
    "title": "Account and sign-in identity",
    "path": "20-features/103-data-and-persistence-categories/F103-01-account-and-sign-in-identity.md",
-   "words": 3103,
+   "words": 3105,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12809,7 +12809,7 @@
    "type": "feature",
    "title": "Projects, files and Library",
    "path": "20-features/103-data-and-persistence-categories/F103-04-projects-files-and-library.md",
-   "words": 2666,
+   "words": 2668,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -12979,7 +12979,7 @@
    "type": "feature",
    "title": "Accounts, payments, encryption keys, monitoring and release builds",
    "path": "20-features/104-named-technology-options-not-claims-about-competitor-interna/F104-10-accounts-payments-encryption-keys-monitoring-and-r.md",
-   "words": 2821,
+   "words": 2823,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -13049,7 +13049,7 @@
    "type": "feature",
    "title": "Try a request in the browser",
    "path": "20-features/105-developer-platform-and-console/F105-05-try-a-request-in-the-browser.md",
-   "words": 2555,
+   "words": 2557,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -13699,7 +13699,7 @@
    "type": "feature",
    "title": "Voice requests that start work or make documents",
    "path": "20-features/110-cross-product-experiences-to-include-in-the-product-map/F110-05-voice-requests-that-start-work-or-make-documents.md",
-   "words": 3444,
+   "words": 3446,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -14869,7 +14869,7 @@
    "type": "'setup'",
    "title": "'Running the Web app locally'",
    "path": "70-qa/setup/web.md",
-   "words": 580,
+   "words": 556,
    "has_metadata": true,
    "last_reviewed": "'2026-11-24'",
    "revision": "'f51d16e747'"
@@ -14909,7 +14909,7 @@
    "type": "'qa-method'",
    "title": "'Where things stand'",
    "path": "70-qa/start-here/where-things-stand.md",
-   "words": 637,
+   "words": 720,
    "has_metadata": true,
    "last_reviewed": "'2026-11-24'",
    "revision": "'f51d16e747'"
@@ -18659,7 +18659,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 4. Signed-in application destinations",
    "path": "70-qa/test-plans/web/004-signed-in-application-destinations.md",
-   "words": 4978,
+   "words": 4979,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -18769,7 +18769,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 15. Model-selector interface",
    "path": "70-qa/test-plans/web/015-model-selector-interface.md",
-   "words": 4252,
+   "words": 4254,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -18789,7 +18789,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 17. Assistant-message components",
    "path": "70-qa/test-plans/web/017-assistant-message-components.md",
-   "words": 4465,
+   "words": 4467,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -18799,7 +18799,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 18. Conversation-level controls",
    "path": "70-qa/test-plans/web/018-conversation-level-controls.md",
-   "words": 2724,
+   "words": 2725,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -18809,7 +18809,7 @@
    "type": "test-plan",
    "title": "Web \u00b7 19. Streaming and response-presentation states",
    "path": "70-qa/test-plans/web/019-streaming-and-response-presentation-states.md",
-   "words": 3672,
+   "words": 3673,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20559,7 +20559,7 @@
    "type": "'meta'",
    "title": "'Maintenance guide'",
    "path": "90-meta/maintenance-guide.md",
-   "words": 1236,
+   "words": 1242,
    "has_metadata": true,
    "last_reviewed": "'2026-11-24'",
    "revision": ""
@@ -20569,7 +20569,7 @@
    "type": "meta",
    "title": "Project documents found out of date",
    "path": "90-meta/outdated-documents.md",
-   "words": 6576,
+   "words": 6574,
    "has_metadata": true,
    "last_reviewed": "2026-11-24",
    "revision": "f51d16e747"
@@ -20599,7 +20599,7 @@
    "type": "'readme'",
    "title": "'AGI Workforce knowledge base'",
    "path": "README.md",
-   "words": 1078,
+   "words": 1130,
    "has_metadata": true,
    "last_reviewed": "'2026-11-24'",
    "revision": ""

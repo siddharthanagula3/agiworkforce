@@ -134,7 +134,7 @@ o = [front_matter(id="REQ-open-product-choices", type="requirements", title="Ope
      "- **PR-3 and plan logic outside the subscription system.** Places where an app decides plan rules itself are listed in [SYS-subscriptions-entitlements-and-usage](../40-systems/subscriptions-entitlements-and-usage.md).",
      "- **PR-1 and model promotion.** Several live model defaults were promoted without the evaluation gate the rules require. See [SYS-model-catalog-and-routing](../40-systems/model-catalog-and-routing.md).", "",
      "## Asked of the owner on 2026-11-24, not answered", "",
-     "- May view-only members chat in a project shared with them? (The fix branch allows it.)", "- Should idle sign-out be off by default? (The fix branch sets it to Never.)", "- Should a paid plan granted by hand never lapse by date?",
+     "- May view-only members chat in a project shared with them? (Main allows it since 2026-11-24.)", "- Should idle sign-out be off by default? (Main sets it to Never since 2026-11-24.)", "- Should a paid plan granted by hand never lapse by date?",
      "- Should Web also offer Local mode? The principle names mobile and desktop.", "- Are individuals the first customers, with teams and enterprise after?", "- Is free local inference plus own key the whole difference from the competitors?", "",
      "## From the competitor traces", ""]
 for t in comp["topics"]:

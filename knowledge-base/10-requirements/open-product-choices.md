@@ -19,8 +19,8 @@ Decisions the product needs that nobody has made. Nothing on this page is decide
 
 ## Asked of the owner on 2026-11-24, not answered
 
-- May view-only members chat in a project shared with them? (The fix branch allows it.)
-- Should idle sign-out be off by default? (The fix branch sets it to Never.)
+- May view-only members chat in a project shared with them? (Main allows it since 2026-11-24.)
+- Should idle sign-out be off by default? (Main sets it to Never since 2026-11-24.)
 - Should a paid plan granted by hand never lapse by date?
 - Should Web also offer Local mode? The principle names mobile and desktop.
 - Are individuals the first customers, with teams and enterprise after?

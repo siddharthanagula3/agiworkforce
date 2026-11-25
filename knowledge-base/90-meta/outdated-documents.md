@@ -8,7 +8,7 @@ revision: "f51d16e747"
 ---
 # Project documents found out of date
 
-115 places in 104 project documents (and code comments) that no longer match the code, found while writing the system, app and engineering pages. Each names what is outdated, what the code says, and where. On the branch `claude/agent-contract` (not merged) 26 of these, in 23 documents, are corrected; each was confirmed against the code by a second reader. Sixteen other corrections were made and then taken back because they were not plain facts or did not hold. Findings about decision records, generated documents, the known-flaws register, the pinned design skill and `AGENTS.md` itself were not applied. The project's own register for such findings is `audit/doc-corrections/contradictions-register.md`.
+115 places in 104 project documents (and code comments) that no longer match the code, found while writing the system, app and engineering pages. Each names what is outdated, what the code says, and where. On main since 2026-11-24, 26 of these, in 23 documents, are corrected; each was confirmed against the code by a second reader. Sixteen other corrections were made and then taken back because they were not plain facts or did not hold. Findings about decision records, generated documents, the known-flaws register, the pinned design skill and `AGENTS.md` itself were not applied. The project's own register for such findings is `audit/doc-corrections/contradictions-register.md`.
 
 ## `.agents/skills/agiworkforce-design/SKILL.md step 3 (logo motion: no shine overlay)`
 

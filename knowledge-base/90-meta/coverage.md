@@ -137,7 +137,7 @@ What has been documented, read in the code, tested by a person, and what is stil
 
 - Pages: 2062 (0 without a metadata header).
 - Links checked: 28058; broken: 0.
-- References to project files checked: 37260; not found: 195 ({'00-start': 11, '20-features': 96, '30-surfaces': 17, '40-systems': 48, '50-competitors': 14, '60-engineering': 6, '70-qa': 3}).
+- References to project files checked: 37154; not found: 100 ({'00-start': 11, '20-features': 1, '30-surfaces': 17, '40-systems': 48, '50-competitors': 14, '60-engineering': 6, '70-qa': 3}).
 - Duplicate identifiers: 0.
 - Relationship map: 24996 nodes, 87849 edges.
 

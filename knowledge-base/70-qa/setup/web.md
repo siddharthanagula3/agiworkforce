@@ -14,10 +14,10 @@ All testing is on localhost. This page starts the Web app from a compiled build,
 
 | Build                                                                                                                  | Run by this session?                                                                                         |
 | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| The fix branch (`claude/web-lane`, based on the older commit `22649ece43`, in `~/.cache/agi-audit/worktrees/web-lane`) | Yes. The 38 Web basics checks of 2026-11-24 ran against it or against its base                               |
-| The project folder (`~/Desktop/agiworkforce`, main at `f51d16e747`)                                                    | **No.** The steps below are the same scripts pointed at the project folder; they have not been run there yet |
+| The fix branch (the older commit `22649ece43` plus six fixes; merged into main on 2026-11-24 and since removed) | Yes. The 38 Web basics checks of 2026-11-24 ran against it or against its base |
+| The project folder (`~/Desktop/agiworkforce`, main) | **No.** The steps below are the same scripts pointed at the project folder; they have not been run there yet |
 
-Test the project folder unless you are checking one of the six fixes that exist only on the fix branch.
+Test the project folder. It holds the six fixes since 2026-11-24.
 
 ## What runs
 
@@ -52,8 +52,6 @@ bash $KIT/server.sh stop
 bash $KIT/clock.sh start
 bash $KIT/clock.sh stop
 ```
-
-To build the fix branch instead, put `AGI_CHECKOUT=~/.cache/agi-audit/worktrees/web-lane` in front of each command and `cd` there for the build.
 
 Then open `http://localhost:3000`.
 

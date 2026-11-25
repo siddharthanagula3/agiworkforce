@@ -12,9 +12,9 @@ Every line says which build it refers to.
 
 | Name used below | What it is                                                                                                                                                  |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Main**        | `~/Desktop/agiworkforce`, branch `main` at commit `f51d16e747`, the same as GitHub. Clean. This is the current code and what a tester should build          |
-| **Old base**    | Commit `22649ece43`, where main was on the morning of 2026-11-24, before another agent's large change landed                                                |
-| **Fix branch**  | `claude/web-lane`: the old base plus six fix commits, in `~/.cache/agi-audit/worktrees/web-lane`. Not pushed. It must be moved onto main before it can land |
+| **Main**        | `~/Desktop/agiworkforce`, branch `main`. On 2026-11-24 it received the six fixes below, five small branches from the other agent, this knowledge base and the updated agent contract. This is the current code and what a tester should build |
+| **Old base**    | Commit `22649ece43`, where main was on the morning of 2026-11-24, before a large change from the other agent landed (about 660 files, commit `f51d16e747`) |
+| **Fix branch**  | The old base plus six fix commits. It was merged into main on 2026-11-24 and no longer exists separately. Results below that name it were seen on that branch, before the merge |
 
 Production is older than all of these. Nothing below has been deployed.
 
@@ -23,7 +23,7 @@ Production is older than all of these. Nothing below has been deployed.
 **Web basics.** 19 basic capabilities, each as a Free and as a Subscribed user: 1 pass, 30 partial, 2 fail, 5 blocked.
 
 - First run (26 checks): old base. Rerun of 12 Free checks: fix branch.
-- **None of these runs was on main.** Main has changed since (about 660 files). The results are a guide to what to look at, not the state of main.
+- **None of these runs was on today's main.** Main has changed since (about 660 files, then the merges of 2026-11-24). The results are a guide to what to look at, not the state of main.
 - Not tested: the public sign-up form, voice with a real microphone, connecting an outside app, a cloud coding pull request.
 - Scorecard: `../results/basics/scorecards/web.csv`. Every problem seen: `../defects/web-problems-seen-in-browser.csv` (237 lines).
 
@@ -31,9 +31,9 @@ Production is older than all of these. Nothing below has been deployed.
 
 **The full plans.** 7,200 items the code audit calls built across six apps; 149 have a passing result from a real run recorded in the project's ledger (Web 141, others 8).
 
-## Six fixes on the fix branch
+## Six fixes, now on main
 
-None is on main. A test of main will not show them.
+All six were merged into main on 2026-11-24. They were checked in a browser on the fix branch, before the merge. None has been checked on main.
 
 | Fix                                                            | Seen in a browser on the fix branch?                                                                                                                                                         |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -44,7 +44,7 @@ None is on main. A test of main will not show them.
 | Slack link page names the Slack account and needs a ticked box | Not seen. The local server had no Slack settings                                                                                                                                             |
 | Checking image progress no longer uses up the image limit      | Not seen. Only the phone app polls for image progress                                                                                                                                        |
 
-Checks on the fix branch: type check, lint and the tests of the changed files pass; 19 of the 20 guards run pass (one cannot run in that folder). The full test suite and full guard chain have not completed on it.
+Checks on the fix branch before the merge: type check, lint and the tests of the changed files passed; 19 of the 20 guards run passed. After the merge the push check ran the repository's guard chain, lint and type check on main; see the commit history for that day.
 
 ## What the code reading says
 
@@ -56,4 +56,4 @@ Checks on the fix branch: type check, lint and the tests of the changed files pa
 
 - Three decisions: [rules.md](rules.md), last section.
 - Open product choices: [10-requirements/open-product-choices.md](../../10-requirements/open-product-choices.md).
-- Merging the branch `claude/agent-contract` (updated `AGENTS.md` and `CLAUDE.md`, and 26 corrections to 23 project documents), and committing this knowledge base.
+- Two of the six fixes set a default where a decision is still open: members can now chat in a project shared with them, and idle sign-out is off unless the person picks a limit. Say so if either should be different.

@@ -50,6 +50,6 @@ These come from the owner. They apply to every session that uses this folder.
 
 ## Owner decisions still open (asked 2026-11-24)
 
-1. May view-only members chat in a project shared with them? The code on the fix branch allows it.
-2. Should idle sign-out be off by default? The code on the fix branch sets it to Never.
+1. May view-only members chat in a project shared with them? Main allows it since the merge of 2026-11-24.
+2. Should idle sign-out be off by default? Main sets it to Never since the merge of 2026-11-24.
 3. Should a paid plan granted by hand never lapse by date? Today chat stops when its one-month period ends.
