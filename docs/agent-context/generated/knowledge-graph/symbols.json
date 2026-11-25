@@ -55364,6 +55364,9 @@
     "formatSessionCreditEstimate": [
       "apps/extension-vscode/src/data/tokenCounter.ts"
     ],
+    "formatSessionTimeout": [
+      "packages/contracts/cloud-contracts/src/account-security.ts"
+    ],
     "formatSettingsDate": [
       "apps/desktop/src/features/settings/cloud/SectionChrome.tsx"
     ],
@@ -71789,6 +71792,9 @@
     "isSessionPastAbsoluteLifetime": [
       "apps/web/lib/auth/session-age.ts"
     ],
+    "isSessionTimeoutMinutes": [
+      "packages/contracts/cloud-contracts/src/account-security.ts"
+    ],
     "isSettingsNavKey": [
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/settings-nav.ts"
@@ -77004,6 +77010,9 @@
     "load_workspace": [
       "apps/cli/src/platform/policy/engine.rs"
     ],
+    "LOADABLE_PROJECT_SCOPE_SQL": [
+      "apps/web/lib/server/project-read-access.ts"
+    ],
     "loadAgentTurnConfig": [
       "apps/web/lib/agents/agent-turn-config.ts"
     ],
@@ -79605,6 +79614,9 @@
       "packages/contracts/cloud-contracts/src/schedules.ts"
     ],
     "MANAGED_CLOUD_SCHEDULE_RECENT_RUNS_PATH": [
+      "packages/contracts/cloud-contracts/src/schedules.ts"
+    ],
+    "MANAGED_CLOUD_SCHEDULE_RUN_FUNCTION_LIMIT_MS": [
       "packages/contracts/cloud-contracts/src/schedules.ts"
     ],
     "MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE": [
@@ -120956,6 +120968,9 @@
     "resolveSessionsPrincipal": [
       "apps/web/app/api/settings/sessions/session-principal.ts"
     ],
+    "resolveSessionTimeout": [
+      "packages/contracts/cloud-contracts/src/account-security.ts"
+    ],
     "resolveSetting": [
       "packages/contracts/types/src/settings-scopes.ts"
     ],
@@ -126113,6 +126128,9 @@
     "sanitizePageText": [
       "apps/extension/src/background/policy.ts"
     ],
+    "sanitizeSlackDisplayName": [
+      "apps/web/lib/slack/slack-display-name.ts"
+    ],
     "sanitizeSvg": [
       "packages/ui/unified-chat/src/lib/sanitize-svg.ts"
     ],
@@ -127189,6 +127207,18 @@
     ],
     "ScheduleCreateRequest": [
       "apps/cli/src/schedules.rs"
+    ],
+    "SCHEDULED_RUN_BUDGET_MS": [
+      "apps/web/lib/deadline-policy.ts"
+    ],
+    "SCHEDULED_RUN_FUNCTION_LIMIT_MS": [
+      "apps/web/lib/deadline-policy.ts"
+    ],
+    "SCHEDULED_RUN_LEASE_SECONDS": [
+      "apps/web/lib/deadline-policy.ts"
+    ],
+    "SCHEDULED_RUN_MIN_WAVE_MS": [
+      "apps/web/lib/deadline-policy.ts"
     ],
     "SCHEDULED_TASK_CLIENT_ID": [
       "apps/extension/src/features/background/background-results.ts"
@@ -129689,6 +129719,9 @@
     "selectCategoryCounts": [
       "apps/desktop/src/stores/skillMarketplaceStore.ts"
     ],
+    "selectChatProject": [
+      "apps/web/lib/server/project-read-access.ts"
+    ],
     "selectCheapestRequestFallback": [
       "apps/web/lib/services/request-cost-fallback.ts"
     ],
@@ -131341,8 +131374,20 @@
     "SESSION_TAX_FIELDS_NEVER_PERSISTED": [
       "apps/web/lib/billing/tax-policy.ts"
     ],
+    "SESSION_TIMEOUT_MAX_MINUTES": [
+      "packages/contracts/cloud-contracts/src/account-security.ts"
+    ],
+    "SESSION_TIMEOUT_MIN_MINUTES": [
+      "packages/contracts/cloud-contracts/src/account-security.ts"
+    ],
     "SESSION_TIMEOUT_MINUTES": [
-      "apps/mobile/src/features/settings/account-security/service.ts"
+      "packages/contracts/cloud-contracts/src/account-security.ts"
+    ],
+    "SESSION_TIMEOUT_OFF": [
+      "packages/contracts/cloud-contracts/src/account-security.ts"
+    ],
+    "SESSION_TIMEOUT_OFF_KEY": [
+      "packages/contracts/cloud-contracts/src/account-security.ts"
     ],
     "SESSION_WORKTREE_DIR": [
       "apps/cli/src/platform/runtime/worktree.rs"
@@ -131658,6 +131703,9 @@
     ],
     "SessionTimeoutMinutes": [
       "apps/mobile/src/features/settings/account-security/service.ts"
+    ],
+    "sessionTimeoutSettingsPatch": [
+      "packages/contracts/cloud-contracts/src/account-security.ts"
     ],
     "SessionTimeoutState": [
       "apps/web/shared/hooks/useSessionTimeout.ts"
@@ -142424,6 +142472,9 @@
     ],
     "sync_utils": [
       "apps/desktop/src-tauri/src/core/mod.rs"
+    ],
+    "SYNCABLE_PROJECT_ACCESS_SQL": [
+      "apps/web/lib/server/project-read-access.ts"
     ],
     "SyncBundle": [
       "apps/cli/src/sync.rs"

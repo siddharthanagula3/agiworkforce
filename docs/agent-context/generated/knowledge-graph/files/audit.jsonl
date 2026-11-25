@@ -149,8 +149,10 @@
 {"path":"audit/missing/069-web-application.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/070-desktop-application.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/071-mobile-application.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/missing/072-cli-and-terminal-application.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/074-browser-extension.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/076-model-capability-registry.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/missing/078-ui-gating-and-adaptation-components.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/079-routing-and-model-neutral-orchestration.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/081-free-basic-pro-max-5x-max-20x-planning-structure.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/082-usage-dashboard-and-limit-ui.md","unit":"audit","role":"doc","unparsed":"notCode"}
@@ -159,6 +161,7 @@
 {"path":"audit/missing/085-personalization-and-data-settings.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/087-enterprise-administration-screens.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/088-support-trust-and-policy-product.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/missing/089-account-and-access-components.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/091-model-and-inference-components.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/093-search-retrieval-and-context-components.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/094-memory-and-personalization-components.md","unit":"audit","role":"doc","unparsed":"notCode"}
@@ -167,6 +170,7 @@
 {"path":"audit/missing/097-media-and-realtime-components.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/098-integration-and-extensibility-components.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/099-coding-and-local-runtime-components.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/missing/101-shared-package-boundaries.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/102-runtime-inventory.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/104-named-technology-options-not-claims-about-competitor-interna.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/105-developer-platform-and-console.md","unit":"audit","role":"doc","unparsed":"notCode"}

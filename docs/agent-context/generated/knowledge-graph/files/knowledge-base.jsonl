@@ -168,6 +168,7 @@
 {"path":"knowledge-base/20-features/005-application-shell-and-navigation-components/F005-09-notification-center.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/005-application-shell-and-navigation-components/F005-10-profile-help-and-upgrade-menus.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/005-application-shell-and-navigation-components/F005-11-connection-offline-and-release-status.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
+{"path":"knowledge-base/20-features/005-application-shell-and-navigation-components/F005-99-other-items.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/005-application-shell-and-navigation-components/README.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/006-visual-foundations-and-spacing-conventions/F006-01-colour-roles.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/006-visual-foundations-and-spacing-conventions/F006-02-type-scale-and-fonts.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
@@ -474,6 +475,7 @@
 {"path":"knowledge-base/20-features/031-pdf-and-document-transformation-products/F031-10-shrink-redact-and-edit-metadata.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/031-pdf-and-document-transformation-products/F031-11-searchable-and-accessible-pdf-output.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/031-pdf-and-document-transformation-products/F031-12-send-a-document-for-e-signature.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
+{"path":"knowledge-base/20-features/031-pdf-and-document-transformation-products/F031-99-other-items.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/031-pdf-and-document-transformation-products/README.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/032-design-workspace/F032-01-start-a-design-from-a-brief.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/032-design-workspace/F032-02-generate-alternatives.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
@@ -887,6 +889,7 @@
 {"path":"knowledge-base/20-features/066-coding-workspace-frontend/F066-10-live-browser-preview-and-simulator.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/066-coding-workspace-frontend/F066-11-pull-request-checks-test-results-recap.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/066-coding-workspace-frontend/F066-12-continue-share-and-move-sessions.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
+{"path":"knowledge-base/20-features/066-coding-workspace-frontend/F066-99-other-items.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/066-coding-workspace-frontend/README.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/067-coding-capabilities-and-developer-workflows/F067-01-understand-the-repository.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/067-coding-capabilities-and-developer-workflows/F067-02-change-code-implement-fix-refactor-write-tests-and.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
@@ -899,6 +902,7 @@
 {"path":"knowledge-base/20-features/067-coding-capabilities-and-developer-workflows/F067-09-bounded-goal-loops.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/067-coding-capabilities-and-developer-workflows/F067-10-repository-memory-instruction-files-and-skills.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/067-coding-capabilities-and-developer-workflows/F067-11-reports-slides-and-designs-from-the-repository.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
+{"path":"knowledge-base/20-features/067-coding-capabilities-and-developer-workflows/F067-99-other-items.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/067-coding-capabilities-and-developer-workflows/README.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/068-session-continuity-and-remote-session-product/F068-01-one-session-on-every-client.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/068-session-continuity-and-remote-session-product/F068-02-live-view-of-a-running-turn.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
@@ -963,6 +967,7 @@
 {"path":"knowledge-base/20-features/072-cli-and-terminal-application/F072-10-sign-in-settings-folders-and-environment.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/072-cli-and-terminal-application/F072-11-install-update-diagnostics-and-shell-completion.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/072-cli-and-terminal-application/F072-12-remote-session-attachment.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
+{"path":"knowledge-base/20-features/072-cli-and-terminal-application/F072-99-other-items.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/072-cli-and-terminal-application/README.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/073-vs-code-and-ide-extension/F073-01-chat-in-the-sidebar-and-in-an-editor-tab.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/073-vs-code-and-ide-extension/F073-02-context-from-the-editor-open-file-selection-proble.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
@@ -1070,6 +1075,7 @@
 {"path":"knowledge-base/20-features/084-general-and-appearance-settings/F084-10-sidebar-items-and-layout-reset.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/084-general-and-appearance-settings/F084-11-desktop-launch-and-quick-access.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/084-general-and-appearance-settings/F084-12-experimental-features-and-restore-defaults.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
+{"path":"knowledge-base/20-features/084-general-and-appearance-settings/F084-99-other-items.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/084-general-and-appearance-settings/README.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/085-personalization-and-data-settings/F085-01-profile-and-account-deletion.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/085-personalization-and-data-settings/F085-02-custom-instructions-and-reply-style.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
@@ -1109,6 +1115,7 @@
 {"path":"knowledge-base/20-features/087-enterprise-administration-screens/F087-10-audit-trail-and-exports.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/087-enterprise-administration-screens/F087-11-usage-budgets-and-spend-limits.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/087-enterprise-administration-screens/F087-12-billing-compliance-legal-holds-and-support-access.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
+{"path":"knowledge-base/20-features/087-enterprise-administration-screens/F087-99-other-items.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/087-enterprise-administration-screens/README.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/088-support-trust-and-policy-product/F088-01-help-centre-and-help-links.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/088-support-trust-and-policy-product/F088-02-contact-support-and-support-tickets.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
@@ -1121,6 +1128,7 @@
 {"path":"knowledge-base/20-features/088-support-trust-and-policy-product/F088-09-reports-and-appeals-content-copyright-safety-refus.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/088-support-trust-and-policy-product/F088-10-security-accessibility-and-policy-pages.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/088-support-trust-and-policy-product/F088-11-support-assistant-answers-email-and-whatsapp-langu.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
+{"path":"knowledge-base/20-features/088-support-trust-and-policy-product/F088-99-other-items.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/088-support-trust-and-policy-product/README.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/089-account-and-access-components/F089-01-sign-in-and-account-standing.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/089-account-and-access-components/F089-02-sessions-and-device-sign-in-credentials.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
@@ -1134,6 +1142,7 @@
 {"path":"knowledge-base/20-features/089-account-and-access-components/F089-10-pairing-a-second-device.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/089-account-and-access-components/F089-11-deleting-and-exporting-account-data.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/089-account-and-access-components/F089-12-support-staff-access-to-customer-data.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
+{"path":"knowledge-base/20-features/089-account-and-access-components/F089-99-other-items.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/089-account-and-access-components/README.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/090-conversation-and-synchronization-components/F090-01-saved-conversations-and-messages.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
 {"path":"knowledge-base/20-features/090-conversation-and-synchronization-components/F090-02-versions-branches-and-forks.md","unit":"knowledge-base","role":"doc","unparsed":"notCode"}
