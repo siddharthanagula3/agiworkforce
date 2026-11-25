@@ -25,6 +25,7 @@ points to the thing that enforces it.
   counted as the product's, a check that passed over an input it never read.
 - **A second opinion sharing the first one's question is not independent.**
   Verification catches fabrication, not a premise both parties assumed.
+- **Working method:** follow `docs/standards/working-method.md` on every task.
 
 ## 2. Source-of-truth precedence
 
@@ -86,11 +87,9 @@ Enforced by: `check:model-id-literals`, `check:model-catalog`, `sync:models:chec
 Polyglot monorepo: pnpm workspaces (`apps/*`, `packages/*/*`,
 `packages/ai/providers/*`, `services/*`, `infrastructure/*`) under Turborepo,
 plus a Cargo workspace (`apps/desktop/src-tauri`, `apps/desktop/gpui`,
-`apps/cli`, `crates/*`). Six product surfaces, and `apps/desktop` holds three
-implementations of one of them: Electron is the public Desktop, Tauri
-(`src-tauri`) is retained internal code, and `gpui` is the native replacement
-in progress (`audit/plan/desktop-gpui-migration.md`). All share one contract
-layer; see `ARCHITECTURE.md`.
+`apps/cli`, `crates/*`). Six product surfaces: `apps/desktop` holds Electron
+(the public Desktop), retained internal Tauri code and the `gpui` replacement
+in progress. All share one contract layer; see `ARCHITECTURE.md`.
 
 What you cannot infer from one file:
 
@@ -130,8 +129,7 @@ egress funnels through `apps/desktop/src/lib/egressGuard.ts`; Rust transports
 use the host-owned egress policy.
 
 Enforced by: `check:trust-boundaries`, `check:rust-egress-boundary`, `check:db-isolation`,
-`check:rls-boundary`, `check:secrets`, and a `trust-boundary.test.ts` in web,
-mobile, the Chrome extension and the VS Code extension.
+`check:rls-boundary`, `check:secrets`, and `trust-boundary.test.ts` in four apps.
 
 ## 7. Models, routing, and cost
 
@@ -259,41 +257,3 @@ Unresolved work lives in `audit/` (see `audit/README.md`): blockers, gaps, plan
 and live-validation queue. Defect rows are in `audit/registers/known-flaws.md`,
 cited by ID from CI and tests: update a row, never duplicate it, delete it when
 fixed.
-
-## 13. Working method
-
-How to work here, whatever the task. Sections 1 to 12 win where they are more
-specific.
-
-- **Read before you write.** Read the files you will change, how the same thing
-  is done elsewhere, the imports and the tests. Follow the pattern that exists.
-  If there is none, say so and name the one you will follow.
-- **Say what you assume.** Before a change with more than one reasonable shape,
-  state the assumption, the trade-off and the plan. A choice that is hard to
-  reverse (schema, API shape, sign-in, billing, stored data) is a decision to
-  flag, not a detail. If the request is unclear, ask; do not fill the gap with
-  plausible code.
-- **Smallest change that solves this problem.** No abstraction for one caller,
-  no handling for what cannot happen, no option nobody asked for. This never
-  licenses hardcoding what the repository already models (section 4).
-- **Surgical diffs.** Change only what the task needs and match the file's
-  style. Remove what your change made unused; leave other code, comments and
-  formatting alone. If a fix starts to cascade across files, stop and say so.
-- **One thing at a time.** Finish and verify one change before starting the
-  next. Do not stack fixes ahead of verification.
-- **Reproduce before fixing.** Read the whole error. Reproduce it, change one
-  thing, check again. Find the cause: a null check over an unexplained null is
-  not a fix. After two failed attempts, say what you tried and what you see.
-- **Verification is a person-style run.** A change in behaviour counts as
-  working only when it has been done in the running app the way a user would
-  (click, type, tap, drag), on localhost with local test accounts, one app at a
-  time, and seen on screen. Tests, type checks and code reading are never
-  offered as proof. Add a regression test where the change touches money,
-  sign-in, permissions or stored data, or where it cheaply guards the root
-  cause. Name the failures that were there before your change.
-- **Dependencies are a decision.** Use what the workspace already has, then the
-  platform. Say why a new package is needed; change the manifest and let the
-  package manager write the lockfile (section 12).
-- **Report plainly.** Say what changed and why, what you verified and how, what
-  you did not verify, and any concern with the approach. Nothing is "done"
-  without the run that shows it.

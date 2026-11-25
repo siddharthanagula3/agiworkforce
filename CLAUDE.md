@@ -37,19 +37,6 @@ what is specific to Claude Code.
   reproduce a finding before reporting it. AGENTS.md §1 on verifying the
   instrument applies to the agent as much as to its harness.
 
-## Working method
-
-`AGENTS.md` section 13 is the method. What it means in Claude Code:
-
-- Verify a change in behaviour by driving the running app on localhost: a
-  browser tool for web, screen control for the desktop window and the
-  simulators, a shell for the CLI. One app at a time. Look at the screen before
-  reporting; a green test run is not the report.
-- One fix at a time: fix, rebuild, check it in the app, then the next. Do not
-  queue fixes, designs or commits ahead of that check.
-- Ask the owner only for his decisions, through `AskUserQuestion`; decide what
-  is reversible, say what you chose, and carry on.
-
 ## Skills and sources
 
 - Load `.agents/skills/agiworkforce-design` before any visible UI work; it
@@ -89,3 +76,4 @@ the diff).
   durable discovery into the owner named in AGENTS.md §11 and delete the note.
 - When you make the same mistake twice, fix it with a rule, an abstraction, a
   test or a guard, not a longer prompt.
+- Method: `docs/standards/working-method.md`. Verify in the running app first.
