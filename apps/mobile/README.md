@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile surface maintainers
-Last updated: 2026-11-24
+Last updated: 2026-10-18
 
 The Expo and React Native surface, built for the App Store and Google Play. The
 repository-wide map is in `ARCHITECTURE.md`; the rules that govern changing any
@@ -13,7 +13,7 @@ of it are in `AGENTS.md`.
 | Directory       | Holds                                                          |
 | --------------- | -------------------------------------------------------------- |
 | `app`           | Expo Router routes: `(app)`, `(auth)`, `(public)` and `legal`  |
-| `src`           | `src/features` (one folder per feature), navigation, integrations, i18n, shared UI |
+| `src`           | Features, navigation, integrations, i18n, theme and shared UI  |
 | `components`    | UI primitives (`components/ui`) the screens compose            |
 | `services`      | Device-side services the features call                         |
 | `storage`       | The on-device database and its repositories                    |
@@ -21,11 +21,6 @@ of it are in `AGENTS.md`.
 | `lib`           | Device helpers: egress guard, TLS pinning, send queue, MMKV    |
 | `native`        | Config plugins and native module glue                          |
 | `store-listing` | Store metadata and reviewer notes, not developer documentation |
-
-What ships in a build is set in two places: `lib/v1FeatureFlags.ts` holds the
-feature flags, and `src/features/billing/storePurchases.json` is the switch for
-selling through the App Store or Google Play (off, the app shows no purchase
-control).
 
 **The native projects are generated.** `apps/mobile/ios` and
 `apps/mobile/android` are gitignored and produced by prebuild. A native change
